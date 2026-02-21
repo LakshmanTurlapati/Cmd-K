@@ -50,8 +50,8 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 02-01-PLAN.md -- Rust backend: Keychain storage (keyring crate), xAI API validation/model fetching (reqwest), Accessibility permission check
-- [ ] 02-02-PLAN.md -- Settings panel UI: Zustand store extension, tabbed settings (Account/Model/Preferences), tray + /settings wiring
+- [x] 02-01-PLAN.md -- Rust backend: Keychain storage (keyring crate), xAI API validation/model fetching (reqwest), Accessibility permission check
+- [x] 02-02-PLAN.md -- Settings panel UI: Zustand store extension, tabbed settings (Account/Model/Preferences), tray + /settings wiring
 - [ ] 02-03-PLAN.md -- Onboarding wizard: 4-step setup flow (Accessibility, API key, Model, Done) with persistence + human verification
 
 ### Phase 3: Terminal Context Reading
@@ -118,7 +118,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation & Overlay | 2/3 (3rd at checkpoint) | Complete    | 2026-02-21 |
-| 2. Settings & Configuration | 1/3 | In Progress|  |
+| 2. Settings & Configuration | 2/3 | In Progress|  |
 | 3. Terminal Context Reading | 0/TBD | Not started | - |
 | 4. AI Command Generation | 0/TBD | Not started | - |
 | 5. Safety Layer | 0/TBD | Not started | - |

@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 2 of 6 (Settings & Configuration)
-Plan: 1 of 3 in current phase (completed)
-Status: In progress -- 02-01 complete, ready for 02-02
-Last activity: 2026-02-21 - Completed Phase 2 Plan 1 (Rust backend commands: keychain, xAI, accessibility)
+Plan: 2 of 3 in current phase (completed)
+Status: In progress -- 02-02 complete, ready for 02-03
+Last activity: 2026-02-21 - Completed Phase 2 Plan 2 (Settings panel UI: tabbed Account/Model/Preferences, API key validation, model selection)
 
-Progress: [████░░░░░░] 40%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
+- Total plans completed: 5
 - Average duration: 8 min
-- Total execution time: 0.6 hours
+- Total execution time: 0.8 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-foundation-overlay | 3 | 22 min | 7 min |
-| 02-settings-configuration | 1 | 12 min | 12 min |
+| 02-settings-configuration | 2 | 24 min | 12 min |
 
 **Recent Trend:**
-- Last 5 plans: 11 min (01-01), 8 min (01-02), 3 min (01-03), 12 min (02-01)
+- Last 5 plans: 8 min (01-02), 3 min (01-03), 12 min (02-01), 12 min (02-02)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -60,6 +60,9 @@ Recent decisions affecting current work:
 - AXIsProcessTrusted via extern C block: stable macOS public API, avoids tauri-plugin-macos-permissions dependency for a single boolean
 - tauri_plugin_http reqwest re-export lacks json() feature: use .body(serde_json) + .bytes() + serde_json::from_slice for HTTP I/O
 - 404 fallback for GET /v1/models built from day one: xAI does not document this endpoint explicitly; fallback validates via POST /v1/chat/completions
+- Custom Tailwind tab UI (no shadcn/ui): shadcn requires CLI setup; plain border-b-2 pattern is sufficient and zero-dependency
+- Change Hotkey tray item routes to openSettings(preferences): keeps all configuration within settings panel tabs
+- Auto-save on API key validation success: no save button per user decision; key persisted immediately via Rust IPC
 
 ### Pending Todos
 
@@ -75,12 +78,13 @@ None yet.
 - Phase 1 Plan 2 COMPLETE: React overlay UI complete -- 640px frosted glass panel with animation, auto-focus textarea, keyboard handling, click-outside dismiss
 - Phase 1 Plan 3 CHECKPOINT: Hotkey config dialog complete; awaiting human verification of full Phase 1 overlay experience (17 verification steps)
 - Phase 2 Plan 1 COMPLETE: 6 Rust Tauri IPC commands ready (keychain CRUD, xAI model validation, accessibility settings opener and permission check)
+- Phase 2 Plan 2 COMPLETE: Settings panel UI complete -- tabbed Account/Model/Preferences, API key masked entry with debounced validation, model dropdown with persistence, dual entry points (tray + /settings)
 - Phase 2: Accessibility permission must be granted before terminal context reading works
 - Phase 3: Terminal context reading is highest-risk technical component (requires custom FFI)
 - Phase 5: AppleScript command injection must be solved before any terminal pasting
 
 ## Session Continuity
 
-Last session: 2026-02-21 (Phase 2 Plan 1 execution)
-Stopped at: Completed 02-01-PLAN.md (Rust backend commands)
+Last session: 2026-02-21 (Phase 2 Plan 2 execution)
+Stopped at: Completed 02-02-PLAN.md (Settings panel UI)
 Resume file: None

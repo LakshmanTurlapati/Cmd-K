@@ -29,7 +29,7 @@
 ### Settings & Onboarding
 
 - [x] **SETT-01**: User can store and validate their xAI API key
-- [ ] **SETT-02**: User can select which Grok model to use
+- [x] **SETT-02**: User can select which Grok model to use
 - [x] **SETT-03**: API keys stored securely in macOS Keychain
 - [ ] **SETT-04**: First-run onboarding guides user through Accessibility permissions and API key setup
 
@@ -73,7 +73,7 @@
 | OVRL-04 | Phase 1 | Complete (01-03) |
 | OVRL-05 | Phase 1 | Complete (01-01) |
 | SETT-01 | Phase 2 | Complete |
-| SETT-02 | Phase 2 | Pending |
+| SETT-02 | Phase 2 | Complete (02-02) |
 | SETT-03 | Phase 2 | Complete |
 | SETT-04 | Phase 2 | Pending |
 | TERM-02 | Phase 3 | Pending |
@@ -91,4 +91,4 @@
 
 ---
 *Requirements defined: 2026-02-21*
-*Last updated: 2026-02-21 after 01-03 Task 1 completion (OVRL-04 complete; OVRL-03 complete via 01-02)*
+*Last updated: 2026-02-21 after 02-02 completion (SETT-01, SETT-02 complete via 02-01/02-02)*
