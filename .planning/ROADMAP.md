@@ -35,8 +35,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 Plans:
 - [x] 01-01-PLAN.md -- Tauri v2 project scaffolding and Rust backend (NSPanel, vibrancy, global hotkey, tray icon)
-- [ ] 01-02-PLAN.md -- Frontend overlay UI (Overlay, CommandInput, ResultsArea, animations, keyboard/click dismiss)
-- [ ] 01-03-PLAN.md -- Hotkey configuration dialog (presets, custom recorder, persistence) + human verification
+- [x] 01-02-PLAN.md -- Frontend overlay UI (Overlay, CommandInput, ResultsArea, animations, keyboard/click dismiss)
+- [~] 01-03-PLAN.md -- Hotkey configuration dialog (presets, custom recorder, persistence) + human verification [CHECKPOINT: awaiting human verify]
 
 ### Phase 2: Settings & Configuration
 **Goal**: User can configure xAI API credentials and model preferences securely
@@ -115,7 +115,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation & Overlay | 1/3 | In progress | - |
+| 1. Foundation & Overlay | 2/3 (3rd at checkpoint) | In progress | - |
 | 2. Settings & Configuration | 0/TBD | Not started | - |
 | 3. Terminal Context Reading | 0/TBD | Not started | - |
 | 4. AI Command Generation | 0/TBD | Not started | - |

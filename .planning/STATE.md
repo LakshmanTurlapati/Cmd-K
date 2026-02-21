@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 1 of 6 (Foundation & Overlay)
-Plan: 2 of TBD in current phase
-Status: In progress
-Last activity: 2026-02-21 - Completed Phase 1 Plan 2 (React overlay UI with Zustand state + components)
+Plan: 3 of 3 in current phase (awaiting human verification checkpoint)
+Status: In progress -- checkpoint:human-verify pending for 01-03
+Last activity: 2026-02-21 - Completed Phase 1 Plan 3 Task 1 (hotkey config dialog); paused at human-verify checkpoint
 
-Progress: [██░░░░░░░░] 20%
+Progress: [███░░░░░░░] 30%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: 10 min
-- Total execution time: 0.3 hours
+- Total plans completed: 3
+- Average duration: 7 min
+- Total execution time: 0.4 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-foundation-overlay | 2 | 19 min | 10 min |
+| 01-foundation-overlay | 3 | 22 min | 7 min |
 
 **Recent Trend:**
-- Last 5 plans: 11 min (01-01), 8 min (01-02)
-- Trend: Stable
+- Last 5 plans: 11 min (01-01), 8 min (01-02), 3 min (01-03)
+- Trend: Accelerating
 
 *Updated after each plan completion*
 
@@ -53,6 +53,8 @@ Recent decisions affecting current work:
 - Animation phase state machine (entering/visible/exiting/hidden): Keeps overlay mounted during exit animation so overlay-out keyframe plays before unmount
 - useKeyboard hook centralizes Escape + event listeners: Invoked once in App.tsx, keeps components clean
 - submit() always sets showApiWarning in Phase 1: No API configured yet; Phase 4 replaces with actual AI call
+- useRef for key tracking in HotkeyRecorder: avoids stale closures and excess re-renders vs useState
+- invoke<string | null> return type for register_hotkey: Rust Result<(), String> maps null=success, string=error
 
 ### Pending Todos
 
@@ -66,12 +68,13 @@ None yet.
 
 - Phase 1 Plan 1 COMPLETE: NSPanel integration resolved -- overlay floats above fullscreen apps using Status level + FullScreenAuxiliary
 - Phase 1 Plan 2 COMPLETE: React overlay UI complete -- 640px frosted glass panel with animation, auto-focus textarea, keyboard handling, click-outside dismiss
+- Phase 1 Plan 3 CHECKPOINT: Hotkey config dialog complete; awaiting human verification of full Phase 1 overlay experience (17 verification steps)
 - Phase 2: Accessibility permission must be granted before terminal context reading works
 - Phase 3: Terminal context reading is highest-risk technical component (requires custom FFI)
 - Phase 5: AppleScript command injection must be solved before any terminal pasting
 
 ## Session Continuity
 
-Last session: 2026-02-21 (Phase 1 Plan 2 execution)
-Stopped at: Completed 01-02-PLAN.md (React overlay UI with Zustand state + components)
+Last session: 2026-02-21 (Phase 1 Plan 3 execution)
+Stopped at: Task 2 checkpoint:human-verify in 01-03-PLAN.md (run pnpm tauri dev and verify 17 steps)
 Resume file: None
