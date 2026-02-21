@@ -4,6 +4,7 @@ import { CommandInput } from "./CommandInput";
 import { ResultsArea } from "./ResultsArea";
 import { HotkeyConfig } from "./HotkeyConfig";
 import { SettingsPanel } from "./Settings/SettingsPanel";
+import { OnboardingWizard } from "./Onboarding/OnboardingWizard";
 
 type AnimationPhase = "entering" | "visible" | "exiting" | "hidden";
 
@@ -44,7 +45,8 @@ export function Overlay({ onSubmit }: OverlayProps) {
         ? "animate-[overlay-out_100ms_ease-in]"
         : "";
 
-  const panelWidth = mode === "settings" ? "w-[380px]" : "w-[320px]";
+  const panelWidth =
+    mode === "settings" || mode === "onboarding" ? "w-[380px]" : "w-[320px]";
 
   return (
     <div
@@ -65,9 +67,7 @@ export function Overlay({ onSubmit }: OverlayProps) {
       {mode === "settings" ? (
         <SettingsPanel />
       ) : mode === "onboarding" ? (
-        <div className="flex items-center justify-center py-4">
-          <p className="text-white/50 text-sm">Setting up...</p>
-        </div>
+        <OnboardingWizard />
       ) : (
         // command mode (default)
         <>

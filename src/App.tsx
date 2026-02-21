@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Store } from "@tauri-apps/plugin-store";
-import { useOverlayStore } from "@/store";
+import { useOverlayStore, XaiModelWithMeta } from "@/store";
 import { useKeyboard } from "@/hooks/useKeyboard";
 import { useWindowAutoSize } from "@/hooks/useWindowAutoSize";
 import { Overlay } from "@/components/Overlay";
@@ -12,7 +12,12 @@ function App() {
   const show = useOverlayStore((state) => state.show);
   const submit = useOverlayStore((state) => state.submit);
   const openSettings = useOverlayStore((state) => state.openSettings);
+  const openOnboarding = useOverlayStore((state) => state.openOnboarding);
   const setCurrentHotkey = useOverlayStore((state) => state.setCurrentHotkey);
+  const setApiKeyStatus = useOverlayStore((state) => state.setApiKeyStatus);
+  const setApiKeyLast4 = useOverlayStore((state) => state.setApiKeyLast4);
+  const setModels = useOverlayStore((state) => state.setModels);
+  const setSelectedModel = useOverlayStore((state) => state.setSelectedModel);
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Register keyboard handler (Escape dismiss + event sync)
@@ -38,6 +43,67 @@ function App() {
     };
 
     loadPersistedHotkey();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // On startup: check onboarding completion status and resume or skip accordingly
+  useEffect(() => {
+    const checkOnboarding = async () => {
+      try {
+        const store = await Store.load("settings.json");
+        const onboardingComplete = await store.get<boolean>("onboardingComplete");
+        if (!onboardingComplete) {
+          const onboardingStep = (await store.get<number>("onboardingStep")) ?? 0;
+          // Check if API key already exists (edge case: user saved key then closed)
+          try {
+            const existingKey = await invoke<string | null>("get_api_key");
+            if (existingKey) {
+              // Validate existing key and pre-populate store state
+              const models = await invoke<XaiModelWithMeta[]>(
+                "validate_and_fetch_models",
+                { apiKey: existingKey }
+              );
+              setApiKeyStatus("valid");
+              setModels(models);
+              setApiKeyLast4(existingKey.slice(-4));
+              // If step was on apikey step or earlier, advance past it
+              const effectiveStep =
+                onboardingStep <= 1
+                  ? Math.max(onboardingStep, 1)
+                  : onboardingStep;
+              openOnboarding(effectiveStep);
+            } else {
+              openOnboarding(onboardingStep);
+            }
+          } catch {
+            openOnboarding(onboardingStep);
+          }
+        } else {
+          // Onboarding done -- load API key status and models for settings panel
+          try {
+            const existingKey = await invoke<string | null>("get_api_key");
+            if (existingKey) {
+              setApiKeyLast4(existingKey.slice(-4));
+              const models = await invoke<XaiModelWithMeta[]>(
+                "validate_and_fetch_models",
+                { apiKey: existingKey }
+              );
+              setApiKeyStatus("valid");
+              setModels(models);
+            }
+          } catch {
+            // Non-fatal: settings panel will show current status
+          }
+          // Load persisted model selection
+          const savedModel = await store.get<string>("selectedModel");
+          if (savedModel) setSelectedModel(savedModel);
+        }
+      } catch (err) {
+        // Non-fatal: fall back to default command mode
+        console.error("Failed to check onboarding status:", err);
+      }
+    };
+
+    checkOnboarding();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Listen for open-settings event from tray menu "Settings..." item
