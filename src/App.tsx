@@ -40,10 +40,20 @@ function App() {
     loadPersistedHotkey();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Listen for open-hotkey-config event from tray menu
+  // Listen for open-settings event from tray menu "Settings..." item
+  useEffect(() => {
+    const unlisten = listen("open-settings", () => {
+      openSettings();
+    });
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, [openSettings]);
+
+  // Listen for open-hotkey-config event from tray menu "Change Hotkey..." item
   useEffect(() => {
     const unlisten = listen("open-hotkey-config", () => {
-      openSettings();
+      openSettings("preferences");
     });
     return () => {
       unlisten.then((f) => f());

@@ -3,6 +3,7 @@ import { useOverlayStore } from "@/store";
 import { CommandInput } from "./CommandInput";
 import { ResultsArea } from "./ResultsArea";
 import { HotkeyConfig } from "./HotkeyConfig";
+import { SettingsPanel } from "./Settings/SettingsPanel";
 
 type AnimationPhase = "entering" | "visible" | "exiting" | "hidden";
 
@@ -13,6 +14,7 @@ interface OverlayProps {
 export function Overlay({ onSubmit }: OverlayProps) {
   const visible = useOverlayStore((state) => state.visible);
   const hotkeyConfigOpen = useOverlayStore((state) => state.hotkeyConfigOpen);
+  const mode = useOverlayStore((state) => state.mode);
   const [animPhase, setAnimPhase] = useState<AnimationPhase>("hidden");
 
   useEffect(() => {
@@ -42,10 +44,12 @@ export function Overlay({ onSubmit }: OverlayProps) {
         ? "animate-[overlay-out_100ms_ease-in]"
         : "";
 
+  const panelWidth = mode === "settings" ? "w-[380px]" : "w-[320px]";
+
   return (
     <div
       className={[
-        "w-[320px]",
+        panelWidth,
         "rounded-xl",
         "shadow-2xl",
         "bg-black/60",
@@ -58,12 +62,23 @@ export function Overlay({ onSubmit }: OverlayProps) {
         .join(" ")}
       onAnimationEnd={handleAnimationEnd}
     >
-      {hotkeyConfigOpen ? (
-        <HotkeyConfig />
+      {mode === "settings" ? (
+        <SettingsPanel />
+      ) : mode === "onboarding" ? (
+        <div className="flex items-center justify-center py-4">
+          <p className="text-white/50 text-sm">Setting up...</p>
+        </div>
       ) : (
+        // command mode (default)
         <>
-          <CommandInput onSubmit={onSubmit} />
-          <ResultsArea />
+          {hotkeyConfigOpen ? (
+            <HotkeyConfig />
+          ) : (
+            <>
+              <CommandInput onSubmit={onSubmit} />
+              <ResultsArea />
+            </>
+          )}
         </>
       )}
     </div>

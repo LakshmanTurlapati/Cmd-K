@@ -3,6 +3,7 @@ import { useOverlayStore } from "@/store";
 export function ResultsArea() {
   const showApiWarning = useOverlayStore((state) => state.showApiWarning);
   const submitted = useOverlayStore((state) => state.submitted);
+  const openSettings = useOverlayStore((state) => state.openSettings);
 
   if (!submitted) {
     return null;
@@ -16,10 +17,7 @@ export function ResultsArea() {
           <button
             type="button"
             className="text-white/70 underline underline-offset-2 hover:text-white/90 transition-colors cursor-pointer bg-transparent border-none p-0"
-            onClick={() => {
-              // Placeholder for Phase 2 settings navigation
-              console.log("Open settings requested");
-            }}
+            onClick={() => openSettings("account")}
           >
             Set up in Settings
           </button>
