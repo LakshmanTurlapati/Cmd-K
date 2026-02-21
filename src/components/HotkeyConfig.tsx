@@ -80,21 +80,7 @@ export function HotkeyConfig() {
     PRESETS.find((p) => p.shortcut === selected)?.label ?? selected;
 
   return (
-    // Backdrop overlay
-    <div className="fixed inset-0 flex items-start justify-center bg-black/40">
-      {/* Dialog panel -- positioned similar to overlay, 25% from top */}
-      <div
-        className={[
-          "mt-[20vh]",
-          "w-[500px]",
-          "rounded-xl",
-          "shadow-2xl",
-          "bg-black/80",
-          "border border-white/10",
-          "p-5",
-          "flex flex-col gap-4",
-        ].join(" ")}
-      >
+      <div className="flex flex-col gap-3">
         {/* Header */}
         <div className="flex flex-col gap-1">
           <h2 className="text-white text-base font-semibold tracking-tight">
@@ -204,7 +190,6 @@ export function HotkeyConfig() {
             Apply
           </button>
         </div>
-      </div>
     </div>
   );
 }

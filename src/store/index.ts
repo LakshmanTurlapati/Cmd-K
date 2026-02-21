@@ -18,6 +18,7 @@ interface OverlayState {
   submit: () => void;
   reset: () => void;
 
+  openSettings: () => void;
   openHotkeyConfig: () => void;
   closeHotkeyConfig: () => void;
   setCurrentHotkey: (shortcut: string) => void;
@@ -35,12 +36,13 @@ export const useOverlayStore = create<OverlayState>((set) => ({
   show: () =>
     set({
       visible: true,
+      hotkeyConfigOpen: false,
       inputValue: "",
       submitted: false,
       showApiWarning: false,
     }),
 
-  hide: () => set({ visible: false }),
+  hide: () => set({ visible: false, hotkeyConfigOpen: false }),
 
   setInputValue: (value: string) => set({ inputValue: value }),
 
@@ -53,6 +55,15 @@ export const useOverlayStore = create<OverlayState>((set) => ({
 
   reset: () =>
     set({
+      inputValue: "",
+      submitted: false,
+      showApiWarning: false,
+    }),
+
+  openSettings: () =>
+    set({
+      visible: true,
+      hotkeyConfigOpen: true,
       inputValue: "",
       submitted: false,
       showApiWarning: false,

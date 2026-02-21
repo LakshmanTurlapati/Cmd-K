@@ -96,8 +96,8 @@ fn position_overlay(app: &AppHandle) -> Result<(), String> {
     let monitor_x = monitor_pos.x as f64 / scale;
     let monitor_y = monitor_pos.y as f64 / scale;
 
-    // Overlay is 640px wide (matching Cursor Cmd+K reference)
-    let overlay_w = 640.0_f64;
+    // Overlay width (320px, half of original Cursor Cmd+K reference)
+    let overlay_w = 320.0_f64;
     let overlay_x = monitor_x + (logical_w - overlay_w) / 2.0;
     let overlay_y = monitor_y + logical_h * 0.25;
 

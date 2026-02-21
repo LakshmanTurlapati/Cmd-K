@@ -5,8 +5,7 @@ export function ResultsArea() {
   const submitted = useOverlayStore((state) => state.submitted);
 
   if (!submitted) {
-    // Reserve space below input, ready for Phase 4 AI output
-    return <div className="min-h-[4px]" />;
+    return null;
   }
 
   if (showApiWarning) {

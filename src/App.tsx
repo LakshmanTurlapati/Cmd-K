@@ -4,20 +4,22 @@ import { listen } from "@tauri-apps/api/event";
 import { Store } from "@tauri-apps/plugin-store";
 import { useOverlayStore } from "@/store";
 import { useKeyboard } from "@/hooks/useKeyboard";
+import { useWindowAutoSize } from "@/hooks/useWindowAutoSize";
 import { Overlay } from "@/components/Overlay";
-import { HotkeyConfig } from "@/components/HotkeyConfig";
 
 function App() {
   const hide = useOverlayStore((state) => state.hide);
   const show = useOverlayStore((state) => state.show);
   const submit = useOverlayStore((state) => state.submit);
-  const openHotkeyConfig = useOverlayStore((state) => state.openHotkeyConfig);
-  const hotkeyConfigOpen = useOverlayStore((state) => state.hotkeyConfigOpen);
+  const openSettings = useOverlayStore((state) => state.openSettings);
   const setCurrentHotkey = useOverlayStore((state) => state.setCurrentHotkey);
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Register keyboard handler (Escape dismiss + event sync)
   useKeyboard();
+
+  // Dynamically resize the Tauri window to match panel content
+  useWindowAutoSize(panelRef);
 
   // On startup: load persisted hotkey from store and re-register it
   useEffect(() => {
@@ -41,12 +43,12 @@ function App() {
   // Listen for open-hotkey-config event from tray menu
   useEffect(() => {
     const unlisten = listen("open-hotkey-config", () => {
-      openHotkeyConfig();
+      openSettings();
     });
     return () => {
       unlisten.then((f) => f());
     };
-  }, [openHotkeyConfig]);
+  }, [openSettings]);
 
   // Click outside dismisses overlay
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -67,7 +69,12 @@ function App() {
   }, [show]);
 
   const handleSubmit = (value: string) => {
-    if (value.trim()) {
+    const trimmed = value.trim();
+    if (trimmed === "/settings") {
+      openSettings();
+      return;
+    }
+    if (trimmed) {
       submit();
     }
   };
@@ -81,7 +88,6 @@ function App() {
       <div ref={panelRef} className="select-text">
         <Overlay onSubmit={handleSubmit} />
       </div>
-      {hotkeyConfigOpen && <HotkeyConfig />}
     </div>
   );
 }

@@ -14,9 +14,9 @@
       {
         "label": "main",
         "title": "CMD+K",
-        "width": 640,
-        "height": 400,
-        "minWidth": 480,
+        "width": 320,
+        "height": 100,
+        "minWidth": 320,
         "transparent": true,
         "decorations": false,
         "alwaysOnTop": false,

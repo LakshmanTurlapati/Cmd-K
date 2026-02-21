@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useOverlayStore } from "@/store";
 import { CommandInput } from "./CommandInput";
 import { ResultsArea } from "./ResultsArea";
+import { HotkeyConfig } from "./HotkeyConfig";
 
 type AnimationPhase = "entering" | "visible" | "exiting" | "hidden";
 
@@ -11,6 +12,7 @@ interface OverlayProps {
 
 export function Overlay({ onSubmit }: OverlayProps) {
   const visible = useOverlayStore((state) => state.visible);
+  const hotkeyConfigOpen = useOverlayStore((state) => state.hotkeyConfigOpen);
   const [animPhase, setAnimPhase] = useState<AnimationPhase>("hidden");
 
   useEffect(() => {
@@ -43,7 +45,7 @@ export function Overlay({ onSubmit }: OverlayProps) {
   return (
     <div
       className={[
-        "w-[640px]",
+        "w-[320px]",
         "rounded-xl",
         "shadow-2xl",
         "bg-black/60",
@@ -56,8 +58,14 @@ export function Overlay({ onSubmit }: OverlayProps) {
         .join(" ")}
       onAnimationEnd={handleAnimationEnd}
     >
-      <CommandInput onSubmit={onSubmit} />
-      <ResultsArea />
+      {hotkeyConfigOpen ? (
+        <HotkeyConfig />
+      ) : (
+        <>
+          <CommandInput onSubmit={onSubmit} />
+          <ResultsArea />
+        </>
+      )}
     </div>
   );
 }
