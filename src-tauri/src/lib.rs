@@ -1,10 +1,12 @@
 mod commands;
 mod state;
+mod terminal;
 
 use commands::{
     hotkey::register_hotkey,
     keychain::{delete_api_key, get_api_key, save_api_key},
     permissions::{check_accessibility_permission, open_accessibility_settings},
+    terminal::get_terminal_context,
     tray::setup_tray,
     window::{hide_overlay, show_overlay},
     xai::validate_and_fetch_models,
@@ -119,6 +121,7 @@ pub fn run() {
             validate_and_fetch_models,
             open_accessibility_settings,
             check_accessibility_permission,
+            get_terminal_context,
         ])
         .run(tauri::generate_context!())
         .expect("error while running CMD+K application");
