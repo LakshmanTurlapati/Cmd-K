@@ -23,7 +23,7 @@
 
 - [ ] **TERM-01**: Generated command is pasted into the active terminal (Terminal.app, iTerm2)
 - [x] **TERM-02**: App detects the current working directory of the active terminal without shell plugins
-- [ ] **TERM-03**: App reads recent terminal output for context without shell plugins
+- [x] **TERM-03**: App reads recent terminal output for context without shell plugins
 - [x] **TERM-04**: Works with Terminal.app, iTerm2, Alacritty, kitty, WezTerm
 
 ### Settings & Onboarding
@@ -77,7 +77,7 @@
 | SETT-03 | Phase 2 | Complete |
 | SETT-04 | Phase 2 | Pending |
 | TERM-02 | Phase 3 | Complete |
-| TERM-03 | Phase 3 | Pending |
+| TERM-03 | Phase 3 | Complete |
 | TERM-04 | Phase 3 | Complete |
 | AICG-01 | Phase 4 | Pending |
 | AICG-02 | Phase 4 | Pending |
