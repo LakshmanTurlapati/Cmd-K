@@ -5,33 +5,34 @@
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Phase 1 - Foundation & Overlay
+**Current focus:** Phase 2 - Settings & Configuration
 
 ## Current Position
 
-Phase: 1 of 6 (Foundation & Overlay)
-Plan: 3 of 3 in current phase (awaiting human verification checkpoint)
-Status: In progress -- checkpoint:human-verify pending for 01-03
-Last activity: 2026-02-21 - Completed Phase 1 Plan 3 Task 1 (hotkey config dialog); paused at human-verify checkpoint
+Phase: 2 of 6 (Settings & Configuration)
+Plan: 1 of 3 in current phase (completed)
+Status: In progress -- 02-01 complete, ready for 02-02
+Last activity: 2026-02-21 - Completed Phase 2 Plan 1 (Rust backend commands: keychain, xAI, accessibility)
 
-Progress: [███░░░░░░░] 30%
+Progress: [████░░░░░░] 40%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 7 min
-- Total execution time: 0.4 hours
+- Total plans completed: 4
+- Average duration: 8 min
+- Total execution time: 0.6 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-foundation-overlay | 3 | 22 min | 7 min |
+| 02-settings-configuration | 1 | 12 min | 12 min |
 
 **Recent Trend:**
-- Last 5 plans: 11 min (01-01), 8 min (01-02), 3 min (01-03)
-- Trend: Accelerating
+- Last 5 plans: 11 min (01-01), 8 min (01-02), 3 min (01-03), 12 min (02-01)
+- Trend: Stable
 
 *Updated after each plan completion*
 
@@ -54,7 +55,11 @@ Recent decisions affecting current work:
 - useKeyboard hook centralizes Escape + event listeners: Invoked once in App.tsx, keeps components clean
 - submit() always sets showApiWarning in Phase 1: No API configured yet; Phase 4 replaces with actual AI call
 - useRef for key tracking in HotkeyRecorder: avoids stale closures and excess re-renders vs useState
-- invoke<string | null> return type for register_hotkey: Rust Result<(), String> maps null=success, string=error
+- invoke<string | null> return type for register_hotkey: Rust Result<(), String) maps null=success, string=error
+- keyring crate used directly (no community plugin): fewer dependencies, full control, same Keychain result
+- AXIsProcessTrusted via extern C block: stable macOS public API, avoids tauri-plugin-macos-permissions dependency for a single boolean
+- tauri_plugin_http reqwest re-export lacks json() feature: use .body(serde_json) + .bytes() + serde_json::from_slice for HTTP I/O
+- 404 fallback for GET /v1/models built from day one: xAI does not document this endpoint explicitly; fallback validates via POST /v1/chat/completions
 
 ### Pending Todos
 
@@ -69,12 +74,13 @@ None yet.
 - Phase 1 Plan 1 COMPLETE: NSPanel integration resolved -- overlay floats above fullscreen apps using Status level + FullScreenAuxiliary
 - Phase 1 Plan 2 COMPLETE: React overlay UI complete -- 640px frosted glass panel with animation, auto-focus textarea, keyboard handling, click-outside dismiss
 - Phase 1 Plan 3 CHECKPOINT: Hotkey config dialog complete; awaiting human verification of full Phase 1 overlay experience (17 verification steps)
+- Phase 2 Plan 1 COMPLETE: 6 Rust Tauri IPC commands ready (keychain CRUD, xAI model validation, accessibility settings opener and permission check)
 - Phase 2: Accessibility permission must be granted before terminal context reading works
 - Phase 3: Terminal context reading is highest-risk technical component (requires custom FFI)
 - Phase 5: AppleScript command injection must be solved before any terminal pasting
 
 ## Session Continuity
 
-Last session: 2026-02-21 (Phase 1 Plan 3 execution)
-Stopped at: Task 2 checkpoint:human-verify in 01-03-PLAN.md (run pnpm tauri dev and verify 17 steps)
+Last session: 2026-02-21 (Phase 2 Plan 1 execution)
+Stopped at: Completed 02-01-PLAN.md (Rust backend commands)
 Resume file: None
