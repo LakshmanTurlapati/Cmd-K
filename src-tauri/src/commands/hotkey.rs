@@ -5,13 +5,62 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use crate::commands::window::toggle_overlay;
 use crate::state::AppState;
 
+/// Capture the PID of the frontmost application using NSWorkspace via ObjC FFI.
+///
+/// This MUST be called BEFORE show_and_make_key() because after the panel is shown,
+/// NSWorkspace.frontmostApplication returns our own app (Pitfall 1 from research).
+#[cfg(target_os = "macos")]
+fn get_frontmost_pid() -> Option<i32> {
+    use std::ffi::c_void;
+    extern "C" {
+        fn objc_getClass(name: *const u8) -> *mut c_void;
+        fn sel_registerName(name: *const u8) -> *mut c_void;
+        fn objc_msgSend(receiver: *mut c_void, sel: *mut c_void, ...) -> *mut c_void;
+    }
+    // SAFETY: These are stable macOS ObjC runtime functions used to call
+    // [NSWorkspace sharedWorkspace].frontmostApplication.processIdentifier.
+    // All pointers are checked for null before dereferencing.
+    unsafe {
+        let workspace_class = objc_getClass(b"NSWorkspace\0".as_ptr());
+        if workspace_class.is_null() {
+            return None;
+        }
+
+        let shared_sel = sel_registerName(b"sharedWorkspace\0".as_ptr());
+        let workspace = objc_msgSend(workspace_class, shared_sel);
+        if workspace.is_null() {
+            return None;
+        }
+
+        let front_sel = sel_registerName(b"frontmostApplication\0".as_ptr());
+        let front_app = objc_msgSend(workspace, front_sel);
+        if front_app.is_null() {
+            return None;
+        }
+
+        let pid_sel = sel_registerName(b"processIdentifier\0".as_ptr());
+        let pid = objc_msgSend(front_app, pid_sel) as i32;
+        if pid > 0 {
+            Some(pid)
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn get_frontmost_pid() -> Option<i32> {
+    None
+}
+
 /// Register (or re-register) a global hotkey that toggles the CMD+K overlay.
 ///
 /// This command:
 /// 1. Unregisters all existing shortcuts to avoid duplicates
 /// 2. Parses and registers the new shortcut string
 /// 3. The handler debounces within 200ms to work around Tauri double-fire bug #10025
-/// 4. Updates AppState with the new hotkey string
+/// 4. Captures the frontmost app PID BEFORE toggling the overlay (for terminal context)
+/// 5. Updates AppState with the new hotkey string
 ///
 /// Returns an error string if registration fails (e.g. hotkey conflict with
 /// another application), which the frontend can surface to the user.
@@ -55,6 +104,25 @@ pub fn register_hotkey(app: AppHandle, shortcut_str: String) -> Result<(), Strin
             };
 
             if should_fire {
+                // Determine if the overlay is currently hidden (about to show).
+                // If it is, capture the frontmost app PID NOW -- before toggle_overlay()
+                // calls show_and_make_key(), which would change frontmostApplication to us.
+                let is_currently_visible = app_handle
+                    .try_state::<AppState>()
+                    .and_then(|state| state.overlay_visible.lock().ok().map(|v| *v))
+                    .unwrap_or(false);
+
+                // Only capture PID when about to show (not when hiding)
+                if !is_currently_visible {
+                    if let Some(pid) = get_frontmost_pid() {
+                        if let Some(state) = app_handle.try_state::<AppState>() {
+                            if let Ok(mut prev) = state.previous_app_pid.lock() {
+                                *prev = Some(pid);
+                            }
+                        }
+                    }
+                }
+
                 toggle_overlay(&app_handle);
             }
         })

@@ -13,6 +13,10 @@ pub struct AppState {
     pub last_hotkey_trigger: Mutex<Option<Instant>>,
     /// Current visibility state of the overlay window
     pub overlay_visible: Mutex<bool>,
+    /// PID of the frontmost app captured BEFORE showing overlay.
+    /// Populated in hotkey handler before show_and_make_key().
+    /// Used by get_terminal_context to detect which terminal was active.
+    pub previous_app_pid: Mutex<Option<i32>>,
 }
 
 impl Default for AppState {
@@ -21,6 +25,7 @@ impl Default for AppState {
             hotkey: Mutex::new("Super+K".to_string()),
             last_hotkey_trigger: Mutex::new(None),
             overlay_visible: Mutex::new(false),
+            previous_app_pid: Mutex::new(None),
         }
     }
 }
