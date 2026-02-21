@@ -67,28 +67,28 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OVRL-01 | - | Pending |
-| OVRL-02 | - | Pending |
-| OVRL-03 | - | Pending |
-| OVRL-04 | - | Pending |
-| OVRL-05 | - | Pending |
-| AICG-01 | - | Pending |
-| AICG-02 | - | Pending |
-| AICG-03 | - | Pending |
-| TERM-01 | - | Pending |
-| TERM-02 | - | Pending |
-| TERM-03 | - | Pending |
-| TERM-04 | - | Pending |
-| SETT-01 | - | Pending |
-| SETT-02 | - | Pending |
-| SETT-03 | - | Pending |
-| SETT-04 | - | Pending |
+| OVRL-01 | Phase 1 | Pending |
+| OVRL-02 | Phase 1 | Pending |
+| OVRL-03 | Phase 1 | Pending |
+| OVRL-04 | Phase 1 | Pending |
+| OVRL-05 | Phase 1 | Pending |
+| SETT-01 | Phase 2 | Pending |
+| SETT-02 | Phase 2 | Pending |
+| SETT-03 | Phase 2 | Pending |
+| SETT-04 | Phase 2 | Pending |
+| TERM-02 | Phase 3 | Pending |
+| TERM-03 | Phase 3 | Pending |
+| TERM-04 | Phase 3 | Pending |
+| AICG-01 | Phase 4 | Pending |
+| AICG-02 | Phase 4 | Pending |
+| AICG-03 | Phase 5 | Pending |
+| TERM-01 | Phase 6 | Pending |
 
 **Coverage:**
 - v1 requirements: 16 total
-- Mapped to phases: 0
-- Unmapped: 16
+- Mapped to phases: 16
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-21*
-*Last updated: 2026-02-21 after initial definition*
+*Last updated: 2026-02-21 after roadmap creation*
