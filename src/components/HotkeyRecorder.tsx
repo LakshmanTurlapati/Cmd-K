@@ -13,13 +13,21 @@ interface CapturedKeys {
   key: string;
 }
 
+function codeToDisplayName(code: string): string {
+  if (code === "Space") return "Space";
+  if (code.startsWith("Key")) return code.slice(3);
+  if (code.startsWith("Digit")) return code.slice(5);
+  // Arrow keys, function keys, etc.
+  return code.replace("Arrow", "").replace("Bracket", "]").replace("Semicolon", ";");
+}
+
 function keysToDisplayString(keys: CapturedKeys): string {
   const parts: string[] = [];
   if (keys.meta) parts.push("Cmd");
   if (keys.ctrl) parts.push("Ctrl");
   if (keys.alt) parts.push("Option");
   if (keys.shift) parts.push("Shift");
-  if (keys.key) parts.push(keys.key.toUpperCase());
+  if (keys.key) parts.push(codeToDisplayName(keys.key));
   return parts.join(" + ");
 }
 
@@ -29,18 +37,7 @@ function keysToTauriString(keys: CapturedKeys): string {
   if (keys.ctrl) parts.push("Control");
   if (keys.alt) parts.push("Alt");
   if (keys.shift) parts.push("Shift");
-  if (keys.key) {
-    const k = keys.key;
-    if (k === " ") {
-      parts.push("Space");
-    } else if (k.length === 1 && /[a-zA-Z]/.test(k)) {
-      parts.push(`Key${k.toUpperCase()}`);
-    } else if (k.length === 1 && /[0-9]/.test(k)) {
-      parts.push(`Digit${k}`);
-    } else {
-      parts.push(k);
-    }
-  }
+  if (keys.key) parts.push(keys.key);
   return parts.join("+");
 }
 
@@ -61,15 +58,15 @@ export function HotkeyRecorder({ onCapture, onCancel }: HotkeyRecorderProps) {
       e.preventDefault();
       e.stopPropagation();
 
-      const modifierKeys = ["Meta", "Control", "Alt", "Shift"];
-      const isModifier = modifierKeys.includes(e.key);
+      const modifierCodes = ["MetaLeft", "MetaRight", "ControlLeft", "ControlRight", "AltLeft", "AltRight", "ShiftLeft", "ShiftRight"];
+      const isModifier = modifierCodes.includes(e.code);
 
       capturedRef.current = {
         meta: e.metaKey,
         ctrl: e.ctrlKey,
         alt: e.altKey,
         shift: e.shiftKey,
-        key: isModifier ? "" : e.key,
+        key: isModifier ? "" : e.code,
       };
 
       const keys = capturedRef.current;
@@ -119,6 +116,21 @@ export function HotkeyRecorder({ onCapture, onCancel }: HotkeyRecorderProps) {
     containerRef.current?.focus();
   }, []);
 
+  const injectSpace = () => {
+    // Manually inject Space as the key since macOS NSPanel filters Space keydown events
+    const current = capturedRef.current;
+    const withSpace: CapturedKeys = { ...current, key: "Space" };
+    capturedRef.current = withSpace;
+
+    const hasModifier = withSpace.meta || withSpace.ctrl || withSpace.alt || withSpace.shift;
+    if (hasModifier) {
+      setDisplayText(keysToDisplayString(withSpace));
+      onCapture(keysToTauriString(withSpace));
+    } else {
+      setDisplayText("Hold a modifier key first, then tap Space");
+    }
+  };
+
   return (
     <div className="flex flex-col gap-3">
       <div
@@ -142,7 +154,15 @@ export function HotkeyRecorder({ onCapture, onCancel }: HotkeyRecorderProps) {
       >
         {displayText}
       </div>
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={injectSpace}
+          className="px-2.5 py-1 rounded-md text-xs text-white/40 hover:text-white/70 bg-white/5 hover:bg-white/10 border border-white/10 transition-colors cursor-default"
+        >
+          Space
+        </button>
         <button
           type="button"
           onClick={onCancel}
