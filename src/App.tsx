@@ -1,63 +1,51 @@
 import { useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { useOverlayStore } from "@/store";
+import { useKeyboard } from "@/hooks/useKeyboard";
+import { Overlay } from "@/components/Overlay";
 
 function App() {
+  const hide = useOverlayStore((state) => state.hide);
+  const show = useOverlayStore((state) => state.show);
+  const submit = useOverlayStore((state) => state.submit);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Click outside dismisses overlay
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        invoke("hide_overlay").catch(console.error);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  // Register keyboard handler (Escape dismiss + event sync)
+  useKeyboard();
 
-  // Listen for overlay-shown event to auto-focus
+  // Click outside dismisses overlay
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+      invoke("hide_overlay").catch(console.error);
+      hide();
+    }
+  };
+
+  // Listen for overlay-shown event from Rust backend to sync state
   useEffect(() => {
     const unlisten = listen("overlay-shown", () => {
-      // Input components will handle their own focus via useEffect
+      show();
     });
     return () => {
       unlisten.then((f) => f());
     };
-  }, []);
+  }, [show]);
+
+  const handleSubmit = (value: string) => {
+    if (value.trim()) {
+      submit();
+    }
+  };
 
   return (
     <div
-      style={{
-        width: "100vw",
-        height: "100vh",
-        background: "transparent",
-        display: "flex",
-        alignItems: "flex-start",
-        justifyContent: "center",
-        paddingTop: "0px",
-      }}
+      className="w-screen h-screen flex items-start justify-center select-none"
+      style={{ background: "transparent" }}
+      onMouseDown={handleMouseDown}
     >
-      <div
-        ref={panelRef}
-        style={{
-          width: "640px",
-          minHeight: "80px",
-          borderRadius: "12px",
-          overflow: "hidden",
-        }}
-      >
-        {/* Overlay content - Phase 2 will replace this placeholder */}
-        <div
-          style={{
-            padding: "16px",
-            color: "rgba(255,255,255,0.6)",
-            fontSize: "14px",
-            textAlign: "center",
-          }}
-        >
-          CMD+K overlay ready
-        </div>
+      <div ref={panelRef} className="select-text">
+        <Overlay onSubmit={handleSubmit} />
       </div>
     </div>
   );
