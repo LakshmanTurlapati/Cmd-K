@@ -47,10 +47,12 @@ Plans:
   2. User can select which Grok model to use from available options
   3. API key is stored in macOS Keychain (not plaintext config file)
   4. First-run wizard guides user through Accessibility permissions and API key setup
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] TBD during phase planning
+- [ ] 02-01-PLAN.md -- Rust backend: Keychain storage (keyring crate), xAI API validation/model fetching (reqwest), Accessibility permission check
+- [ ] 02-02-PLAN.md -- Settings panel UI: Zustand store extension, tabbed settings (Account/Model/Preferences), tray + /settings wiring
+- [ ] 02-03-PLAN.md -- Onboarding wizard: 4-step setup flow (Accessibility, API key, Model, Done) with persistence + human verification
 
 ### Phase 3: Terminal Context Reading
 **Goal**: App detects active terminal's working directory and recent output without shell plugins
@@ -116,7 +118,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation & Overlay | 2/3 (3rd at checkpoint) | Complete    | 2026-02-21 |
-| 2. Settings & Configuration | 0/TBD | Not started | - |
+| 2. Settings & Configuration | 0/3 | Planned | - |
 | 3. Terminal Context Reading | 0/TBD | Not started | - |
 | 4. AI Command Generation | 0/TBD | Not started | - |
 | 5. Safety Layer | 0/TBD | Not started | - |
