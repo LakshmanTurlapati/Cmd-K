@@ -3,8 +3,11 @@ mod state;
 
 use commands::{
     hotkey::register_hotkey,
+    keychain::{delete_api_key, get_api_key, save_api_key},
+    permissions::{check_accessibility_permission, open_accessibility_settings},
     tray::setup_tray,
     window::{hide_overlay, show_overlay},
+    xai::validate_and_fetch_models,
 };
 use state::AppState;
 use tauri::Manager;
@@ -35,6 +38,8 @@ pub fn run() {
         .plugin(tauri_plugin_positioner::init())
         // Store plugin for persistent config (hotkey preference, API key, etc.)
         .plugin(tauri_plugin_store::Builder::default().build())
+        // HTTP plugin for Rust-side xAI API calls (bearer token stays off the JS layer)
+        .plugin(tauri_plugin_http::init())
         // Shared application state
         .manage(AppState::default())
         .setup(|app| {
@@ -108,6 +113,12 @@ pub fn run() {
             show_overlay,
             hide_overlay,
             register_hotkey,
+            save_api_key,
+            get_api_key,
+            delete_api_key,
+            validate_and_fetch_models,
+            open_accessibility_settings,
+            check_accessibility_permission,
         ])
         .run(tauri::generate_context!())
         .expect("error while running CMD+K application");

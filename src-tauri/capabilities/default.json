@@ -18,6 +18,13 @@
     "positioner:allow-move-window",
     "store:allow-get",
     "store:allow-set",
-    "store:allow-save"
+    "store:allow-save",
+    "store:allow-load",
+    "store:allow-delete",
+    "http:default",
+    {
+      "identifier": "http:default",
+      "allow": [{ "url": "https://api.x.ai/**" }]
+    }
   ]
 }
