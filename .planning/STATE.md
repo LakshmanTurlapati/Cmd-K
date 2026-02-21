@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Phase 2 - Settings & Configuration
+**Current focus:** Phase 3 - Terminal Context Reading
 
 ## Current Position
 
-Phase: 2 of 6 (Settings & Configuration)
-Plan: 3 of 3 in current phase (checkpoint -- awaiting human verification)
-Status: In progress -- 02-03 Task 1 complete, paused at checkpoint Task 2 (human-verify)
-Last activity: 2026-02-21 - Executed Phase 2 Plan 3 Task 1 (Onboarding wizard: 5 components + App startup check + Overlay integration)
+Phase: 3 of 6 (Terminal Context Reading)
+Plan: 2 of 3 in current phase
+Status: In progress -- 03-01 complete, ready for 03-02 (AX text reading)
+Last activity: 2026-02-21 - Executed Phase 3 Plan 1 (Rust terminal detection backend: libproc FFI, ObjC bundle ID, get_terminal_context IPC)
 
-Progress: [█████░░░░░] 50%
+Progress: [██████░░░░] 60%
 
 ## Performance Metrics
 
@@ -29,9 +29,10 @@ Progress: [█████░░░░░] 50%
 |-------|-------|-------|----------|
 | 01-foundation-overlay | 3 | 22 min | 7 min |
 | 02-settings-configuration | 2 | 24 min | 12 min |
+| 03-terminal-context-reading | 1 | 4 min | 4 min |
 
 **Recent Trend:**
-- Last 5 plans: 8 min (01-02), 3 min (01-03), 12 min (02-01), 12 min (02-02)
+- Last 5 plans: 8 min (01-02), 3 min (01-03), 12 min (02-01), 12 min (02-02), 4 min (03-01)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -63,6 +64,9 @@ Recent decisions affecting current work:
 - Custom Tailwind tab UI (no shadcn/ui): shadcn requires CLI setup; plain border-b-2 pattern is sufficient and zero-dependency
 - Change Hotkey tray item routes to openSettings(preferences): keeps all configuration within settings panel tabs
 - Auto-save on API key validation success: no save button per user decision; key persisted immediately via Rust IPC
+- Raw libproc FFI instead of darwin-libproc crate: darwin-libproc 0.2 pins memchr ~2.3 which conflicts with tauri chain; raw extern C is equivalent and avoids the conflict
+- PROC_PIDVNODEPATHINFO for CWD reading: proc_pidinfo flavor 9 returns proc_vnodepathinfo with pvi_cdir.pvip.vip_path
+- Capture-before-show PID pattern: frontmost app PID must be captured BEFORE toggle_overlay()/show_and_make_key() or NSWorkspace reports our own app as frontmost
 
 ### Pending Todos
 
@@ -81,11 +85,12 @@ None yet.
 - Phase 2 Plan 2 COMPLETE: Settings panel UI complete -- tabbed Account/Model/Preferences, API key masked entry with debounced validation, model dropdown with persistence, dual entry points (tray + /settings)
 - Phase 2 Plan 3 CHECKPOINT: Onboarding wizard built (5 components: Accessibility/ApiKey/ModelSelect/Done/Wizard) + App.tsx startup check + Overlay integration; awaiting human verification of complete Phase 2 experience (25 steps)
 - Phase 2: Accessibility permission must be granted before terminal context reading works
-- Phase 3: Terminal context reading is highest-risk technical component (requires custom FFI)
+- Phase 3 Plan 1 COMPLETE: get_terminal_context IPC command, terminal/detect.rs (bundle ID matching for 5 terminals), terminal/process.rs (libproc raw FFI: CWD, shell name, child PIDs, tmux walk), AppState.previous_app_pid capture before overlay show
+- Phase 3: darwin-libproc crate incompatible (memchr conflict); raw FFI approach used instead, works identically
 - Phase 5: AppleScript command injection must be solved before any terminal pasting
 
 ## Session Continuity
 
-Last session: 2026-02-21 (Phase 2 Plan 3 execution)
-Stopped at: 02-03-PLAN.md Task 2 checkpoint (human-verify: complete Phase 2 experience verification)
+Last session: 2026-02-21 (Phase 3 Plan 1 execution)
+Stopped at: Completed 03-01-PLAN.md (all tasks done, ready for 03-02)
 Resume file: None
