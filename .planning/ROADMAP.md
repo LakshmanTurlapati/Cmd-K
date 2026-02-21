@@ -63,10 +63,12 @@ Plans:
   2. App reads recent terminal output visible on screen for command context
   3. Detection works across Terminal.app, iTerm2, Alacritty, kitty, and WezTerm
   4. When Accessibility permission denied, app gracefully degrades with clear explanation
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] TBD during phase planning
+- [ ] 03-01-PLAN.md -- Rust backend: dependencies (darwin-libproc, accessibility-sys, regex), AppState PID capture, terminal detection module (detect.rs + process.rs), get_terminal_context IPC command
+- [ ] 03-02-PLAN.md -- AX tree text reading for Terminal.app/iTerm2, sensitive data filtering, 500ms timeout wrapper, full detection pipeline wiring
+- [ ] 03-03-PLAN.md -- Frontend overlay integration: Zustand terminal context state, shell type label, accessibility banner, spinner + human verification
 
 ### Phase 4: AI Command Generation
 **Goal**: User describes intent in natural language and receives appropriate terminal command via xAI
@@ -119,7 +121,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. Foundation & Overlay | 2/3 (3rd at checkpoint) | Complete    | 2026-02-21 |
 | 2. Settings & Configuration | 2/3 | Complete    | 2026-02-21 |
-| 3. Terminal Context Reading | 0/TBD | Not started | - |
+| 3. Terminal Context Reading | 0/3 | Not started | - |
 | 4. AI Command Generation | 0/TBD | Not started | - |
 | 5. Safety Layer | 0/TBD | Not started | - |
 | 6. Terminal Pasting | 0/TBD | Not started | - |
