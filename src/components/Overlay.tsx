@@ -16,6 +16,9 @@ export function Overlay({ onSubmit }: OverlayProps) {
   const visible = useOverlayStore((state) => state.visible);
   const hotkeyConfigOpen = useOverlayStore((state) => state.hotkeyConfigOpen);
   const mode = useOverlayStore((state) => state.mode);
+  const terminalContext = useOverlayStore((s) => s.terminalContext);
+  const isDetecting = useOverlayStore((s) => s.isDetectingContext);
+  const accessibilityGranted = useOverlayStore((s) => s.accessibilityGranted);
   const [animPhase, setAnimPhase] = useState<AnimationPhase>("hidden");
 
   useEffect(() => {
@@ -71,11 +74,33 @@ export function Overlay({ onSubmit }: OverlayProps) {
       ) : (
         // command mode (default)
         <>
+          {mode === "command" && !accessibilityGranted && (
+            <div
+              className="flex items-center gap-2 px-3 py-2 bg-amber-900/40 border border-amber-500/30 rounded-lg text-xs text-amber-200 cursor-pointer"
+              onClick={async () => {
+                const { invoke } = await import("@tauri-apps/api/core");
+                invoke("open_accessibility_settings");
+              }}
+            >
+              <span>Enable Accessibility for terminal context</span>
+            </div>
+          )}
           {hotkeyConfigOpen ? (
             <HotkeyConfig />
           ) : (
             <>
               <CommandInput onSubmit={onSubmit} />
+              {mode === "command" && (
+                <div className="flex items-center gap-2 min-h-[20px]">
+                  {isDetecting ? (
+                    <div className="w-3 h-3 border border-white/30 border-t-white/70 rounded-full animate-spin" />
+                  ) : terminalContext?.shell_type ? (
+                    <span className="text-[11px] text-white/40 font-mono">
+                      {terminalContext.shell_type}
+                    </span>
+                  ) : null}
+                </div>
+              )}
               <ResultsArea />
             </>
           )}

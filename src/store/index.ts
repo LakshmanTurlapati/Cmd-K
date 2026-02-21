@@ -7,6 +7,13 @@ export interface XaiModelWithMeta {
   label: string;
 }
 
+export interface TerminalContext {
+  shell_type: string | null;
+  cwd: string | null;
+  visible_output: string | null;
+  running_process: string | null;
+}
+
 interface OverlayState {
   // Overlay visibility
   visible: boolean;
@@ -32,6 +39,11 @@ interface OverlayState {
   hotkeyConfigOpen: boolean;
   currentHotkey: string;
 
+  // Terminal context
+  terminalContext: TerminalContext | null;
+  isDetectingContext: boolean;
+  accessibilityGranted: boolean;
+
   // Actions
   show: () => void;
   hide: () => void;
@@ -55,6 +67,10 @@ interface OverlayState {
   openHotkeyConfig: () => void;
   closeHotkeyConfig: () => void;
   setCurrentHotkey: (shortcut: string) => void;
+
+  setTerminalContext: (ctx: TerminalContext | null) => void;
+  setIsDetectingContext: (detecting: boolean) => void;
+  setAccessibilityGranted: (granted: boolean) => void;
 }
 
 export const useOverlayStore = create<OverlayState>((set) => ({
@@ -76,7 +92,11 @@ export const useOverlayStore = create<OverlayState>((set) => ({
   hotkeyConfigOpen: false,
   currentHotkey: "Super+KeyK",
 
-  show: () =>
+  terminalContext: null,
+  isDetectingContext: false,
+  accessibilityGranted: false,
+
+  show: () => {
     set((state) => ({
       visible: true,
       mode:
@@ -87,7 +107,32 @@ export const useOverlayStore = create<OverlayState>((set) => ({
       inputValue: "",
       submitted: false,
       showApiWarning: false,
-    })),
+      terminalContext: null,
+      isDetectingContext: true,
+    }));
+
+    // Fire-and-forget context detection (non-blocking)
+    // Overlay appears immediately with a spinner; context fills in after detection completes
+    (async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+
+        // Check accessibility permission each time overlay opens
+        const hasPermission = await invoke<boolean>(
+          "check_accessibility_permission"
+        );
+        useOverlayStore.getState().setAccessibilityGranted(hasPermission);
+
+        // Detect terminal context (returns null for non-terminal apps)
+        const ctx = await invoke<TerminalContext | null>("get_terminal_context");
+        useOverlayStore.getState().setTerminalContext(ctx);
+      } catch {
+        // Silent failure -- AI works without terminal context
+      } finally {
+        useOverlayStore.getState().setIsDetectingContext(false);
+      }
+    })();
+  },
 
   hide: () =>
     set((state) => ({
@@ -156,4 +201,10 @@ export const useOverlayStore = create<OverlayState>((set) => ({
   closeHotkeyConfig: () => set({ hotkeyConfigOpen: false }),
 
   setCurrentHotkey: (shortcut: string) => set({ currentHotkey: shortcut }),
+
+  setTerminalContext: (ctx) => set({ terminalContext: ctx }),
+
+  setIsDetectingContext: (detecting) => set({ isDetectingContext: detecting }),
+
+  setAccessibilityGranted: (granted) => set({ accessibilityGranted: granted }),
 }));
