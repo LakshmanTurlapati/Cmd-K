@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 2 of 6 (Settings & Configuration)
-Plan: 2 of 3 in current phase (completed)
-Status: In progress -- 02-02 complete, ready for 02-03
-Last activity: 2026-02-21 - Completed Phase 2 Plan 2 (Settings panel UI: tabbed Account/Model/Preferences, API key validation, model selection)
+Plan: 3 of 3 in current phase (checkpoint -- awaiting human verification)
+Status: In progress -- 02-03 Task 1 complete, paused at checkpoint Task 2 (human-verify)
+Last activity: 2026-02-21 - Executed Phase 2 Plan 3 Task 1 (Onboarding wizard: 5 components + App startup check + Overlay integration)
 
 Progress: [█████░░░░░] 50%
 
@@ -79,12 +79,13 @@ None yet.
 - Phase 1 Plan 3 CHECKPOINT: Hotkey config dialog complete; awaiting human verification of full Phase 1 overlay experience (17 verification steps)
 - Phase 2 Plan 1 COMPLETE: 6 Rust Tauri IPC commands ready (keychain CRUD, xAI model validation, accessibility settings opener and permission check)
 - Phase 2 Plan 2 COMPLETE: Settings panel UI complete -- tabbed Account/Model/Preferences, API key masked entry with debounced validation, model dropdown with persistence, dual entry points (tray + /settings)
+- Phase 2 Plan 3 CHECKPOINT: Onboarding wizard built (5 components: Accessibility/ApiKey/ModelSelect/Done/Wizard) + App.tsx startup check + Overlay integration; awaiting human verification of complete Phase 2 experience (25 steps)
 - Phase 2: Accessibility permission must be granted before terminal context reading works
 - Phase 3: Terminal context reading is highest-risk technical component (requires custom FFI)
 - Phase 5: AppleScript command injection must be solved before any terminal pasting
 
 ## Session Continuity
 
-Last session: 2026-02-21 (Phase 2 Plan 2 execution)
-Stopped at: Completed 02-02-PLAN.md (Settings panel UI)
+Last session: 2026-02-21 (Phase 2 Plan 3 execution)
+Stopped at: 02-03-PLAN.md Task 2 checkpoint (human-verify: complete Phase 2 experience verification)
 Resume file: None
