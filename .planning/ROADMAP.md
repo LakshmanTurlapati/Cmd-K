@@ -31,10 +31,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. User presses Escape and overlay disappears without affecting underlying application
   4. User can configure hotkey to avoid conflicts via menu bar settings
   5. App runs silently in background with menu bar icon (no dock icon)
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] TBD during phase planning
+- [ ] 01-01-PLAN.md -- Tauri v2 project scaffolding and Rust backend (NSPanel, vibrancy, global hotkey, tray icon)
+- [ ] 01-02-PLAN.md -- Frontend overlay UI (Overlay, CommandInput, ResultsArea, animations, keyboard/click dismiss)
+- [ ] 01-03-PLAN.md -- Hotkey configuration dialog (presets, custom recorder, persistence) + human verification
 
 ### Phase 2: Settings & Configuration
 **Goal**: User can configure xAI API credentials and model preferences securely
@@ -113,7 +115,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation & Overlay | 0/TBD | Not started | - |
+| 1. Foundation & Overlay | 0/3 | Planning complete | - |
 | 2. Settings & Configuration | 0/TBD | Not started | - |
 | 3. Terminal Context Reading | 0/TBD | Not started | - |
 | 4. AI Command Generation | 0/TBD | Not started | - |
