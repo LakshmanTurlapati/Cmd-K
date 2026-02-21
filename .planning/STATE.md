@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 1 of 6 (Foundation & Overlay)
-Plan: 1 of TBD in current phase
+Plan: 2 of TBD in current phase
 Status: In progress
-Last activity: 2026-02-21 - Completed Phase 1 Plan 1 (Tauri v2 scaffold + Rust backend)
+Last activity: 2026-02-21 - Completed Phase 1 Plan 2 (React overlay UI with Zustand state + components)
 
-Progress: [█░░░░░░░░░] 10%
+Progress: [██░░░░░░░░] 20%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 11 min
-- Total execution time: 0.2 hours
+- Total plans completed: 2
+- Average duration: 10 min
+- Total execution time: 0.3 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-foundation-overlay | 1 | 11 min | 11 min |
+| 01-foundation-overlay | 2 | 19 min | 10 min |
 
 **Recent Trend:**
-- Last 5 plans: 11 min (01-01)
-- Trend: Not established (1 plan)
+- Last 5 plans: 11 min (01-01), 8 min (01-02)
+- Trend: Stable
 
 *Updated after each plan completion*
 
@@ -50,6 +50,9 @@ Recent decisions affecting current work:
 - PanelLevel::Status (25) for window level: Chosen to float above fullscreen apps and all normal windows
 - NSPanel FullScreenAuxiliary+CanJoinAllSpaces: Required collection behavior for overlay on fullscreen apps
 - time crate pinned to 0.3.36: rustc 1.85.0 compatibility (0.3.47 requires 1.88.0)
+- Animation phase state machine (entering/visible/exiting/hidden): Keeps overlay mounted during exit animation so overlay-out keyframe plays before unmount
+- useKeyboard hook centralizes Escape + event listeners: Invoked once in App.tsx, keeps components clean
+- submit() always sets showApiWarning in Phase 1: No API configured yet; Phase 4 replaces with actual AI call
 
 ### Pending Todos
 
@@ -62,12 +65,13 @@ None yet.
 [Issues that affect future work]
 
 - Phase 1 Plan 1 COMPLETE: NSPanel integration resolved -- overlay floats above fullscreen apps using Status level + FullScreenAuxiliary
+- Phase 1 Plan 2 COMPLETE: React overlay UI complete -- 640px frosted glass panel with animation, auto-focus textarea, keyboard handling, click-outside dismiss
 - Phase 2: Accessibility permission must be granted before terminal context reading works
 - Phase 3: Terminal context reading is highest-risk technical component (requires custom FFI)
 - Phase 5: AppleScript command injection must be solved before any terminal pasting
 
 ## Session Continuity
 
-Last session: 2026-02-21 (Phase 1 Plan 1 execution)
-Stopped at: Completed 01-01-PLAN.md (Tauri v2 scaffold + Rust backend)
+Last session: 2026-02-21 (Phase 1 Plan 2 execution)
+Stopped at: Completed 01-02-PLAN.md (React overlay UI with Zustand state + components)
 Resume file: None
