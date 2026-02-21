@@ -7,11 +7,11 @@
 
 ### Overlay
 
-- [ ] **OVRL-01**: System-wide Cmd+K hotkey triggers the overlay from any application
-- [ ] **OVRL-02**: Overlay appears as a floating panel on top of the currently active window
+- [x] **OVRL-01**: System-wide Cmd+K hotkey triggers the overlay from any application
+- [x] **OVRL-02**: Overlay appears as a floating panel on top of the currently active window
 - [ ] **OVRL-03**: User can dismiss overlay with Escape key without executing
 - [ ] **OVRL-04**: User can configure the trigger hotkey to avoid conflicts
-- [ ] **OVRL-05**: App runs as background daemon with menu bar icon
+- [x] **OVRL-05**: App runs as background daemon with menu bar icon
 
 ### AI Command Generation
 
@@ -67,11 +67,11 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OVRL-01 | Phase 1 | Pending |
-| OVRL-02 | Phase 1 | Pending |
+| OVRL-01 | Phase 1 | Complete (01-01) |
+| OVRL-02 | Phase 1 | Complete (01-01) |
 | OVRL-03 | Phase 1 | Pending |
 | OVRL-04 | Phase 1 | Pending |
-| OVRL-05 | Phase 1 | Pending |
+| OVRL-05 | Phase 1 | Complete (01-01) |
 | SETT-01 | Phase 2 | Pending |
 | SETT-02 | Phase 2 | Pending |
 | SETT-03 | Phase 2 | Pending |
@@ -91,4 +91,4 @@
 
 ---
 *Requirements defined: 2026-02-21*
-*Last updated: 2026-02-21 after roadmap creation*
+*Last updated: 2026-02-21 after 01-01 completion (OVRL-01, OVRL-02, OVRL-05 complete)*

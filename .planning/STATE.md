@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 1 of 6 (Foundation & Overlay)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-02-21 - Roadmap created with 6 phases covering all 16 v1 requirements
+Plan: 1 of TBD in current phase
+Status: In progress
+Last activity: 2026-02-21 - Completed Phase 1 Plan 1 (Tauri v2 scaffold + Rust backend)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 10%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: - min
-- Total execution time: 0.0 hours
+- Total plans completed: 1
+- Average duration: 11 min
+- Total execution time: 0.2 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01-foundation-overlay | 1 | 11 min | 11 min |
 
 **Recent Trend:**
-- Last 5 plans: None yet
-- Trend: Not established
+- Last 5 plans: 11 min (01-01)
+- Trend: Not established (1 plan)
 
 *Updated after each plan completion*
 
@@ -46,6 +46,10 @@ Recent decisions affecting current work:
 - xAI only for v1: Simplify scope, add other providers later
 - macOS only for v1: Focus on one platform, nail the overlay UX
 - Zero shell setup: Lower adoption friction, use Accessibility API + AppleScript instead
+- tauri_panel! macro for NSPanel config: tauri-nspanel v2.1 uses macro-based panel config (removed setter methods)
+- PanelLevel::Status (25) for window level: Chosen to float above fullscreen apps and all normal windows
+- NSPanel FullScreenAuxiliary+CanJoinAllSpaces: Required collection behavior for overlay on fullscreen apps
+- time crate pinned to 0.3.36: rustc 1.85.0 compatibility (0.3.47 requires 1.88.0)
 
 ### Pending Todos
 
@@ -57,13 +61,13 @@ None yet.
 
 [Issues that affect future work]
 
-- Phase 1: NSPanel integration critical for overlay positioning on top of fullscreen apps
+- Phase 1 Plan 1 COMPLETE: NSPanel integration resolved -- overlay floats above fullscreen apps using Status level + FullScreenAuxiliary
 - Phase 2: Accessibility permission must be granted before terminal context reading works
 - Phase 3: Terminal context reading is highest-risk technical component (requires custom FFI)
 - Phase 5: AppleScript command injection must be solved before any terminal pasting
 
 ## Session Continuity
 
-Last session: 2026-02-21 (roadmap creation)
-Stopped at: Roadmap and state files created, awaiting Phase 1 planning
+Last session: 2026-02-21 (Phase 1 Plan 1 execution)
+Stopped at: Completed 01-01-PLAN.md (Tauri v2 scaffold + Rust backend)
 Resume file: None
