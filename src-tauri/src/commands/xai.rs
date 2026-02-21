@@ -21,7 +21,9 @@ pub struct XaiModelWithMeta {
 
 /// Map a raw model id to its display label.
 fn model_label(id: &str) -> String {
-    if id.contains("grok-4") {
+    if id.contains("grok-code-fast") {
+        "Recommended".to_string()
+    } else if id.contains("grok-4") {
         "Most capable".to_string()
     } else if id.contains("grok-3-mini") {
         "Fast".to_string()

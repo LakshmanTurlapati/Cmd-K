@@ -18,10 +18,9 @@ export function StepModelSelect({ onNext }: StepModelSelectProps) {
   useEffect(() => {
     if (!hasModels || selectedModel) return;
 
-    const balanced = availableModels.find(
-      (m) => m.label === "Balanced" || m.label === "Recommended"
-    );
-    const defaultModel = balanced ?? availableModels[0];
+    const recommended = availableModels.find((m) => m.label === "Recommended")
+      ?? availableModels.find((m) => m.label === "Balanced");
+    const defaultModel = recommended ?? availableModels[0];
     if (defaultModel) {
       setSelectedModel(defaultModel.id);
       persistModel(defaultModel.id);
@@ -38,48 +37,43 @@ export function StepModelSelect({ onNext }: StepModelSelectProps) {
     }
   };
 
-  const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value;
-    setSelectedModel(value);
-    await persistModel(value);
-  };
-
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <p className="text-white/40 text-xs uppercase tracking-wider">
-          Grok Model
+          xAI Model
         </p>
 
         {hasModels ? (
-          <select
-            value={selectedModel ?? ""}
-            onChange={handleChange}
-            className={[
-              "w-full bg-white/8 border border-white/10 rounded-lg",
-              "px-3 py-2 text-sm text-white cursor-pointer",
-              "focus:outline-none focus:border-white/25 transition-colors",
-            ].join(" ")}
-          >
+          <div className="flex flex-col gap-1">
             {availableModels.map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.id}
-                {model.label ? ` (${model.label})` : ""}
-              </option>
+              <button
+                key={model.id}
+                type="button"
+                onClick={async () => {
+                  setSelectedModel(model.id);
+                  await persistModel(model.id);
+                }}
+                className={[
+                  "flex items-center justify-between w-full rounded-lg px-3 py-2 text-sm text-left",
+                  "cursor-default transition-colors",
+                  selectedModel === model.id
+                    ? "bg-white/15 text-white"
+                    : "text-white/70 hover:bg-white/8 hover:text-white",
+                ].join(" ")}
+              >
+                <span>{model.id}</span>
+                {model.label && (
+                  <span className="text-white/30 text-xs">{model.label}</span>
+                )}
+              </button>
             ))}
-          </select>
+          </div>
         ) : (
           <div className="flex flex-col gap-2">
-            <select
-              disabled
-              className={[
-                "w-full bg-white/8 border border-white/10 rounded-lg",
-                "px-3 py-2 text-sm text-white/30 cursor-not-allowed",
-                "focus:outline-none transition-colors",
-              ].join(" ")}
-            >
-              <option value="">No models available</option>
-            </select>
+            <div className="w-full bg-white/8 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/30">
+              No models available
+            </div>
             <p className="text-white/30 text-xs">
               Configure API key first to select a model
             </p>

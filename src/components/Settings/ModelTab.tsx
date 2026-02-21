@@ -32,10 +32,9 @@ export function ModelTab() {
   useEffect(() => {
     if (!isEnabled || selectedModel) return;
 
-    const balanced = availableModels.find(
-      (m) => m.label === "Balanced" || m.label === "Recommended"
-    );
-    const defaultModel = balanced ?? availableModels[0];
+    const recommended = availableModels.find((m) => m.label === "Recommended")
+      ?? availableModels.find((m) => m.label === "Balanced");
+    const defaultModel = recommended ?? availableModels[0];
     if (defaultModel) {
       setSelectedModel(defaultModel.id);
       persistModel(defaultModel.id);
@@ -52,45 +51,43 @@ export function ModelTab() {
     }
   };
 
-  const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value;
-    setSelectedModel(value);
-    await persistModel(value);
-  };
-
   return (
     <div className="flex flex-col gap-4">
       {/* Model selection */}
       <div className="flex flex-col gap-1.5">
         <p className="text-white/40 text-xs uppercase tracking-wider">
-          Grok Model
+          xAI Model
         </p>
-        <select
-          value={selectedModel ?? ""}
-          onChange={handleChange}
-          disabled={!isEnabled}
-          className={[
-            "w-full bg-white/8 border border-white/10 rounded-lg",
-            "px-3 py-2 text-sm transition-colors",
-            "focus:outline-none focus:border-white/25",
-            isEnabled
-              ? "text-white cursor-pointer"
-              : "text-white/30 cursor-not-allowed",
-          ].join(" ")}
-        >
-          {!isEnabled && (
-            <option value="" disabled>
-              Validate API key first
-            </option>
-          )}
-          {isEnabled &&
-            availableModels.map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.id}
-                {model.label ? ` (${model.label})` : ""}
-              </option>
+        {!isEnabled ? (
+          <div className="w-full bg-white/8 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/30">
+            Validate API key first
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {availableModels.map((model) => (
+              <button
+                key={model.id}
+                type="button"
+                onClick={async () => {
+                  setSelectedModel(model.id);
+                  await persistModel(model.id);
+                }}
+                className={[
+                  "flex items-center justify-between w-full rounded-lg px-3 py-2 text-sm text-left",
+                  "cursor-default transition-colors",
+                  selectedModel === model.id
+                    ? "bg-white/15 text-white"
+                    : "text-white/70 hover:bg-white/8 hover:text-white",
+                ].join(" ")}
+              >
+                <span>{model.id}</span>
+                {model.label && (
+                  <span className="text-white/30 text-xs">{model.label}</span>
+                )}
+              </button>
             ))}
-        </select>
+          </div>
+        )}
       </div>
 
       {/* Usage placeholder */}
