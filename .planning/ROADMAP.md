@@ -12,7 +12,7 @@ CMD+K transforms from concept to production through six phases that establish th
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Foundation & Overlay** - System-wide overlay with global hotkey
+- [x] **Phase 1: Foundation & Overlay** - System-wide overlay with global hotkey (completed 2026-02-21)
 - [ ] **Phase 2: Settings & Configuration** - API key management and onboarding
 - [ ] **Phase 3: Terminal Context Reading** - Detect terminal state without shell plugins
 - [ ] **Phase 4: AI Command Generation** - Natural language to terminal commands via xAI
@@ -115,7 +115,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation & Overlay | 2/3 (3rd at checkpoint) | In progress | - |
+| 1. Foundation & Overlay | 2/3 (3rd at checkpoint) | Complete    | 2026-02-21 |
 | 2. Settings & Configuration | 0/TBD | Not started | - |
 | 3. Terminal Context Reading | 0/TBD | Not started | - |
 | 4. AI Command Generation | 0/TBD | Not started | - |
