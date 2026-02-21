@@ -1,15 +1,26 @@
 import { create } from "zustand";
 
 interface OverlayState {
+  // Overlay visibility
   visible: boolean;
   inputValue: string;
   submitted: boolean;
   showApiWarning: boolean;
+
+  // Hotkey config dialog
+  hotkeyConfigOpen: boolean;
+  currentHotkey: string;
+
+  // Actions
   show: () => void;
   hide: () => void;
   setInputValue: (value: string) => void;
   submit: () => void;
   reset: () => void;
+
+  openHotkeyConfig: () => void;
+  closeHotkeyConfig: () => void;
+  setCurrentHotkey: (shortcut: string) => void;
 }
 
 export const useOverlayStore = create<OverlayState>((set) => ({
@@ -17,6 +28,9 @@ export const useOverlayStore = create<OverlayState>((set) => ({
   inputValue: "",
   submitted: false,
   showApiWarning: false,
+
+  hotkeyConfigOpen: false,
+  currentHotkey: "Super+KeyK",
 
   show: () =>
     set({
@@ -43,4 +57,10 @@ export const useOverlayStore = create<OverlayState>((set) => ({
       submitted: false,
       showApiWarning: false,
     }),
+
+  openHotkeyConfig: () => set({ hotkeyConfigOpen: true }),
+
+  closeHotkeyConfig: () => set({ hotkeyConfigOpen: false }),
+
+  setCurrentHotkey: (shortcut: string) => set({ currentHotkey: shortcut }),
 }));
