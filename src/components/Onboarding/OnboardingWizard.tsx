@@ -51,38 +51,63 @@ export function OnboardingWizard() {
           Welcome to CMD+K
         </h1>
 
-        {/* Progress indicator */}
-        <div className="flex items-center gap-1.5">
-          {stepLabels.map((label, index) => (
-            <div key={label} className="flex items-center gap-1.5">
-              <div className="flex flex-col items-center gap-0.5">
-                <div
-                  className={[
-                    "w-2 h-2 rounded-full transition-colors",
-                    index < onboardingStep
-                      ? "bg-green-400"
-                      : index === onboardingStep
-                        ? "bg-white"
-                        : "bg-white/20",
-                  ].join(" ")}
-                />
-                <span className="text-white/30 text-[10px]">{label}</span>
-              </div>
-              {index < TOTAL_STEPS - 1 && (
-                <div
-                  className={[
-                    "w-6 h-px mb-3 transition-colors",
-                    index < onboardingStep ? "bg-green-400/50" : "bg-white/15",
-                  ].join(" ")}
-                />
-              )}
-            </div>
-          ))}
-        </div>
+        {/* macOS-style stepper */}
+        <div className="relative w-[300px] h-[36px] flex items-center">
+          {/* Track background */}
+          <div className="absolute inset-x-0 h-[12px] bg-white/8 rounded-full shadow-[inset_0_1px_3px_rgba(0,0,0,0.2)]">
+            {/* Track fill */}
+            <div
+              className="h-full rounded-full transition-all duration-400 ease-[cubic-bezier(0.25,1,0.5,1)]"
+              style={{
+                width: `${12 + (onboardingStep / (TOTAL_STEPS - 1)) * 76}%`,
+                background: "rgba(255,255,255,0.12)",
+              }}
+            />
+          </div>
 
-        <p className="text-white/40 text-xs">
-          Step {onboardingStep + 1} of {TOTAL_STEPS}
-        </p>
+          {/* Step nodes */}
+          {stepLabels.map((_, index) => {
+            const position = 12 + (index / (TOTAL_STEPS - 1)) * 76;
+            const isCompleted = index < onboardingStep;
+            const isActive = index === onboardingStep;
+
+            return (
+              <div
+                key={index}
+                className="absolute -translate-x-1/2 z-10"
+                style={{ left: `${position}%` }}
+              >
+                <div
+                  className={[
+                    "w-[30px] h-[30px] rounded-full flex items-center justify-center",
+                    "text-[13px] font-medium transition-all duration-300",
+                    isCompleted
+                      ? "bg-[#48484A]"
+                      : isActive
+                        ? "bg-white/15 backdrop-blur-[12px] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.2),0_4px_12px_rgba(0,0,0,0.15)] text-white/90"
+                        : "bg-transparent text-white/30",
+                  ].join(" ")}
+                >
+                  {isCompleted ? (
+                    <svg
+                      className="w-[14px] h-[14px] transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.275)]"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="white"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polyline points="5 12 10 17 19 8" />
+                    </svg>
+                  ) : (
+                    <span>{index + 1}</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Step content */}
