@@ -41,6 +41,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "resources": ["../K.png"],
     "macOS": {
       "entitlements": "entitlements.plist",
       "signingIdentity": null

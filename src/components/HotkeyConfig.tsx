@@ -73,11 +73,25 @@ export function HotkeyConfig() {
     closeHotkeyConfig();
   };
 
+  const tauriToDisplay = (shortcut: string): string => {
+    return shortcut
+      .split("+")
+      .map((part) => {
+        if (part === "Super") return "Cmd";
+        if (part === "Control") return "Ctrl";
+        if (part === "Alt") return "Option";
+        if (part.startsWith("Key")) return part.slice(3);
+        if (part.startsWith("Digit")) return part.slice(5);
+        return part;
+      })
+      .join(" + ");
+  };
+
   const currentDisplayLabel =
-    PRESETS.find((p) => p.shortcut === currentHotkey)?.label ?? currentHotkey;
+    PRESETS.find((p) => p.shortcut === currentHotkey)?.label ?? tauriToDisplay(currentHotkey);
 
   const selectedDisplayLabel =
-    PRESETS.find((p) => p.shortcut === selected)?.label ?? selected;
+    PRESETS.find((p) => p.shortcut === selected)?.label ?? tauriToDisplay(selected);
 
   return (
       <div className="flex flex-col gap-3">
@@ -118,7 +132,7 @@ export function HotkeyConfig() {
               {preset.note && (
                 <span className="text-white/30 text-xs">{preset.note}</span>
               )}
-              {selected === preset.shortcut && (
+              {selected === preset.shortcut && selected !== currentHotkey && (
                 <span className="text-white/60 text-xs ml-auto mr-0">
                   selected
                 </span>
@@ -129,6 +143,17 @@ export function HotkeyConfig() {
 
         {/* Custom recorder section */}
         <div className="flex flex-col gap-2">
+          {/* Show the current custom shortcut if it's not a preset */}
+          {!PRESETS.some((p) => p.shortcut === selected) && !showRecorder && selected && (
+            <button
+              type="button"
+              onClick={() => setShowRecorder(true)}
+              className="flex items-center justify-between rounded-lg px-3 py-2 text-sm text-left cursor-default transition-colors bg-white/15 text-white"
+            >
+              <span>{selectedDisplayLabel}</span>
+              <span className="text-white/30 text-xs">custom</span>
+            </button>
+          )}
           {!showRecorder ? (
             <button
               type="button"

@@ -77,25 +77,35 @@ export const useOverlayStore = create<OverlayState>((set) => ({
   currentHotkey: "Super+KeyK",
 
   show: () =>
-    set({
+    set((state) => ({
       visible: true,
-      mode: "command",
+      mode:
+        state.mode === "onboarding" && !state.onboardingComplete
+          ? "onboarding"
+          : "command",
       hotkeyConfigOpen: false,
       inputValue: "",
       submitted: false,
       showApiWarning: false,
-    }),
+    })),
 
-  hide: () => set({ visible: false, mode: "command", hotkeyConfigOpen: false }),
+  hide: () =>
+    set((state) => ({
+      visible: false,
+      mode:
+        state.mode === "onboarding" && !state.onboardingComplete
+          ? "onboarding"
+          : "command",
+      hotkeyConfigOpen: false,
+    })),
 
   setInputValue: (value: string) => set({ inputValue: value }),
 
   submit: () =>
-    set({
+    set((state) => ({
       submitted: true,
-      // Phase 1: always show API warning since no API is configured yet
-      showApiWarning: true,
-    }),
+      showApiWarning: state.apiKeyStatus !== "valid",
+    })),
 
   reset: () =>
     set({

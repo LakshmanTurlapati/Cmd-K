@@ -155,11 +155,6 @@ export function AccountTab() {
           {apiKeyStatus === "error" && (
             <p className="text-red-400/80 text-xs">Validation failed</p>
           )}
-          {apiKeyStatus === "valid" && apiKeyLast4 && (
-            <p className="text-green-400/60 text-xs">
-              Key ending in {apiKeyLast4} is valid
-            </p>
-          )}
         </div>
 
         {/* Delete key button */}

@@ -77,6 +77,8 @@ function App() {
           } catch {
             openOnboarding(onboardingStep);
           }
+          // Show the native window so the onboarding wizard is visible
+          await invoke("show_overlay");
         } else {
           // Onboarding done -- load API key status and models for settings panel
           try {
