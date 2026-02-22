@@ -55,7 +55,7 @@ Plans:
 - [ ] 02-03-PLAN.md -- Onboarding wizard: 4-step setup flow (Accessibility, API key, Model, Done) with persistence + human verification
 
 ### Phase 3: Terminal Context Reading
-**Goal**: App detects active terminal's working directory and recent output without shell plugins
+**Goal**: App detects active app context (terminal state, browser console, app identity) and displays appropriate badge without shell plugins
 **Depends on**: Phase 2 (needs Accessibility permissions from onboarding)
 **Requirements**: TERM-02, TERM-03, TERM-04
 **Success Criteria** (what must be TRUE):
@@ -63,12 +63,17 @@ Plans:
   2. App reads recent terminal output visible on screen for command context
   3. Detection works across Terminal.app, iTerm2, Alacritty, kitty, and WezTerm
   4. When Accessibility permission denied, app gracefully degrades with clear explanation
-**Plans**: 3 plans
+  5. Every frontmost app gets a badge: shell type for terminals, "Console" for browsers with DevTools, cleaned app name otherwise
+  6. Browser console detection works for Chrome, Safari, Firefox, Arc, Edge, Brave
+  7. Shells inside code editors (VS Code, Cursor) show shell badge, not editor name
+**Plans**: 5 plans
 
 Plans:
-- [ ] 03-01-PLAN.md -- Rust backend: dependencies (darwin-libproc, accessibility-sys, regex), AppState PID capture, terminal detection module (detect.rs + process.rs), get_terminal_context IPC command
-- [ ] 03-02-PLAN.md -- AX tree text reading for Terminal.app/iTerm2, sensitive data filtering, 500ms timeout wrapper, full detection pipeline wiring
+- [x] 03-01-PLAN.md -- Rust backend: dependencies, AppState PID capture, terminal detection module (detect.rs + process.rs), get_terminal_context IPC command
+- [x] 03-02-PLAN.md -- AX tree text reading for Terminal.app/iTerm2, sensitive data filtering, 500ms timeout wrapper, full detection pipeline wiring
 - [ ] 03-03-PLAN.md -- Frontend overlay integration: Zustand terminal context state, shell type label, accessibility banner, spinner + human verification
+- [ ] 03-04-PLAN.md -- App name resolution, browser console detection, AppContext struct, get_app_context IPC command
+- [ ] 03-05-PLAN.md -- Frontend badge priority system (shell > console > app name) + human verification of all badge scenarios
 
 ### Phase 4: AI Command Generation
 **Goal**: User describes intent in natural language and receives appropriate terminal command via xAI
@@ -121,7 +126,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. Foundation & Overlay | 2/3 (3rd at checkpoint) | Complete    | 2026-02-21 |
 | 2. Settings & Configuration | 2/3 | Complete    | 2026-02-21 |
-| 3. Terminal Context Reading | 1/3 | In Progress|  |
+| 3. Terminal Context Reading | 2/5 | In Progress|  |
 | 4. AI Command Generation | 0/TBD | Not started | - |
 | 5. Safety Layer | 0/TBD | Not started | - |
 | 6. Terminal Pasting | 0/TBD | Not started | - |
