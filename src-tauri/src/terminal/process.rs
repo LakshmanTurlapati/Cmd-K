@@ -379,28 +379,31 @@ fn find_shell_by_ancestry(app_pid: i32) -> Option<i32> {
     eprintln!("[process] found {} descendant shells: {:?}", descendant_shells.len(),
         descendant_shells.iter().map(|(pid, n)| (*pid, n.clone())).collect::<Vec<_>>());
 
-    // When multiple shells exist (e.g., Cursor with user zsh terminals + Claude Code bash),
-    // prefer shells matching the user's configured $SHELL to filter out tool-spawned shells.
-    let preferred_shell = std::env::var("SHELL").ok()
-        .and_then(|s| std::path::Path::new(&s).file_name()
-            .and_then(|n| n.to_str())
-            .map(|n| n.to_string()));
+    // Filter out sub-shells: shells that are descendants of OTHER shells in the list.
+    // This removes tool-spawned shells (e.g., Claude Code's bash spawned from within
+    // a user's zsh terminal) while keeping directly-opened terminal tabs of any type.
+    let shell_pid_set: Vec<i32> = descendant_shells.iter().map(|(pid, _)| *pid).collect();
+    let parent_map = build_parent_map();
 
-    let candidates: Vec<&(i32, Option<String>)> = if let Some(ref pref) = preferred_shell {
-        let matching: Vec<_> = descendant_shells.iter()
-            .filter(|(_, name)| name.as_deref() == Some(pref.as_str()))
-            .collect();
-        if !matching.is_empty() {
-            eprintln!("[process] preferring {} shells matching $SHELL ({} found)", pref, matching.len());
-            matching
-        } else {
-            descendant_shells.iter().collect()
-        }
+    let top_level_shells: Vec<&(i32, Option<String>)> = descendant_shells.iter()
+        .filter(|(pid, name)| {
+            let is_sub = is_sub_shell_of_any(*pid, &shell_pid_set, &parent_map);
+            if is_sub {
+                eprintln!("[process] filtering out sub-shell pid {} ({:?}) -- descendant of another shell", pid, name);
+            }
+            !is_sub
+        })
+        .collect();
+
+    let candidates = if top_level_shells.is_empty() {
+        // All shells are sub-shells of each other (shouldn't happen), fall back to all
+        eprintln!("[process] all shells are sub-shells, using full list");
+        descendant_shells.iter().collect::<Vec<_>>()
     } else {
-        descendant_shells.iter().collect()
+        top_level_shells
     };
 
-    // Among candidates, pick the most recently spawned (highest PID).
+    // Among top-level shells, pick the most recently spawned (highest PID).
     let best = candidates.iter().max_by_key(|(pid, _)| *pid);
     best.map(|(pid, _)| *pid)
 }
@@ -438,6 +441,48 @@ fn get_parent_pid(pid: i32) -> Option<i32> {
         .trim()
         .parse::<i32>()
         .ok()
+}
+
+/// Build a PID -> parent PID map from a single `ps` call.
+/// Much faster than calling `get_parent_pid` per-process for sub-shell filtering.
+#[cfg(target_os = "macos")]
+fn build_parent_map() -> std::collections::HashMap<i32, i32> {
+    let mut map = std::collections::HashMap::new();
+    let output = std::process::Command::new("ps")
+        .args(["-eo", "pid=,ppid="])
+        .output();
+
+    if let Ok(out) = output {
+        for line in String::from_utf8_lossy(&out.stdout).lines() {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() == 2 {
+                if let (Ok(pid), Ok(ppid)) = (parts[0].parse::<i32>(), parts[1].parse::<i32>()) {
+                    map.insert(pid, ppid);
+                }
+            }
+        }
+    }
+    map
+}
+
+/// Check if `pid` is a descendant of any PID in `ancestor_pids` using the pre-built parent map.
+/// This identifies sub-shells (e.g., Claude Code's bash spawned from a user's zsh).
+#[cfg(target_os = "macos")]
+fn is_sub_shell_of_any(pid: i32, ancestor_pids: &[i32], parent_map: &std::collections::HashMap<i32, i32>) -> bool {
+    let mut current = pid;
+    for _ in 0..20 {
+        match parent_map.get(&current) {
+            Some(&ppid) if ppid <= 1 => return false,
+            Some(&ppid) => {
+                if ancestor_pids.contains(&ppid) {
+                    return true;
+                }
+                current = ppid;
+            }
+            None => return false,
+        }
+    }
+    false
 }
 
 #[cfg(not(target_os = "macos"))]
