@@ -379,11 +379,29 @@ fn find_shell_by_ancestry(app_pid: i32) -> Option<i32> {
     eprintln!("[process] found {} descendant shells: {:?}", descendant_shells.len(),
         descendant_shells.iter().map(|(pid, n)| (*pid, n.clone())).collect::<Vec<_>>());
 
-    // Pick the most recently spawned shell (highest PID).
-    // On macOS, PIDs increment monotonically (with wraparound at ~99999),
-    // so the highest PID is typically the most recently created process,
-    // which corresponds to the most recently opened terminal tab.
-    let best = descendant_shells.iter().max_by_key(|(pid, _)| *pid);
+    // When multiple shells exist (e.g., Cursor with user zsh terminals + Claude Code bash),
+    // prefer shells matching the user's configured $SHELL to filter out tool-spawned shells.
+    let preferred_shell = std::env::var("SHELL").ok()
+        .and_then(|s| std::path::Path::new(&s).file_name()
+            .and_then(|n| n.to_str())
+            .map(|n| n.to_string()));
+
+    let candidates: Vec<&(i32, Option<String>)> = if let Some(ref pref) = preferred_shell {
+        let matching: Vec<_> = descendant_shells.iter()
+            .filter(|(_, name)| name.as_deref() == Some(pref.as_str()))
+            .collect();
+        if !matching.is_empty() {
+            eprintln!("[process] preferring {} shells matching $SHELL ({} found)", pref, matching.len());
+            matching
+        } else {
+            descendant_shells.iter().collect()
+        }
+    } else {
+        descendant_shells.iter().collect()
+    };
+
+    // Among candidates, pick the most recently spawned (highest PID).
+    let best = candidates.iter().max_by_key(|(pid, _)| *pid);
     best.map(|(pid, _)| *pid)
 }
 
