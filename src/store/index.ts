@@ -120,13 +120,15 @@ export const useOverlayStore = create<OverlayState>((set) => ({
         const hasPermission = await invoke<boolean>(
           "check_accessibility_permission"
         );
+        console.log("[store] accessibility permission:", hasPermission);
         useOverlayStore.getState().setAccessibilityGranted(hasPermission);
 
         // Detect terminal context (returns null for non-terminal apps)
         const ctx = await invoke<TerminalContext | null>("get_terminal_context");
+        console.log("[store] terminal context:", JSON.stringify(ctx));
         useOverlayStore.getState().setTerminalContext(ctx);
-      } catch {
-        // Silent failure -- AI works without terminal context
+      } catch (err) {
+        console.error("[store] context detection error:", err);
       } finally {
         useOverlayStore.getState().setIsDetectingContext(false);
       }

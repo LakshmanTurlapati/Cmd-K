@@ -14,11 +14,22 @@ use crate::terminal;
 #[tauri::command]
 pub fn get_terminal_context(app: AppHandle) -> Option<terminal::TerminalContext> {
     // Read the previously captured frontmost app PID from AppState
-    let pid = (*app
-        .try_state::<AppState>()?
-        .previous_app_pid
-        .lock()
-        .ok()?)?;
+    let state = app.try_state::<AppState>();
+    if state.is_none() {
+        eprintln!("[terminal] AppState not found");
+        return None;
+    }
+    let state = state.unwrap();
+    let guard = state.previous_app_pid.lock();
+    if guard.is_err() {
+        eprintln!("[terminal] previous_app_pid mutex poisoned");
+        return None;
+    }
+    let pid_opt = *guard.unwrap();
+    eprintln!("[terminal] get_terminal_context called, previous_app_pid={:?}", pid_opt);
 
-    terminal::detect(pid)
+    let pid = pid_opt?;
+    let result = terminal::detect(pid);
+    eprintln!("[terminal] detect({}) returned: {:?}", pid, result.as_ref().map(|c| (&c.shell_type, &c.cwd)));
+    result
 }

@@ -114,13 +114,17 @@ pub fn register_hotkey(app: AppHandle, shortcut_str: String) -> Result<(), Strin
 
                 // Only capture PID when about to show (not when hiding)
                 if !is_currently_visible {
-                    if let Some(pid) = get_frontmost_pid() {
+                    let pid = get_frontmost_pid();
+                    eprintln!("[hotkey] overlay hidden, capturing frontmost PID: {:?}", pid);
+                    if let Some(pid) = pid {
                         if let Some(state) = app_handle.try_state::<AppState>() {
                             if let Ok(mut prev) = state.previous_app_pid.lock() {
                                 *prev = Some(pid);
                             }
                         }
                     }
+                } else {
+                    eprintln!("[hotkey] overlay visible, hiding (no PID capture)");
                 }
 
                 toggle_overlay(&app_handle);

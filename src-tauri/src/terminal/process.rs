@@ -82,9 +82,21 @@ pub struct ProcessInfo {
 /// Walks the process tree from the terminal app PID to find the foreground shell,
 /// handles tmux/screen multiplexers by walking deeper (max 3 levels).
 pub fn get_foreground_info(terminal_pid: i32) -> ProcessInfo {
+    eprintln!("[process] get_foreground_info for terminal_pid={}", terminal_pid);
+    let children = get_child_pids(terminal_pid);
+    eprintln!("[process] direct children of {}: {:?}", terminal_pid, children);
+    for &child in &children {
+        let name = get_process_name(child);
+        eprintln!("[process]   child {} -> name: {:?}", child, name);
+    }
+
     let shell_pid = match find_shell_pid(terminal_pid) {
-        Some(pid) => pid,
+        Some(pid) => {
+            eprintln!("[process] found shell pid: {} (name: {:?})", pid, get_process_name(pid));
+            pid
+        }
         None => {
+            eprintln!("[process] no shell pid found for terminal_pid={}", terminal_pid);
             return ProcessInfo {
                 cwd: None,
                 shell_type: None,
@@ -95,10 +107,12 @@ pub fn get_foreground_info(terminal_pid: i32) -> ProcessInfo {
 
     // Get CWD from the shell process via proc_pidinfo PROC_PIDVNODEPATHINFO
     let cwd = get_process_cwd(shell_pid);
+    eprintln!("[process] cwd for shell_pid {}: {:?}", shell_pid, cwd);
 
     // Get shell type from actual binary name (not $SHELL -- avoids Pitfall 7)
     let shell_name = get_process_name(shell_pid);
     let shell_type = shell_name.clone();
+    eprintln!("[process] shell_type for {}: {:?}", shell_pid, shell_type);
 
     // Check if a foreground process is running inside the shell (e.g., node, python)
     let running_process = find_running_process(shell_pid, &shell_name);
@@ -110,18 +124,29 @@ pub fn get_foreground_info(terminal_pid: i32) -> ProcessInfo {
     }
 }
 
-/// Get the current working directory of a process via libproc proc_pidinfo.
+/// Get the current working directory of a process.
 ///
-/// Uses PROC_PIDVNODEPATHINFO flavor which returns a proc_vnodepathinfo struct
-/// containing the current directory (pvi_cdir) and root directory (pvi_rdir).
-/// The CWD path is extracted from the pvi_cdir.pvip.vip_path field.
+/// Tries proc_pidinfo with PROC_PIDVNODEPATHINFO first (fast, no subprocess).
+/// Falls back to `lsof -a -p <pid> -d cwd -Fn` if proc_pidinfo fails
+/// (which happens for processes spawned by root-owned parents like `login`).
 #[cfg(target_os = "macos")]
 fn get_process_cwd(pid: i32) -> Option<String> {
+    // Fast path: proc_pidinfo
+    if let Some(cwd) = get_process_cwd_libproc(pid) {
+        return Some(cwd);
+    }
+
+    // Fallback: lsof
+    eprintln!("[process] proc_pidinfo CWD failed for pid {}, trying lsof fallback", pid);
+    get_process_cwd_lsof(pid)
+}
+
+/// Fast path: use proc_pidinfo with PROC_PIDVNODEPATHINFO.
+#[cfg(target_os = "macos")]
+fn get_process_cwd_libproc(pid: i32) -> Option<String> {
     use std::ffi::CStr;
 
     let mut buf = [0u8; PROC_VNODEPATHINFO_SIZE];
-    // SAFETY: buf is stack-allocated with the exact size of proc_vnodepathinfo.
-    // proc_pidinfo is a stable macOS public C API. We check the return value.
     let ret = unsafe {
         ffi::proc_pidinfo(
             pid,
@@ -133,12 +158,11 @@ fn get_process_cwd(pid: i32) -> Option<String> {
     };
 
     if ret <= 0 {
+        eprintln!("[process] proc_pidinfo({}, VNODEPATHINFO) returned {}", pid, ret);
         return None;
     }
 
-    // Extract the path from pvi_cdir.pvip.vip_path (at VIP_PATH_OFFSET within the struct)
     let path_slice = &buf[VIP_PATH_OFFSET..VIP_PATH_OFFSET + PATH_MAX];
-    // SAFETY: We have a valid zero-terminated buffer from the kernel.
     let c_str = unsafe { CStr::from_ptr(path_slice.as_ptr() as *const i8) };
     let path = c_str.to_string_lossy();
     if path.is_empty() {
@@ -146,6 +170,33 @@ fn get_process_cwd(pid: i32) -> Option<String> {
     } else {
         Some(path.into_owned())
     }
+}
+
+/// Fallback: use `lsof` to get CWD of a process.
+#[cfg(target_os = "macos")]
+fn get_process_cwd_lsof(pid: i32) -> Option<String> {
+    let output = std::process::Command::new("lsof")
+        .args(["-a", "-p", &pid.to_string(), "-d", "cwd", "-Fn"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        eprintln!("[process] lsof CWD for pid {} failed", pid);
+        return None;
+    }
+
+    // lsof -Fn output: lines starting with 'n' contain the path
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        if let Some(path) = line.strip_prefix('n') {
+            if !path.is_empty() {
+                eprintln!("[process] lsof CWD for pid {}: {}", pid, path);
+                return Some(path.to_string());
+            }
+        }
+    }
+
+    None
 }
 
 /// Non-macOS stub.
@@ -181,26 +232,38 @@ fn get_process_name(_pid: i32) -> Option<String> {
     None
 }
 
-/// Get the child PIDs of a process using proc_listchildpids.
+/// Get the child PIDs of a process.
 ///
-/// Returns an empty Vec if there are no children or on error.
+/// Tries proc_listchildpids first (fast), falls back to sysctl KERN_PROC scan
+/// if that returns nothing (proc_listchildpids can fail for root-owned processes
+/// like `login` when called from a user-owned process).
 #[cfg(target_os = "macos")]
 fn get_child_pids(pid: i32) -> Vec<i32> {
-    // First call with NULL buffer to get the count
-    // SAFETY: NULL buffer with 0 size is a documented pattern for proc_listchildpids
+    // Try proc_listchildpids first (fast path)
+    let pids = get_child_pids_libproc(pid);
+    if !pids.is_empty() {
+        return pids;
+    }
+
+    // Fallback: scan all processes via sysctl and find those with ppid == pid
+    eprintln!("[process] proc_listchildpids({}) returned empty, trying sysctl fallback", pid);
+    get_child_pids_sysctl(pid)
+}
+
+/// Fast path: use proc_listchildpids.
+#[cfg(target_os = "macos")]
+fn get_child_pids_libproc(pid: i32) -> Vec<i32> {
     let count = unsafe { ffi::proc_listchildpids(pid, std::ptr::null_mut(), 0) };
     if count <= 0 {
         return Vec::new();
     }
 
-    // count is the number of bytes needed (n_pids * sizeof(pid_t) = n_pids * 4)
     let n_pids = (count as usize) / std::mem::size_of::<i32>();
     if n_pids == 0 {
         return Vec::new();
     }
 
     let mut pids: Vec<i32> = vec![0i32; n_pids];
-    // SAFETY: pids Vec is properly allocated with the right size.
     let ret = unsafe {
         ffi::proc_listchildpids(pid, pids.as_mut_ptr(), count)
     };
@@ -209,12 +272,37 @@ fn get_child_pids(pid: i32) -> Vec<i32> {
         return Vec::new();
     }
 
-    // Actual number of PIDs written
     let actual_n = (ret as usize) / std::mem::size_of::<i32>();
     pids.truncate(actual_n);
-    // Filter out zero PIDs (padding/error values)
     pids.retain(|&p| p > 0);
     pids
+}
+
+/// Fallback: use `pgrep -P <pid>` to find child processes.
+/// This works reliably for all process types including root-owned processes
+/// like `login`, where proc_listchildpids may fail due to permissions.
+#[cfg(target_os = "macos")]
+fn get_child_pids_sysctl(ppid: i32) -> Vec<i32> {
+    let output = std::process::Command::new("pgrep")
+        .arg("-P")
+        .arg(ppid.to_string())
+        .output();
+
+    match output {
+        Ok(out) if out.status.success() => {
+            let pids: Vec<i32> = String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .filter_map(|line| line.trim().parse::<i32>().ok())
+                .filter(|&p| p > 0)
+                .collect();
+            eprintln!("[process] pgrep -P {} found: {:?}", ppid, pids);
+            pids
+        }
+        _ => {
+            eprintln!("[process] pgrep -P {} failed or no children", ppid);
+            Vec::new()
+        }
+    }
 }
 
 /// Non-macOS stub.
@@ -223,14 +311,120 @@ fn get_child_pids(_pid: i32) -> Vec<i32> {
     Vec::new()
 }
 
-/// Walk child processes from a terminal app PID to find the foreground shell PID.
+/// Find the foreground shell PID for a given app.
 ///
-/// Handles multiplexers (tmux/screen) and wrapper processes (login, sshd, su, sudo):
-/// - Terminal.app: Terminal → login → zsh
-/// - tmux: Terminal → tmux-server → tmux-client → zsh
-/// Walks up to 3 levels deep to find the actual shell.
+/// Strategy:
+/// 1. Fast path: walk direct children (handles Terminal.app → login → zsh).
+/// 2. Broad path: use `pgrep` to find all shell processes system-wide,
+///    then check which ones are descendants of this app PID by walking
+///    up the parent chain. This handles deep Electron trees in VS Code/Cursor
+///    (e.g., VSCode → Helper → node → pty-helper → zsh).
 fn find_shell_pid(terminal_pid: i32) -> Option<i32> {
-    find_shell_recursive(terminal_pid, 3)
+    // Try the fast recursive walk first (works for simple terminal apps)
+    if let Some(pid) = find_shell_recursive(terminal_pid, 3) {
+        return Some(pid);
+    }
+
+    // Broad search: find shells that are descendants of this app
+    eprintln!("[process] recursive walk failed for {}, trying ancestry search", terminal_pid);
+    find_shell_by_ancestry(terminal_pid)
+}
+
+/// Find shell processes that are descendants of the given app PID.
+///
+/// Uses `pgrep` to find all running shell processes, then for each one
+/// walks up the parent chain to check if the app PID is an ancestor.
+/// Collects ALL matching shells and picks the most recently spawned one
+/// (highest PID), which is most likely the active/focused terminal tab.
+#[cfg(target_os = "macos")]
+fn find_shell_by_ancestry(app_pid: i32) -> Option<i32> {
+    // Build a pgrep pattern matching all known shells
+    let shell_pattern = KNOWN_SHELLS.join("|");
+    let output = std::process::Command::new("pgrep")
+        .arg("-x") // exact match on process name
+        .arg(&shell_pattern)
+        .output();
+
+    let shell_pids: Vec<i32> = match output {
+        Ok(out) if out.status.success() => {
+            String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .filter_map(|line| line.trim().parse::<i32>().ok())
+                .filter(|&p| p > 0)
+                .collect()
+        }
+        _ => {
+            eprintln!("[process] pgrep for shells failed");
+            return None;
+        }
+    };
+
+    eprintln!("[process] found {} shell processes system-wide, checking ancestry to {}", shell_pids.len(), app_pid);
+
+    // Collect ALL shells that are descendants of the app
+    let mut descendant_shells: Vec<(i32, Option<String>)> = Vec::new();
+    for &shell_pid in &shell_pids {
+        if is_descendant_of(shell_pid, app_pid) {
+            let name = get_process_name(shell_pid);
+            eprintln!("[process] shell pid {} ({:?}) is a descendant of app {}", shell_pid, name, app_pid);
+            descendant_shells.push((shell_pid, name));
+        }
+    }
+
+    if descendant_shells.is_empty() {
+        eprintln!("[process] no shell found as descendant of {}", app_pid);
+        return None;
+    }
+
+    eprintln!("[process] found {} descendant shells: {:?}", descendant_shells.len(),
+        descendant_shells.iter().map(|(pid, n)| (*pid, n.clone())).collect::<Vec<_>>());
+
+    // Pick the most recently spawned shell (highest PID).
+    // On macOS, PIDs increment monotonically (with wraparound at ~99999),
+    // so the highest PID is typically the most recently created process,
+    // which corresponds to the most recently opened terminal tab.
+    let best = descendant_shells.iter().max_by_key(|(pid, _)| *pid);
+    best.map(|(pid, _)| *pid)
+}
+
+/// Check if `pid` is a descendant of `ancestor_pid` by walking up the parent chain.
+/// Walks at most 15 levels to avoid infinite loops from PID 1.
+#[cfg(target_os = "macos")]
+fn is_descendant_of(pid: i32, ancestor_pid: i32) -> bool {
+    let mut current = pid;
+    for _ in 0..15 {
+        let parent = get_parent_pid(current);
+        match parent {
+            Some(ppid) if ppid == ancestor_pid => return true,
+            Some(ppid) if ppid <= 1 => return false, // reached init/launchd
+            Some(ppid) => current = ppid,
+            None => return false,
+        }
+    }
+    false
+}
+
+/// Get the parent PID of a process using `ps`.
+#[cfg(target_os = "macos")]
+fn get_parent_pid(pid: i32) -> Option<i32> {
+    let output = std::process::Command::new("ps")
+        .args(["-o", "ppid=", "-p", &pid.to_string()])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .parse::<i32>()
+        .ok()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn find_shell_by_ancestry(_app_pid: i32) -> Option<i32> {
+    None
 }
 
 /// Recursively walk child processes to find a shell, walking through

@@ -61,29 +61,42 @@ pub fn detect(previous_app_pid: i32) -> Option<TerminalContext> {
 /// 4. For non-GPU terminals: read visible output via Accessibility API.
 /// 5. Filter captured text for sensitive data before returning.
 fn detect_inner(previous_app_pid: i32) -> Option<TerminalContext> {
-    // 1. Get bundle ID of the previous frontmost app.
-    let bundle_id = detect::get_bundle_id(previous_app_pid)?;
+    eprintln!("[detect_inner] starting for pid {}", previous_app_pid);
 
-    // 2. Check if it is a known terminal emulator.
-    if !detect::is_known_terminal(&bundle_id) {
-        // Not a terminal -- overlay works fine without terminal context.
+    // 1. Get bundle ID of the previous frontmost app.
+    let bundle_id = detect::get_bundle_id(previous_app_pid);
+    let bundle_str = bundle_id.as_deref().unwrap_or("unknown");
+    let is_terminal = bundle_id.as_deref().map_or(false, detect::is_known_terminal);
+
+    if is_terminal {
+        eprintln!("[detect_inner] {} IS a known terminal", bundle_str);
+    } else {
+        eprintln!("[detect_inner] {} is NOT a known terminal, trying generic shell detection", bundle_str);
+    }
+
+    // 2. Read process info (CWD, shell type, running process) via libproc.
+    //    This works for both standalone terminals and apps with integrated terminals
+    //    (VS Code, Cursor, etc.) by walking the process tree to find shell processes.
+    let proc_info = process::get_foreground_info(previous_app_pid);
+
+    // If no shell found in the process tree, this app has no terminal context.
+    if proc_info.shell_type.is_none() && proc_info.cwd.is_none() {
+        eprintln!("[detect_inner] no shell found in process tree of {} ({})", previous_app_pid, bundle_str);
         return None;
     }
 
-    // 3. Check if this is a GPU-rendered terminal (cannot read AX text).
-    let is_gpu = detect::is_gpu_terminal(&bundle_id);
-
-    // 4. Read process info (CWD, shell type, running process) via libproc.
-    let proc_info = process::get_foreground_info(previous_app_pid);
-
-    // 5. Read visible output for AX-capable terminals only (Terminal.app, iTerm2).
-    //    GPU terminals (Alacritty, kitty, WezTerm) return None silently --
-    //    this is not an error, it is expected behavior.
-    let visible_output = if !is_gpu {
-        ax_reader::read_terminal_text(previous_app_pid, &bundle_id)
-            .map(|text| filter::filter_sensitive(&text))
+    // 3. Read visible output via AX only for known AX-capable terminals.
+    //    Non-terminal apps (editors) and GPU terminals skip this entirely.
+    let visible_output = if is_terminal {
+        let is_gpu = bundle_id.as_deref().map_or(true, detect::is_gpu_terminal);
+        if !is_gpu {
+            ax_reader::read_terminal_text(previous_app_pid, bundle_id.as_deref().unwrap_or(""))
+                .map(|text| filter::filter_sensitive(&text))
+        } else {
+            None
+        }
     } else {
-        None // GPU terminals: silent fallback, no AX text available
+        None // Non-terminal apps: no AX text reading
     };
 
     Some(TerminalContext {
