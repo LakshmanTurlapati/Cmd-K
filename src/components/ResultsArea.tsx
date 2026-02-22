@@ -26,6 +26,12 @@ export function ResultsArea() {
     );
   }
 
-  // Placeholder for Phase 4 AI output
-  return <div className="min-h-[4px]" />;
+  // Phase 4 will replace this with actual AI responses
+  return (
+    <div className="border-t border-white/10 pt-3 mt-1">
+      <p className="text-white/30 text-xs text-center">
+        AI responses coming soon
+      </p>
+    </div>
+  );
 }

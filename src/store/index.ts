@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { invoke } from "@tauri-apps/api/core";
 
 export type OverlayMode = "command" | "onboarding" | "settings";
 
@@ -115,8 +116,6 @@ export const useOverlayStore = create<OverlayState>((set) => ({
     // Overlay appears immediately with a spinner; context fills in after detection completes
     (async () => {
       try {
-        const { invoke } = await import("@tauri-apps/api/core");
-
         // Check accessibility permission each time overlay opens
         const hasPermission = await invoke<boolean>(
           "check_accessibility_permission"

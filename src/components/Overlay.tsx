@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useOverlayStore } from "@/store";
 import { CommandInput } from "./CommandInput";
 import { ResultsArea } from "./ResultsArea";
@@ -77,8 +78,7 @@ export function Overlay({ onSubmit }: OverlayProps) {
           {mode === "command" && !accessibilityGranted && (
             <div
               className="flex items-center gap-2 px-3 py-2 bg-amber-900/40 border border-amber-500/30 rounded-lg text-xs text-amber-200 cursor-pointer"
-              onClick={async () => {
-                const { invoke } = await import("@tauri-apps/api/core");
+              onClick={() => {
                 invoke("open_accessibility_settings");
               }}
             >
