@@ -17,6 +17,10 @@ const KNOWN_SHELLS: &[&str] = &[
 /// Process names indicating a terminal multiplexer that requires deeper process tree walking.
 const MULTIPLEXERS: &[&str] = &["tmux", "screen"];
 
+/// Wrapper processes that sit between the terminal app and the actual shell.
+/// Terminal.app spawns: Terminal → login → zsh. We need to walk through these.
+const SHELL_WRAPPERS: &[&str] = &["login", "sshd", "su", "sudo"];
+
 /// PATH_MAX on macOS is 1024 bytes.
 const PATH_MAX: usize = 1024;
 
@@ -221,60 +225,50 @@ fn get_child_pids(_pid: i32) -> Vec<i32> {
 
 /// Walk child processes from a terminal app PID to find the foreground shell PID.
 ///
-/// Handles tmux/screen multiplexers: if a direct child is a multiplexer,
-/// walks deeper (up to 3 levels) to find the actual shell.
+/// Handles multiplexers (tmux/screen) and wrapper processes (login, sshd, su, sudo):
+/// - Terminal.app: Terminal → login → zsh
+/// - tmux: Terminal → tmux-server → tmux-client → zsh
+/// Walks up to 3 levels deep to find the actual shell.
 fn find_shell_pid(terminal_pid: i32) -> Option<i32> {
-    let children = get_child_pids(terminal_pid);
-    if children.is_empty() {
-        return None;
-    }
-
-    for &child in &children {
-        let name = get_process_name(child);
-        if let Some(ref n) = name {
-            // If child is a multiplexer, walk deeper (Pitfall 6: max 3 levels)
-            if MULTIPLEXERS.iter().any(|m| n.contains(m)) {
-                if let Some(shell) = walk_multiplexer_tree(child, 3) {
-                    return Some(shell);
-                }
-            }
-            // If child is a known shell, return it directly
-            if KNOWN_SHELLS.contains(&n.as_str()) {
-                return Some(child);
-            }
-        }
-    }
-
-    // Fallback: return first child (might be a login shell wrapper or PTY process)
-    Some(children[0])
+    find_shell_recursive(terminal_pid, 3)
 }
 
-/// Recursively walk a multiplexer's process tree to find a shell.
-///
-/// max_depth prevents infinite recursion in pathological cases.
-/// 3 levels handles: terminal -> tmux-server -> tmux-client -> shell.
-fn walk_multiplexer_tree(parent_pid: i32, max_depth: u32) -> Option<i32> {
+/// Recursively walk child processes to find a shell, walking through
+/// multiplexers and wrapper processes (login, sshd, su, sudo).
+fn find_shell_recursive(pid: i32, max_depth: u32) -> Option<i32> {
     if max_depth == 0 {
         return None;
     }
 
-    let children = get_child_pids(parent_pid);
+    let children = get_child_pids(pid);
+    if children.is_empty() {
+        return None;
+    }
+
+    // First pass: look for a known shell among direct children
     for &child in &children {
-        let name = get_process_name(child);
-        if let Some(ref n) = name {
+        if let Some(ref n) = get_process_name(child) {
             if KNOWN_SHELLS.contains(&n.as_str()) {
                 return Some(child);
             }
-            if MULTIPLEXERS.iter().any(|m| n.contains(m)) {
-                if let Some(shell) = walk_multiplexer_tree(child, max_depth - 1) {
+        }
+    }
+
+    // Second pass: walk through multiplexers and wrapper processes
+    for &child in &children {
+        if let Some(ref n) = get_process_name(child) {
+            if MULTIPLEXERS.iter().any(|m| n.contains(m))
+                || SHELL_WRAPPERS.contains(&n.as_str())
+            {
+                if let Some(shell) = find_shell_recursive(child, max_depth - 1) {
                     return Some(shell);
                 }
             }
         }
     }
 
-    // If no shell found among children, return first child as best-effort fallback
-    children.first().copied()
+    // Fallback: try walking into the first child (might be an unlisted wrapper)
+    find_shell_recursive(children[0], max_depth - 1)
 }
 
 /// Find a non-shell foreground process running inside the shell.
