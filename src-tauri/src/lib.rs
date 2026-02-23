@@ -3,6 +3,7 @@ mod state;
 mod terminal;
 
 use commands::{
+    ai::stream_ai_response,
     hotkey::register_hotkey,
     keychain::{delete_api_key, get_api_key, save_api_key},
     permissions::{check_accessibility_permission, open_accessibility_settings},
@@ -123,6 +124,7 @@ pub fn run() {
             check_accessibility_permission,
             get_terminal_context,
             get_app_context,
+            stream_ai_response,
         ])
         .run(tauri::generate_context!())
         .expect("error while running CMD+K application");

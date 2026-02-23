@@ -1,3 +1,4 @@
+pub mod ai;
 pub mod hotkey;
 pub mod keychain;
 pub mod permissions;
