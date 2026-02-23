@@ -24,14 +24,6 @@ pub fn is_known_browser(bundle_id: &str) -> bool {
     BROWSER_BUNDLE_IDS.iter().any(|(id, _)| *id == bundle_id)
 }
 
-/// Returns the static display name for a browser bundle ID, if known.
-pub fn browser_display_name(bundle_id: &str) -> Option<&'static str> {
-    BROWSER_BUNDLE_IDS
-        .iter()
-        .find(|(id, _)| *id == bundle_id)
-        .map(|(_, name)| *name)
-}
-
 /// Static mapping of verbose macOS app names to shortened display names.
 const APP_NAME_MAP: &[(&str, &str)] = &[
     ("Google Chrome", "Chrome"),
