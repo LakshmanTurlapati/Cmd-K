@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 4 of 6 (AI Command Generation)
-Plan: 2 of 3 in current phase (04-02 complete, ready for 04-03)
-Status: In progress -- 04-02 complete, ready for 04-03 (clipboard/paste integration)
-Last activity: 2026-02-23 - Executed Phase 4 Plan 2 (frontend streaming UI: Zustand state machine, ResultsArea renderer, two-Escape keyboard)
+Plan: 3 of 3 in current phase (04-03 complete, Phase 4 done)
+Status: Phase 4 complete -- all 22 verification checks passed, ready for Phase 5
+Last activity: 2026-02-22 - Executed Phase 4 Plan 3 (end-to-end verification + UX polish: single-Escape close, input visible above results, click-position-aware input)
 
-Progress: [█████████░] 85%
+Progress: [██████████] 95%
 
 ## Performance Metrics
 
@@ -30,10 +30,10 @@ Progress: [█████████░] 85%
 | 01-foundation-overlay | 3 | 22 min | 7 min |
 | 02-settings-configuration | 2 | 24 min | 12 min |
 | 03-terminal-context-reading | 4 | 27 min | 7 min |
-| 04-ai-command-generation | 2 | 10 min | 5 min |
+| 04-ai-command-generation | 3 | 35 min | 12 min |
 
 **Recent Trend:**
-- Last 5 plans: 15 min (03-03), 4 min (03-04), 8 min (04-01), 2 min (04-02)
+- Last 5 plans: 4 min (03-04), 8 min (04-01), 2 min (04-02), 25 min (04-03)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -86,6 +86,10 @@ Recent decisions affecting current work:
 - [Phase 04-02]: submitQuery reads fresh state via useOverlayStore.getState() inside async IIFE to avoid stale closures
 - [Phase 04-02]: displayMode state machine ('input'|'streaming'|'result') replaces submitted/showApiWarning booleans for slot switching
 - [Phase 04-02]: show() resets turnHistory: [] to clear session on each overlay open
+- [Phase 04-03]: Escape always closes overlay (single press) -- simplified from two-Escape cycling state machine per user preference
+- [Phase 04-03]: CommandInput always rendered above ResultsArea (stacked) so query stays visible during streaming
+- [Phase 04-03]: handleMouseUp click-position heuristic -- selectionStart !== length triggers clear input vs edit mode
+- [Phase 04-03]: hide() resets all streaming state (isStreaming, displayMode, streamingText, streamError) for clean reopen
 
 ### Pending Todos
 
@@ -111,10 +115,12 @@ None yet.
 - Phase 3: darwin-libproc crate incompatible (memchr conflict); raw FFI approach used instead, works identically
 - Phase 4 Plan 1 COMPLETE: stream_ai_response Rust command with eventsource-stream SSE parsing, Channel<String> token streaming, two-mode system prompts, 10s timeout, Keychain API key read
 - Phase 4 Plan 2 COMPLETE: Frontend streaming UI -- Zustand displayMode state machine, ResultsArea monospace renderer with block cursor, two-Escape keyboard flow, session history (7 turns), auto-copy + click-to-copy
+- Phase 4 Plan 3 COMPLETE: End-to-end verification passed (all 22 checks); UX polish applied -- single-Escape close, input visible above results, click-position-aware input interaction
+- Phase 4 COMPLETE: All requirements AICG-01 and AICG-02 satisfied
 - Phase 5: AppleScript command injection must be solved before any terminal pasting
 
 ## Session Continuity
 
-Last session: 2026-02-23 (Phase 4 Plan 2 execution)
-Stopped at: Completed 04-02-PLAN.md (frontend streaming UI done, ready for 04-03 clipboard/paste integration)
+Last session: 2026-02-22 (Phase 4 Plan 3 execution)
+Stopped at: Completed 04-03-PLAN.md (end-to-end verification done, Phase 4 complete)
 Resume file: None
