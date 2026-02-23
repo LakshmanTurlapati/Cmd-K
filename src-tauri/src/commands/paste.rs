@@ -93,6 +93,29 @@ pub fn paste_to_terminal(app: AppHandle, command: String) -> Result<(), String> 
         pid, bundle_id, command
     );
 
+    // Write command to system clipboard via pbcopy.
+    // navigator.clipboard.writeText() in the webview may fail silently outside
+    // a user gesture context, so we ensure the clipboard has the text from Rust.
+    // Essential for the Cmd+V fallback; also a safety net for click-to-copy.
+    {
+        use std::io::Write;
+        match std::process::Command::new("pbcopy")
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+        {
+            Ok(mut child) => {
+                if let Some(mut stdin) = child.stdin.take() {
+                    let _ = stdin.write_all(command.as_bytes());
+                }
+                let _ = child.wait();
+                eprintln!("[paste] clipboard written via pbcopy");
+            }
+            Err(e) => {
+                eprintln!("[paste] pbcopy failed (non-fatal): {}", e);
+            }
+        }
+    }
+
     // Build the AppleScript for this terminal type
     let script = build_paste_script(&bundle_id, &command)?;
 
