@@ -7,6 +7,7 @@ use commands::{
     hotkey::register_hotkey,
     keychain::{delete_api_key, get_api_key, save_api_key},
     permissions::{check_accessibility_permission, open_accessibility_settings},
+    safety::{check_destructive, get_destructive_explanation},
     terminal::{get_app_context, get_terminal_context},
     tray::setup_tray,
     window::{hide_overlay, show_overlay},
@@ -125,6 +126,8 @@ pub fn run() {
             get_terminal_context,
             get_app_context,
             stream_ai_response,
+            check_destructive,
+            get_destructive_explanation,
         ])
         .run(tauri::generate_context!())
         .expect("error while running CMD+K application");
