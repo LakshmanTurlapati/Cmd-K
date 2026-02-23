@@ -10,11 +10,11 @@ use crate::terminal::detect::get_bundle_id;
 /// embed inside AppleScript double-quoted string literals.
 ///
 /// Supported terminals:
-/// - `com.googlecode.iterm2` (iTerm2): uses `write text … newline NO`
+/// - `com.googlecode.iterm2` (iTerm2): uses `write text ... newline NO`
 /// - `com.apple.Terminal` (Terminal.app): sends Ctrl+U to clear the line first,
 ///   then types the text using `keystroke` (does NOT execute the command)
-///
-/// Returns `Err` for any other bundle ID.
+/// - All other apps: universal fallback that activates the app and simulates
+///   Cmd+V via System Events (clipboard must already contain the command text)
 fn build_paste_script(bundle_id: &str, command: &str) -> Result<String, String> {
     // Escape backslashes first, then double-quotes, for safe AppleScript string interpolation.
     let escaped = command.replace('\\', "\\\\").replace('"', "\\\"");
@@ -43,7 +43,21 @@ end tell"#
 end tell"#
         )),
 
-        other => Err(format!("unsupported terminal: {}", other)),
+        // Universal fallback: activate the target app and simulate Cmd+V.
+        // The clipboard already has the command text (auto-copied before paste is called).
+        // Works for IDE terminals (Cursor, VS Code, etc.) and any other app.
+        _ => {
+            eprintln!("[paste] using universal Cmd+V fallback for bundle: {}", bundle_id);
+            Ok(format!(
+                r#"tell application id "{bundle_id}"
+    activate
+end tell
+delay 0.1
+tell application "System Events"
+    keystroke "v" using command down
+end tell"#
+            ))
+        }
     }
 }
 
@@ -90,9 +104,11 @@ pub fn paste_to_terminal(app: AppHandle, command: String) -> Result<(), String> 
         .map_err(|e| format!("failed to spawn osascript: {}", e))?;
 
     if output.status.success() {
+        eprintln!("[paste] paste succeeded for bundle: {}", bundle_id);
         Ok(())
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!("[paste] paste failed for bundle {}: {}", bundle_id, stderr.trim());
         Err(format!("osascript failed: {}", stderr.trim()))
     }
 }
