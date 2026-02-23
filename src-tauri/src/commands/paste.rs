@@ -19,13 +19,21 @@ fn build_paste_script(bundle_id: &str, command: &str) -> Result<String, String> 
     // Escape backslashes first, then double-quotes, for safe AppleScript string interpolation.
     let escaped = command.replace('\\', "\\\\").replace('"', "\\\"");
 
+    // Per-character delay (seconds) for typewriter effect.
+    // 0.02s = 50 chars/sec -- visually matches streaming speed.
+    let delay = "0.02";
+
     match bundle_id {
         "com.googlecode.iterm2" => Ok(format!(
             r#"tell application "iTerm2"
     activate
     tell current window
         tell current session
-            write text "{escaped}" newline NO
+            set cmd to "{escaped}"
+            repeat with i from 1 to length of cmd
+                write text (character i of cmd) newline NO
+                delay {delay}
+            end repeat
         end tell
     end tell
 end tell"#
@@ -37,17 +45,18 @@ end tell"#
     tell application "System Events"
         tell process "Terminal"
             keystroke "u" using control down
-            keystroke "{escaped}"
+            set cmd to "{escaped}"
+            repeat with i from 1 to length of cmd
+                keystroke (character i of cmd)
+                delay {delay}
+            end repeat
         end tell
     end tell
 end tell"#
         )),
 
         // Universal fallback: activate the target app and type via keystroke.
-        // Uses System Events keystroke which sends individual key events --
-        // the shell sees typed input, NOT a paste, so bracketed paste mode
-        // is not triggered and text appears cleanly.
-        // Clipboard still has the command (via pbcopy) as a manual fallback.
+        // Character-by-character with delays to match the streaming typewriter feel.
         _ => {
             eprintln!("[paste] using universal keystroke fallback for bundle: {}", bundle_id);
             Ok(format!(
@@ -57,7 +66,11 @@ end tell
 delay 0.1
 tell application "System Events"
     keystroke "u" using control down
-    keystroke "{escaped}"
+    set cmd to "{escaped}"
+    repeat with i from 1 to length of cmd
+        keystroke (character i of cmd)
+        delay {delay}
+    end repeat
 end tell"#
             ))
         }
