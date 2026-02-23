@@ -19,9 +19,9 @@ fn build_paste_script(bundle_id: &str, command: &str) -> Result<String, String> 
     // Escape backslashes first, then double-quotes, for safe AppleScript string interpolation.
     let escaped = command.replace('\\', "\\\\").replace('"', "\\\"");
 
-    // Per-character delay (seconds) for typewriter effect.
-    // 0.02s = 50 chars/sec -- visually matches streaming speed.
-    let delay = "0.02";
+    // Batch size for typewriter effect: 7 chars per 16ms delay = ~437 chars/sec.
+    // Matches the frontend reveal speed (7 chars per 16ms setInterval tick).
+    // AppleScript delay resolution is ~16ms, so we batch to hit target speed.
 
     match bundle_id {
         "com.googlecode.iterm2" => Ok(format!(
@@ -30,9 +30,16 @@ fn build_paste_script(bundle_id: &str, command: &str) -> Result<String, String> 
     tell current window
         tell current session
             set cmd to "{escaped}"
-            repeat with i from 1 to length of cmd
-                write text (character i of cmd) newline NO
-                delay {delay}
+            set cmdLen to count cmd
+            set i to 1
+            repeat
+                if i > cmdLen then exit repeat
+                set j to i + 6
+                if j > cmdLen then set j to cmdLen
+                write text (text i thru j of cmd) newline NO
+                set i to j + 1
+                if i > cmdLen then exit repeat
+                delay 0.016
             end repeat
         end tell
     end tell
@@ -46,9 +53,16 @@ end tell"#
         tell process "Terminal"
             keystroke "u" using control down
             set cmd to "{escaped}"
-            repeat with i from 1 to length of cmd
-                keystroke (character i of cmd)
-                delay {delay}
+            set cmdLen to count cmd
+            set i to 1
+            repeat
+                if i > cmdLen then exit repeat
+                set j to i + 6
+                if j > cmdLen then set j to cmdLen
+                keystroke (text i thru j of cmd)
+                set i to j + 1
+                if i > cmdLen then exit repeat
+                delay 0.016
             end repeat
         end tell
     end tell
@@ -56,7 +70,7 @@ end tell"#
         )),
 
         // Universal fallback: activate the target app and type via keystroke.
-        // Character-by-character with delays to match the streaming typewriter feel.
+        // Batched at 7 chars per 16ms to match overlay reveal speed.
         _ => {
             eprintln!("[paste] using universal keystroke fallback for bundle: {}", bundle_id);
             Ok(format!(
@@ -67,9 +81,16 @@ delay 0.1
 tell application "System Events"
     keystroke "u" using control down
     set cmd to "{escaped}"
-    repeat with i from 1 to length of cmd
-        keystroke (character i of cmd)
-        delay {delay}
+    set cmdLen to count cmd
+    set i to 1
+    repeat
+        if i > cmdLen then exit repeat
+        set j to i + 6
+        if j > cmdLen then set j to cmdLen
+        keystroke (text i thru j of cmd)
+        set i to j + 1
+        if i > cmdLen then exit repeat
+        delay 0.016
     end repeat
 end tell"#
             ))

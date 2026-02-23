@@ -139,6 +139,16 @@ interface OverlayState {
   setDestructiveDetectionEnabled: (enabled: boolean) => void;
 }
 
+// Synchronized reveal timer -- types text into overlay at ~400 chars/sec
+// to match the terminal paste speed. Module-scoped so all actions can cancel it.
+let _revealTimer: ReturnType<typeof setInterval> | null = null;
+function clearRevealTimer() {
+  if (_revealTimer !== null) {
+    clearInterval(_revealTimer);
+    _revealTimer = null;
+  }
+}
+
 export const useOverlayStore = create<OverlayState>((set) => ({
   visible: false,
   inputValue: "",
@@ -180,6 +190,7 @@ export const useOverlayStore = create<OverlayState>((set) => ({
   autoPasteEnabled: true,
 
   show: () => {
+    clearRevealTimer();
     set((state) => ({
       visible: true,
       mode:
@@ -228,7 +239,8 @@ export const useOverlayStore = create<OverlayState>((set) => ({
     })();
   },
 
-  hide: () =>
+  hide: () => {
+    clearRevealTimer();
     set((state) => ({
       visible: false,
       mode:
@@ -236,16 +248,15 @@ export const useOverlayStore = create<OverlayState>((set) => ({
           ? "onboarding"
           : "command",
       hotkeyConfigOpen: false,
-      // Reset streaming state on close
       isStreaming: false,
       displayMode: "input",
       streamingText: "",
       streamError: null,
-      // Reset destructive detection state on close
       isDestructive: false,
       destructiveExplanation: null,
       destructiveDismissed: false,
-    })),
+    }));
+  },
 
   setInputValue: (value: string) => set({ inputValue: value }),
 
@@ -318,9 +329,9 @@ export const useOverlayStore = create<OverlayState>((set) => ({
     })),
 
   submitQuery: (query: string) => {
+    clearRevealTimer();
     const currentState = useOverlayStore.getState();
 
-    // Validate API key status before proceeding
     if (currentState.apiKeyStatus !== "valid") {
       set({
         streamError: "No API key configured. Open Settings to add one.",
@@ -330,8 +341,6 @@ export const useOverlayStore = create<OverlayState>((set) => ({
       return;
     }
 
-    // Transition to streaming state (keep inputValue so the field shows the query)
-    // Also reset destructive detection state for this new query
     set({
       isStreaming: true,
       displayMode: "streaming",
@@ -346,7 +355,6 @@ export const useOverlayStore = create<OverlayState>((set) => ({
       destructiveDismissed: false,
     });
 
-    // Run the async streaming operation
     (async () => {
       try {
         const state = useOverlayStore.getState();
@@ -355,10 +363,11 @@ export const useOverlayStore = create<OverlayState>((set) => ({
         const contextJson = appContext ? JSON.stringify(appContext) : "{}";
         const history = state.turnHistory;
 
-        // Create a Tauri Channel for token streaming
+        // Buffer tokens locally -- revealed at controlled speed after generation
+        let fullText = "";
         const onToken = new Channel<string>();
         onToken.onmessage = (token: string) => {
-          useOverlayStore.getState().appendToken(token);
+          fullText += token;
         };
 
         await invoke("stream_ai_response", {
@@ -369,79 +378,115 @@ export const useOverlayStore = create<OverlayState>((set) => ({
           onToken,
         });
 
-        // Success: get final text and build history
+        // All tokens received -- build turn history
         const finalState = useOverlayStore.getState();
-        const finalText = finalState.streamingText;
-
-        // Build updated turn history (max 7 turns = 14 messages)
         const updatedHistory = [
           ...finalState.turnHistory,
           { role: "user" as const, content: query },
-          { role: "assistant" as const, content: finalText },
+          { role: "assistant" as const, content: fullText },
         ];
         const trimmedHistory =
           updatedHistory.length > 14
             ? updatedHistory.slice(updatedHistory.length - 14)
             : updatedHistory;
 
-        // Run destructive check BEFORE showing result, so the badge appears
-        // simultaneously with the result and paste never fires for destructive commands.
+        // Destructive check BEFORE any display or paste
         let destructive = false;
         const pasteState = useOverlayStore.getState();
-        if (pasteState.destructiveDetectionEnabled && finalText) {
+        if (pasteState.destructiveDetectionEnabled && fullText) {
           try {
-            destructive = await invoke<boolean>("check_destructive", { command: finalText });
+            destructive = await invoke<boolean>("check_destructive", {
+              command: fullText,
+            });
           } catch (err) {
             console.error("[store] check_destructive failed:", err);
-            // Fail-closed for paste: don't auto-paste if check errors
           }
         }
 
-        // Transition to result mode with destructive badge already resolved
-        set({
-          isStreaming: false,
-          displayMode: "result",
-          turnHistory: trimmedHistory,
-          isDestructive: destructive,
-        });
+        if (destructive) {
+          // Destructive: show full text immediately with badge, no paste
+          set({
+            isStreaming: false,
+            displayMode: "result",
+            streamingText: fullText,
+            turnHistory: trimmedHistory,
+            isDestructive: true,
+          });
+        } else if (fullText) {
+          // Safe: synchronized reveal + paste at ~400 chars/sec
+          // 7 chars per 16ms tick = ~437 chars/sec (matches AppleScript batch pace)
+          const CHARS_PER_TICK = 7;
+          const TICK_MS = 16;
+          let idx = 0;
 
-        // Auto-paste only if safe and enabled
-        if (!destructive && finalText) {
+          // Fire paste to terminal simultaneously (types at same speed)
           const afterCheck = useOverlayStore.getState();
           if (afterCheck.autoPasteEnabled) {
-            invoke("paste_to_terminal", { command: finalText }).catch((err) => {
-              console.error("[store] auto-paste failed (clipboard fallback available):", err);
+            invoke("paste_to_terminal", { command: fullText }).catch((err) => {
+              console.error(
+                "[store] auto-paste failed (clipboard fallback available):",
+                err
+              );
             });
           }
+
+          // Reveal text in overlay at matching speed
+          _revealTimer = setInterval(() => {
+            idx = Math.min(idx + CHARS_PER_TICK, fullText.length);
+            if (idx >= fullText.length) {
+              clearRevealTimer();
+              set({
+                isStreaming: false,
+                displayMode: "result",
+                streamingText: fullText,
+                turnHistory: trimmedHistory,
+              });
+            } else {
+              set({ streamingText: fullText.slice(0, idx) });
+            }
+          }, TICK_MS);
+        } else {
+          set({
+            isStreaming: false,
+            displayMode: "result",
+            streamingText: "",
+            turnHistory: trimmedHistory,
+          });
         }
       } catch (err) {
+        clearRevealTimer();
         const errorMessage =
           typeof err === "string" ? err : "An error occurred. Try again.";
         set({
           isStreaming: false,
           displayMode: "result",
+          streamingText: "",
           streamError: errorMessage,
         });
       }
     })();
   },
 
-  cancelStreaming: () =>
+  cancelStreaming: () => {
+    clearRevealTimer();
     set({
       isStreaming: false,
       displayMode: "input",
       streamingText: "",
       streamError: null,
-    }),
+    });
+  },
 
-  returnToInput: () =>
+  returnToInput: () => {
+    clearRevealTimer();
     set((state) => ({
       displayMode: "input",
       inputValue: state.previousQuery,
       streamingText: "",
       streamError: null,
       isStreaming: false,
-    })),
+    }));
+  },
 
   setStreamError: (error) => set({ streamError: error }),
 
