@@ -369,7 +369,7 @@ export const useOverlayStore = create<OverlayState>((set) => ({
           onToken,
         });
 
-        // Success: transition to result mode
+        // Success: get final text and build history
         const finalState = useOverlayStore.getState();
         const finalText = finalState.streamingText;
 
@@ -379,56 +379,36 @@ export const useOverlayStore = create<OverlayState>((set) => ({
           { role: "user" as const, content: query },
           { role: "assistant" as const, content: finalText },
         ];
-        // Trim oldest turn if we exceed 14 messages (7 turns)
         const trimmedHistory =
           updatedHistory.length > 14
             ? updatedHistory.slice(updatedHistory.length - 14)
             : updatedHistory;
 
+        // Run destructive check BEFORE showing result, so the badge appears
+        // simultaneously with the result and paste never fires for destructive commands.
+        let destructive = false;
+        const pasteState = useOverlayStore.getState();
+        if (pasteState.destructiveDetectionEnabled && finalText) {
+          try {
+            destructive = await invoke<boolean>("check_destructive", { command: finalText });
+          } catch (err) {
+            console.error("[store] check_destructive failed:", err);
+            // Fail-closed for paste: don't auto-paste if check errors
+          }
+        }
+
+        // Transition to result mode with destructive badge already resolved
         set({
           isStreaming: false,
           displayMode: "result",
           turnHistory: trimmedHistory,
+          isDestructive: destructive,
         });
 
-        // Auto-copy completed response to clipboard (always runs first)
-        if (finalText) {
-          navigator.clipboard.writeText(finalText).catch((err) => {
-            console.error("[store] clipboard auto-copy failed:", err);
-          });
-        }
-
-        // Check destructive, then conditionally auto-paste
-        const pasteState = useOverlayStore.getState();
-        if (pasteState.destructiveDetectionEnabled && finalText) {
-          try {
-            const destructive = await invoke<boolean>("check_destructive", { command: finalText });
-            if (destructive) {
-              useOverlayStore.getState().setIsDestructive(true);
-              // Destructive: do NOT auto-paste. User copies manually.
-            } else {
-              // Safe command: auto-paste if enabled
-              const afterCheck = useOverlayStore.getState();
-              if (afterCheck.autoPasteEnabled && finalText) {
-                invoke("paste_to_terminal", { command: finalText }).catch((err) => {
-                  console.error("[store] auto-paste failed (clipboard fallback available):", err);
-                });
-              }
-            }
-          } catch (err) {
-            console.error("[store] check_destructive failed:", err);
-            // On detection failure, still attempt paste (fail-open for paste, fail-closed for safety badge)
-            const afterErr = useOverlayStore.getState();
-            if (afterErr.autoPasteEnabled && finalText) {
-              invoke("paste_to_terminal", { command: finalText }).catch((pasteErr) => {
-                console.error("[store] auto-paste failed:", pasteErr);
-              });
-            }
-          }
-        } else if (finalText) {
-          // Detection disabled: auto-paste if enabled (no safety check)
-          const nocheckState = useOverlayStore.getState();
-          if (nocheckState.autoPasteEnabled) {
+        // Auto-paste only if safe and enabled
+        if (!destructive && finalText) {
+          const afterCheck = useOverlayStore.getState();
+          if (afterCheck.autoPasteEnabled) {
             invoke("paste_to_terminal", { command: finalText }).catch((err) => {
               console.error("[store] auto-paste failed (clipboard fallback available):", err);
             });
