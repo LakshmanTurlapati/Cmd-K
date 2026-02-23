@@ -8,11 +8,32 @@ export function useKeyboard(): void {
   const show = useOverlayStore((state) => state.show);
 
   useEffect(() => {
-    // Escape always closes the overlay regardless of display mode
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Escape always closes the overlay regardless of display mode
       if (e.key === "Escape") {
         invoke("hide_overlay").catch(console.error);
         hide();
+        return;
+      }
+
+      // Enter in result mode: execute the pasted command in terminal and dismiss.
+      // Guards: must have actual AI content (streamingText), no error, not destructive.
+      if (e.key === "Enter" && !e.shiftKey) {
+        const state = useOverlayStore.getState();
+        if (
+          state.displayMode === "result" &&
+          state.autoPasteEnabled &&
+          !state.isDestructive &&
+          !state.streamError &&
+          state.streamingText.length > 0
+        ) {
+          e.preventDefault();
+          invoke("confirm_terminal_command").catch((err) => {
+            console.error("[useKeyboard] confirm failed:", err);
+          });
+          invoke("hide_overlay").catch(console.error);
+          hide();
+        }
       }
     };
 

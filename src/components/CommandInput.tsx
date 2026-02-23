@@ -77,11 +77,27 @@ export function CommandInput({ onSubmit }: CommandInputProps) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       // Block submission during active streaming (AI still generating)
-      if (displayMode === "streaming") return;
+      if (displayMode === "streaming") {
+        e.stopPropagation();
+        return;
+      }
+      // In result mode: if the user edited the input (follow-up query), submit it.
+      // Otherwise let the document-level handler (useKeyboard) confirm the terminal command.
+      if (displayMode === "result") {
+        const state = useOverlayStore.getState();
+        if (inputValue.trim() && inputValue !== state.previousQuery) {
+          e.stopPropagation();
+          onSubmit(inputValue);
+        }
+        return;
+      }
+      // Stop propagation so the document-level Enter handler in useKeyboard
+      // does not fire from the same event that submits the query
+      e.stopPropagation();
       if (inputValue.trim()) {
         onSubmit(inputValue);
       } else {
-        // Empty input: trigger shake animation
+        // Empty input in input mode: trigger shake animation
         setShaking(true);
         setTimeout(() => setShaking(false), 300);
       }
@@ -134,7 +150,10 @@ export function CommandInput({ onSubmit }: CommandInputProps) {
           "scrollbar-thin",
           "relative",
         ].join(" ")}
-        style={{ minHeight: "24px" }}
+        style={{
+          minHeight: "24px",
+          caretColor: displayMode === "input" ? undefined : "transparent",
+        }}
       />
     </div>
   );

@@ -163,6 +163,29 @@ function App() {
     };
   }, [show]);
 
+  // Click outside (window blur) dismisses overlay.
+  // When the user clicks anywhere outside the NSPanel, the panel loses key
+  // window status and the webview fires a blur event. During paste operations
+  // the panel temporarily resigns key (isPasting guards against false dismiss).
+  // Also guard against dismissal during streaming (AI generating) since internal
+  // focus changes (textarea blur) can cause NSPanel to resign key on macOS.
+  useEffect(() => {
+    const handleBlur = () => {
+      const state = useOverlayStore.getState();
+      if (
+        state.visible &&
+        !state.isPasting &&
+        !state.isStreaming &&
+        state.mode === "command"
+      ) {
+        invoke("hide_overlay").catch(console.error);
+        hide();
+      }
+    };
+    window.addEventListener("blur", handleBlur);
+    return () => window.removeEventListener("blur", handleBlur);
+  }, [hide]);
+
   const handleSubmit = (value: string) => {
     const trimmed = value.trim();
     if (trimmed === "/settings") {
