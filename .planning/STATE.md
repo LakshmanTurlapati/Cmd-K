@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Phase 4 - AI Command Generation
+**Current focus:** Phase 5 - Safety Layer
 
 ## Current Position
 
-Phase: 4 of 6 (AI Command Generation)
-Plan: 3 of 3 in current phase (04-03 complete, Phase 4 done)
-Status: Phase 4 complete -- all 22 verification checks passed, ready for Phase 5
-Last activity: 2026-02-22 - Executed Phase 4 Plan 3 (end-to-end verification + UX polish: single-Escape close, input visible above results, click-position-aware input)
+Phase: 5 of 6 (Safety Layer)
+Plan: 1 of 2 in current phase (05-01 complete)
+Status: Phase 5 Plan 1 complete -- Rust safety backend and Zustand state infrastructure ready; Plan 2 will wire badge UI and overlay integration
+Last activity: 2026-02-23 - Executed Phase 5 Plan 1 (safety.rs RegexSet detection, xAI explanation API, Zustand destructive state, PreferencesTab toggle)
 
-Progress: [██████████] 95%
+Progress: [██████████] 97%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
+- Total plans completed: 9
 - Average duration: 7 min
 - Total execution time: 1.1 hours
 
@@ -31,9 +31,10 @@ Progress: [██████████] 95%
 | 02-settings-configuration | 2 | 24 min | 12 min |
 | 03-terminal-context-reading | 4 | 27 min | 7 min |
 | 04-ai-command-generation | 3 | 35 min | 12 min |
+| 05-safety-layer | 1 | 3 min | 3 min |
 
 **Recent Trend:**
-- Last 5 plans: 4 min (03-04), 8 min (04-01), 2 min (04-02), 25 min (04-03)
+- Last 5 plans: 8 min (04-01), 2 min (04-02), 25 min (04-03), 3 min (05-01)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -90,6 +91,10 @@ Recent decisions affecting current work:
 - [Phase 04-03]: CommandInput always rendered above ResultsArea (stacked) so query stays visible during streaming
 - [Phase 04-03]: handleMouseUp click-position heuristic -- selectionStart !== length triggers clear input vs edit mode
 - [Phase 04-03]: hide() resets all streaming state (isStreaming, displayMode, streamingText, streamError) for clean reopen
+- [Phase 05-01]: once_cell Lazy<RegexSet> for DESTRUCTIVE_PATTERNS: compiled once at first call, zero allocation on subsequent checks
+- [Phase 05-01]: model: String parameter passed from frontend to get_destructive_explanation (Rust cannot read Zustand)
+- [Phase 05-01]: temperature: 0.0 for get_destructive_explanation: deterministic safety explanations preferred
+- [Phase 05-01]: destructiveDetectionEnabled defaults to true when key absent from settings.json; loaded in both onboarding branches
 
 ### Pending Todos
 
@@ -117,10 +122,11 @@ None yet.
 - Phase 4 Plan 2 COMPLETE: Frontend streaming UI -- Zustand displayMode state machine, ResultsArea monospace renderer with block cursor, two-Escape keyboard flow, session history (7 turns), auto-copy + click-to-copy
 - Phase 4 Plan 3 COMPLETE: End-to-end verification passed (all 22 checks); UX polish applied -- single-Escape close, input visible above results, click-position-aware input interaction
 - Phase 4 COMPLETE: All requirements AICG-01 and AICG-02 satisfied
+- Phase 5 Plan 1 COMPLETE: safety.rs with check_destructive (RegexSet) and get_destructive_explanation (xAI non-streaming); Zustand 4 destructive state fields; PreferencesTab Safety toggle with persistence; App.tsx startup preference loading
 - Phase 5: AppleScript command injection must be solved before any terminal pasting
 
 ## Session Continuity
 
-Last session: 2026-02-22 (Phase 4 Plan 3 execution)
-Stopped at: Completed 04-03-PLAN.md (end-to-end verification done, Phase 4 complete)
+Last session: 2026-02-23 (Phase 5 Plan 1 execution)
+Stopped at: Completed 05-01-PLAN.md (safety backend + Zustand state + settings toggle complete)
 Resume file: None

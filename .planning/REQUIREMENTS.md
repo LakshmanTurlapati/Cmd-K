@@ -17,7 +17,7 @@
 
 - [x] **AICG-01**: User can type natural language and receive a terminal command via xAI (Grok)
 - [x] **AICG-02**: Command generation streams in real-time as the response is generated
-- [ ] **AICG-03**: Destructive commands (rm -rf, format, etc.) are flagged with a warning before paste
+- [x] **AICG-03**: Destructive commands (rm -rf, format, etc.) are flagged with a warning before paste
 
 ### Terminal Integration
 
@@ -81,7 +81,7 @@
 | TERM-04 | Phase 3 | Complete |
 | AICG-01 | Phase 4 | Complete |
 | AICG-02 | Phase 4 | Complete |
-| AICG-03 | Phase 5 | Pending |
+| AICG-03 | Phase 5 | Complete |
 | TERM-01 | Phase 6 | Pending |
 
 **Coverage:**
