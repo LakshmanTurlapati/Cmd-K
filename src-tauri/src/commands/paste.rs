@@ -13,8 +13,8 @@ use crate::terminal::detect::get_bundle_id;
 /// - `com.googlecode.iterm2` (iTerm2): uses `write text ... newline NO`
 /// - `com.apple.Terminal` (Terminal.app): sends Ctrl+U to clear the line first,
 ///   then types the text using `keystroke` (does NOT execute the command)
-/// - All other apps: universal fallback that activates the app and simulates
-///   Cmd+V via System Events (clipboard must already contain the command text)
+/// - All other apps: universal fallback that activates the app and types the
+///   text via System Events `keystroke` (bypasses bracketed paste mode)
 fn build_paste_script(bundle_id: &str, command: &str) -> Result<String, String> {
     // Escape backslashes first, then double-quotes, for safe AppleScript string interpolation.
     let escaped = command.replace('\\', "\\\\").replace('"', "\\\"");
@@ -43,18 +43,21 @@ end tell"#
 end tell"#
         )),
 
-        // Universal fallback: activate the target app and simulate Cmd+V.
-        // The clipboard already has the command text (auto-copied before paste is called).
-        // Works for IDE terminals (Cursor, VS Code, etc.) and any other app.
+        // Universal fallback: activate the target app and type via keystroke.
+        // Uses System Events keystroke which sends individual key events --
+        // the shell sees typed input, NOT a paste, so bracketed paste mode
+        // is not triggered and text appears cleanly.
+        // Clipboard still has the command (via pbcopy) as a manual fallback.
         _ => {
-            eprintln!("[paste] using universal Cmd+V fallback for bundle: {}", bundle_id);
+            eprintln!("[paste] using universal keystroke fallback for bundle: {}", bundle_id);
             Ok(format!(
                 r#"tell application id "{bundle_id}"
     activate
 end tell
 delay 0.1
 tell application "System Events"
-    keystroke "v" using command down
+    keystroke "u" using control down
+    keystroke "{escaped}"
 end tell"#
             ))
         }
