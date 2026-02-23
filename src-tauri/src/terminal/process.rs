@@ -379,13 +379,12 @@ fn find_shell_by_ancestry(app_pid: i32) -> Option<i32> {
     eprintln!("[process] found {} descendant shells: {:?}", descendant_shells.len(),
         descendant_shells.iter().map(|(pid, n)| (*pid, n.clone())).collect::<Vec<_>>());
 
-    // Filter out sub-shells: shells that are descendants of OTHER shells in the list.
-    // This removes tool-spawned shells (e.g., Claude Code's bash spawned from within
-    // a user's zsh terminal) while keeping directly-opened terminal tabs of any type.
+    // Step 1: Filter out sub-shells (shells spawned from within another shell).
+    // E.g., Claude Code's bash spawned from a user's zsh terminal.
     let shell_pid_set: Vec<i32> = descendant_shells.iter().map(|(pid, _)| *pid).collect();
     let parent_map = build_parent_map();
 
-    let top_level_shells: Vec<&(i32, Option<String>)> = descendant_shells.iter()
+    let top_level: Vec<&(i32, Option<String>)> = descendant_shells.iter()
         .filter(|(pid, name)| {
             let is_sub = is_sub_shell_of_any(*pid, &shell_pid_set, &parent_map);
             if is_sub {
@@ -395,15 +394,44 @@ fn find_shell_by_ancestry(app_pid: i32) -> Option<i32> {
         })
         .collect();
 
-    let candidates = if top_level_shells.is_empty() {
-        // All shells are sub-shells of each other (shouldn't happen), fall back to all
-        eprintln!("[process] all shells are sub-shells, using full list");
+    let remaining = if top_level.is_empty() {
         descendant_shells.iter().collect::<Vec<_>>()
     } else {
-        top_level_shells
+        top_level
     };
 
-    // Among top-level shells, pick the most recently spawned (highest PID).
+    // Step 2: If mixed shell types remain (e.g., extension-spawned bash + user zsh),
+    // prefer shells matching $SHELL since we can't determine the active IDE tab.
+    let has_mixed_types = {
+        let first = remaining.first().and_then(|(_, n)| n.as_deref());
+        remaining.iter().any(|(_, n)| n.as_deref() != first)
+    };
+
+    let candidates = if has_mixed_types {
+        let preferred = std::env::var("SHELL").ok()
+            .and_then(|s| std::path::Path::new(&s).file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n.to_string()));
+
+        if let Some(ref pref) = preferred {
+            let matching: Vec<_> = remaining.iter()
+                .filter(|(_, name)| name.as_deref() == Some(pref.as_str()))
+                .cloned()
+                .collect();
+            if !matching.is_empty() {
+                eprintln!("[process] mixed shell types in IDE, preferring {} matching $SHELL ({} found)", pref, matching.len());
+                matching
+            } else {
+                remaining
+            }
+        } else {
+            remaining
+        }
+    } else {
+        remaining
+    };
+
+    // Step 3: Among candidates, pick the most recently spawned (highest PID).
     let best = candidates.iter().max_by_key(|(pid, _)| *pid);
     best.map(|(pid, _)| *pid)
 }
