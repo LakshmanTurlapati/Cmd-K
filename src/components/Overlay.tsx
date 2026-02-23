@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { useOverlayStore } from "@/store";
+import { useOverlayStore, resolveBadge } from "@/store";
 import { CommandInput } from "./CommandInput";
 import { ResultsArea } from "./ResultsArea";
 import { HotkeyConfig } from "./HotkeyConfig";
@@ -17,9 +17,10 @@ export function Overlay({ onSubmit }: OverlayProps) {
   const visible = useOverlayStore((state) => state.visible);
   const hotkeyConfigOpen = useOverlayStore((state) => state.hotkeyConfigOpen);
   const mode = useOverlayStore((state) => state.mode);
-  const terminalContext = useOverlayStore((s) => s.terminalContext);
+  const appContext = useOverlayStore((s) => s.appContext);
   const isDetecting = useOverlayStore((s) => s.isDetectingContext);
   const accessibilityGranted = useOverlayStore((s) => s.accessibilityGranted);
+  const badgeText = resolveBadge(appContext);
   const [animPhase, setAnimPhase] = useState<AnimationPhase>("hidden");
 
   useEffect(() => {
@@ -94,9 +95,9 @@ export function Overlay({ onSubmit }: OverlayProps) {
                 <div className="flex items-center gap-2 min-h-[20px]">
                   {isDetecting ? (
                     <div className="w-3 h-3 border border-white/30 border-t-white/70 rounded-full animate-spin" />
-                  ) : terminalContext?.shell_type ? (
+                  ) : badgeText ? (
                     <span className="text-[11px] text-white/40 font-mono">
-                      {terminalContext.shell_type}
+                      {badgeText}
                     </span>
                   ) : null}
                 </div>

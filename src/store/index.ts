@@ -15,6 +15,35 @@ export interface TerminalContext {
   running_process: string | null;
 }
 
+export interface AppContext {
+  app_name: string | null;
+  terminal: TerminalContext | null;
+  console_detected: boolean;
+  console_last_line: string | null;
+}
+
+/** Resolve the badge text from AppContext using priority: shell > console > app name */
+export function resolveBadge(ctx: AppContext | null): string | null {
+  if (!ctx) return null;
+
+  // Priority 1: Shell type (from terminal or editor integrated terminal)
+  if (ctx.terminal?.shell_type) {
+    return ctx.terminal.shell_type;
+  }
+
+  // Priority 2: Console (browser has DevTools open)
+  if (ctx.console_detected) {
+    return "Console";
+  }
+
+  // Priority 3: App name
+  if (ctx.app_name) {
+    return ctx.app_name;
+  }
+
+  return null;
+}
+
 interface OverlayState {
   // Overlay visibility
   visible: boolean;
@@ -40,8 +69,8 @@ interface OverlayState {
   hotkeyConfigOpen: boolean;
   currentHotkey: string;
 
-  // Terminal context
-  terminalContext: TerminalContext | null;
+  // App context (terminal, browser console, app name)
+  appContext: AppContext | null;
   isDetectingContext: boolean;
   accessibilityGranted: boolean;
 
@@ -69,7 +98,7 @@ interface OverlayState {
   closeHotkeyConfig: () => void;
   setCurrentHotkey: (shortcut: string) => void;
 
-  setTerminalContext: (ctx: TerminalContext | null) => void;
+  setAppContext: (ctx: AppContext | null) => void;
   setIsDetectingContext: (detecting: boolean) => void;
   setAccessibilityGranted: (granted: boolean) => void;
 }
@@ -93,7 +122,7 @@ export const useOverlayStore = create<OverlayState>((set) => ({
   hotkeyConfigOpen: false,
   currentHotkey: "Super+KeyK",
 
-  terminalContext: null,
+  appContext: null,
   isDetectingContext: false,
   accessibilityGranted: false,
 
@@ -108,7 +137,7 @@ export const useOverlayStore = create<OverlayState>((set) => ({
       inputValue: "",
       submitted: false,
       showApiWarning: false,
-      terminalContext: null,
+      appContext: null,
       isDetectingContext: true,
     }));
 
@@ -123,10 +152,10 @@ export const useOverlayStore = create<OverlayState>((set) => ({
         console.log("[store] accessibility permission:", hasPermission);
         useOverlayStore.getState().setAccessibilityGranted(hasPermission);
 
-        // Detect terminal context (returns null for non-terminal apps)
-        const ctx = await invoke<TerminalContext | null>("get_terminal_context");
-        console.log("[store] terminal context:", JSON.stringify(ctx));
-        useOverlayStore.getState().setTerminalContext(ctx);
+        // Detect app context (returns AppContext for ALL frontmost apps)
+        const ctx = await invoke<AppContext | null>("get_app_context");
+        console.log("[store] app context:", JSON.stringify(ctx));
+        useOverlayStore.getState().setAppContext(ctx);
       } catch (err) {
         console.error("[store] context detection error:", err);
       } finally {
@@ -203,7 +232,7 @@ export const useOverlayStore = create<OverlayState>((set) => ({
 
   setCurrentHotkey: (shortcut: string) => set({ currentHotkey: shortcut }),
 
-  setTerminalContext: (ctx) => set({ terminalContext: ctx }),
+  setAppContext: (ctx) => set({ appContext: ctx }),
 
   setIsDetectingContext: (detecting) => set({ isDetectingContext: detecting }),
 
