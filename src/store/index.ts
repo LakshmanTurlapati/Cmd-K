@@ -87,6 +87,12 @@ interface OverlayState {
   turnHistory: TurnMessage[];
   streamError: string | null;
 
+  // Destructive command detection
+  isDestructive: boolean;
+  destructiveExplanation: string | null;
+  destructiveDismissed: boolean;
+  destructiveDetectionEnabled: boolean;
+
   // Actions
   show: () => void;
   hide: () => void;
@@ -121,6 +127,12 @@ interface OverlayState {
   cancelStreaming: () => void;
   returnToInput: () => void;
   setStreamError: (error: string | null) => void;
+
+  // Destructive detection actions
+  setIsDestructive: (value: boolean) => void;
+  setDestructiveExplanation: (explanation: string | null) => void;
+  dismissDestructiveBadge: () => void;
+  setDestructiveDetectionEnabled: (enabled: boolean) => void;
 }
 
 export const useOverlayStore = create<OverlayState>((set) => ({
@@ -154,6 +166,12 @@ export const useOverlayStore = create<OverlayState>((set) => ({
   turnHistory: [],
   streamError: null,
 
+  // Destructive command detection initial state
+  isDestructive: false,
+  destructiveExplanation: null,
+  destructiveDismissed: false,
+  destructiveDetectionEnabled: true,
+
   show: () => {
     set((state) => ({
       visible: true,
@@ -174,6 +192,10 @@ export const useOverlayStore = create<OverlayState>((set) => ({
       previousQuery: "",
       turnHistory: [],
       streamError: null,
+      // Reset destructive detection state on each overlay open
+      isDestructive: false,
+      destructiveExplanation: null,
+      destructiveDismissed: false,
     }));
 
     // Fire-and-forget context detection (non-blocking)
@@ -212,6 +234,10 @@ export const useOverlayStore = create<OverlayState>((set) => ({
       displayMode: "input",
       streamingText: "",
       streamError: null,
+      // Reset destructive detection state on close
+      isDestructive: false,
+      destructiveExplanation: null,
+      destructiveDismissed: false,
     })),
 
   setInputValue: (value: string) => set({ inputValue: value }),
@@ -390,4 +416,10 @@ export const useOverlayStore = create<OverlayState>((set) => ({
     })),
 
   setStreamError: (error) => set({ streamError: error }),
+
+  // Destructive detection action implementations
+  setIsDestructive: (value) => set({ isDestructive: value }),
+  setDestructiveExplanation: (explanation) => set({ destructiveExplanation: explanation }),
+  dismissDestructiveBadge: () => set({ destructiveDismissed: true }),
+  setDestructiveDetectionEnabled: (enabled) => set({ destructiveDetectionEnabled: enabled }),
 }));

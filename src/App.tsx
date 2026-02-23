@@ -53,6 +53,11 @@ function App() {
         const onboardingComplete = await store.get<boolean>("onboardingComplete");
         if (!onboardingComplete) {
           const onboardingStep = (await store.get<number>("onboardingStep")) ?? 0;
+
+          // Load persisted destructive detection preference
+          const destructiveEnabled = await store.get<boolean>("destructiveDetectionEnabled");
+          useOverlayStore.getState().setDestructiveDetectionEnabled(destructiveEnabled ?? true);
+
           // Check if API key already exists (edge case: user saved key then closed)
           try {
             const existingKey = await invoke<string | null>("get_api_key");
@@ -98,6 +103,10 @@ function App() {
           // Load persisted model selection
           const savedModel = await store.get<string>("selectedModel");
           if (savedModel) setSelectedModel(savedModel);
+
+          // Load persisted destructive detection preference
+          const destructiveEnabled = await store.get<boolean>("destructiveDetectionEnabled");
+          useOverlayStore.getState().setDestructiveDetectionEnabled(destructiveEnabled ?? true);
         }
       } catch (err) {
         // Non-fatal: fall back to default command mode
