@@ -21,7 +21,7 @@
 
 ### Terminal Integration
 
-- [ ] **TERM-01**: Generated command is pasted into the active terminal (Terminal.app, iTerm2)
+- [x] **TERM-01**: Generated command is pasted into the active terminal (Terminal.app, iTerm2)
 - [x] **TERM-02**: App detects the current working directory of the active terminal without shell plugins
 - [x] **TERM-03**: App reads recent terminal output for context without shell plugins
 - [x] **TERM-04**: Works with Terminal.app, iTerm2, Alacritty, kitty, WezTerm
@@ -82,7 +82,7 @@
 | AICG-01 | Phase 4 | Complete |
 | AICG-02 | Phase 4 | Complete |
 | AICG-03 | Phase 5 | Complete |
-| TERM-01 | Phase 6 | Pending |
+| TERM-01 | Phase 6 | Complete |
 
 **Coverage:**
 - v1 requirements: 16 total

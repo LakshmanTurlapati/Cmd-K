@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Phase 5 - Safety Layer COMPLETE
+**Current focus:** Phase 6 - Terminal Pasting (in progress)
 
 ## Current Position
 
-Phase: 5 of 6 (Safety Layer) -- COMPLETE
-Plan: 2 of 2 in current phase (05-02 complete)
-Status: Phase 5 COMPLETE -- All AICG-03 requirements satisfied; DestructiveBadge component verified end-to-end across 6 test scenarios
-Last activity: 2026-02-23 - Executed Phase 5 Plan 2 (DestructiveBadge UI, check_destructive wiring, Overlay integration, human verification passed)
+Phase: 6 of 6 (Terminal Pasting) -- IN PROGRESS
+Plan: 1 of 2 in current phase (06-01 complete)
+Status: Phase 6 Plan 1 COMPLETE -- paste_to_terminal Rust command registered; autoPasteEnabled Zustand state + PreferencesTab Terminal toggle + App.tsx startup load complete
+Last activity: 2026-02-23 - Executed Phase 6 Plan 1 (paste_to_terminal Rust command + autoPasteEnabled frontend infrastructure)
 
 Progress: [██████████] 100%
 
@@ -38,6 +38,7 @@ Progress: [██████████] 100%
 - Trend: Stable
 
 *Updated after each plan completion*
+| Phase 06-terminal-pasting P01 | 8 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -100,6 +101,9 @@ Recent decisions affecting current work:
 - [Phase 05-02]: ml-auto on DestructiveBadge pushes badge to right side of badge row
 - [Phase 05-02]: bg-red-500/20 opacity (80% transparent) for subtle but visible destructive warning signal
 - [Phase 05-02]: Syntax highlighting in ResultsArea: flags yellow, strings green, plain args white
+- [Phase 06-terminal-pasting]: paste_to_terminal reads previous_app_pid from AppState at paste time (not re-detected) to avoid race conditions
+- [Phase 06-terminal-pasting]: iTerm2 AppleScript uses write text newline NO; Terminal.app uses Ctrl+U then keystroke -- neither uses do script which executes immediately
+- [Phase 06-terminal-pasting]: autoPasteEnabled defaults to true; blue toggle in PreferencesTab Terminal section
 
 ### Pending Todos
 
@@ -131,9 +135,10 @@ None yet.
 - Phase 5 Plan 2 COMPLETE: DestructiveBadge component with Radix tooltip and eager explanation loading; wired in submitQuery and Overlay; human verification passed (all 6 tests)
 - Phase 5 COMPLETE: All AICG-03 requirements satisfied; full safety layer operational
 - Phase 5: AppleScript command injection must be solved before any terminal pasting
+- Phase 6 Plan 1 COMPLETE: paste_to_terminal Rust command (AppleScript dispatch for iTerm2 + Terminal.app); autoPasteEnabled Zustand state + PreferencesTab Terminal section + App.tsx startup load
 
 ## Session Continuity
 
-Last session: 2026-02-23 (Phase 5 Plan 2 execution)
-Stopped at: Completed 05-02-PLAN.md (DestructiveBadge UI + detection wiring + human verification complete; Phase 5 DONE)
+Last session: 2026-02-23 (Phase 6 Plan 1 execution)
+Stopped at: Completed 06-01-PLAN.md (paste_to_terminal Rust command + autoPasteEnabled frontend infrastructure; ready for Plan 02 wiring)
 Resume file: None
