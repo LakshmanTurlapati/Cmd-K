@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Settings & Configuration** - API key management and onboarding (completed 2026-02-21)
 - [ ] **Phase 3: Terminal Context Reading** - Detect terminal state without shell plugins
 - [x] **Phase 4: AI Command Generation** - Natural language to terminal commands via xAI (completed 2026-02-23)
-- [ ] **Phase 5: Safety Layer** - Destructive command detection and warnings
+- [x] **Phase 5: Safety Layer** - Destructive command detection and warnings (completed 2026-02-23)
 - [ ] **Phase 6: Terminal Pasting** - Auto-paste commands to active terminal
 
 ## Phase Details
@@ -131,5 +131,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Settings & Configuration | 2/3 | Complete    | 2026-02-21 |
 | 3. Terminal Context Reading | 2/5 | In Progress|  |
 | 4. AI Command Generation | 3/3 | Complete    | 2026-02-23 |
-| 5. Safety Layer | 1/2 | In Progress|  |
+| 5. Safety Layer | 2/2 | Complete   | 2026-02-23 |
 | 6. Terminal Pasting | 0/TBD | Not started | - |

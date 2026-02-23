@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Phase 5 - Safety Layer
+**Current focus:** Phase 5 - Safety Layer COMPLETE
 
 ## Current Position
 
-Phase: 5 of 6 (Safety Layer)
-Plan: 1 of 2 in current phase (05-01 complete)
-Status: Phase 5 Plan 1 complete -- Rust safety backend and Zustand state infrastructure ready; Plan 2 will wire badge UI and overlay integration
-Last activity: 2026-02-23 - Executed Phase 5 Plan 1 (safety.rs RegexSet detection, xAI explanation API, Zustand destructive state, PreferencesTab toggle)
+Phase: 5 of 6 (Safety Layer) -- COMPLETE
+Plan: 2 of 2 in current phase (05-02 complete)
+Status: Phase 5 COMPLETE -- All AICG-03 requirements satisfied; DestructiveBadge component verified end-to-end across 6 test scenarios
+Last activity: 2026-02-23 - Executed Phase 5 Plan 2 (DestructiveBadge UI, check_destructive wiring, Overlay integration, human verification passed)
 
-Progress: [██████████] 97%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
+- Total plans completed: 10
 - Average duration: 7 min
-- Total execution time: 1.1 hours
+- Total execution time: 1.4 hours
 
 **By Phase:**
 
@@ -31,10 +31,10 @@ Progress: [██████████] 97%
 | 02-settings-configuration | 2 | 24 min | 12 min |
 | 03-terminal-context-reading | 4 | 27 min | 7 min |
 | 04-ai-command-generation | 3 | 35 min | 12 min |
-| 05-safety-layer | 1 | 3 min | 3 min |
+| 05-safety-layer | 2 | 21 min | 10 min |
 
 **Recent Trend:**
-- Last 5 plans: 8 min (04-01), 2 min (04-02), 25 min (04-03), 3 min (05-01)
+- Last 5 plans: 2 min (04-02), 25 min (04-03), 3 min (05-01), 18 min (05-02)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -95,6 +95,11 @@ Recent decisions affecting current work:
 - [Phase 05-01]: model: String parameter passed from frontend to get_destructive_explanation (Rust cannot read Zustand)
 - [Phase 05-01]: temperature: 0.0 for get_destructive_explanation: deterministic safety explanations preferred
 - [Phase 05-01]: destructiveDetectionEnabled defaults to true when key absent from settings.json; loaded in both onboarding branches
+- [Phase 05-02]: @radix-ui/react-tooltip installed separately (1.2.8) -- umbrella radix-ui v1.4.3 does not export Tooltip at that path
+- [Phase 05-02]: Eager explanation loading on DestructiveBadge mount via Channel<String> so explanation is ready before first hover
+- [Phase 05-02]: ml-auto on DestructiveBadge pushes badge to right side of badge row
+- [Phase 05-02]: bg-red-500/20 opacity (80% transparent) for subtle but visible destructive warning signal
+- [Phase 05-02]: Syntax highlighting in ResultsArea: flags yellow, strings green, plain args white
 
 ### Pending Todos
 
@@ -123,10 +128,12 @@ None yet.
 - Phase 4 Plan 3 COMPLETE: End-to-end verification passed (all 22 checks); UX polish applied -- single-Escape close, input visible above results, click-position-aware input interaction
 - Phase 4 COMPLETE: All requirements AICG-01 and AICG-02 satisfied
 - Phase 5 Plan 1 COMPLETE: safety.rs with check_destructive (RegexSet) and get_destructive_explanation (xAI non-streaming); Zustand 4 destructive state fields; PreferencesTab Safety toggle with persistence; App.tsx startup preference loading
+- Phase 5 Plan 2 COMPLETE: DestructiveBadge component with Radix tooltip and eager explanation loading; wired in submitQuery and Overlay; human verification passed (all 6 tests)
+- Phase 5 COMPLETE: All AICG-03 requirements satisfied; full safety layer operational
 - Phase 5: AppleScript command injection must be solved before any terminal pasting
 
 ## Session Continuity
 
-Last session: 2026-02-23 (Phase 5 Plan 1 execution)
-Stopped at: Completed 05-01-PLAN.md (safety backend + Zustand state + settings toggle complete)
+Last session: 2026-02-23 (Phase 5 Plan 2 execution)
+Stopped at: Completed 05-02-PLAN.md (DestructiveBadge UI + detection wiring + human verification complete; Phase 5 DONE)
 Resume file: None
