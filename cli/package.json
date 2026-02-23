@@ -1,0 +1,21 @@
+{
+  "name": "cmdk-cli",
+  "version": "1.0.0",
+  "description": "CMD+K overlay for AI-powered command generation",
+  "main": "main.js",
+  "bin": {
+    "cmdk": "./bin/cli.js"
+  },
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "dependencies": {
+    "openai": "^4.73.0",
+    "@anthropic-ai/sdk": "^0.32.1",
+    "electron-store": "^8.2.0"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0"
+  }
+}

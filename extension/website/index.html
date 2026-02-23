@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CMD+K Terminal AI - About</title>
+    <meta name="description" content="AI-powered terminal command generation for VS Code. Inspired by Cursor's Terminal Assist.">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header class="hero">
+            <div class="terminal-prompt">
+                <span class="prompt-symbol">$</span>
+                <span class="typing-text">cmd+k</span>
+                <span class="cursor-blink">_</span>
+            </div>
+            <h1>CMD+K Terminal AI</h1>
+            <p class="tagline">Transform natural language into shell commands with AI</p>
+        </header>
+
+        <main>
+            <section class="about">
+                <h2>What is CMD+K Terminal AI?</h2>
+                <p>A powerful VS Code extension that brings AI-powered command generation directly to your terminal. Press <kbd>CMD+K</kbd> (or <kbd>Ctrl+K</kbd>) in any terminal, describe what you want to do in plain English, and let AI generate the perfect command for you.</p>
+                <div class="inspiration-note">
+                    <span class="icon">&#10024;</span>
+                    Inspired by Cursor's Terminal Assist feature
+                </div>
+            </section>
+
+            <section class="features">
+                <h2>Key Features</h2>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">&#128640;</div>
+                        <h3>Natural Language</h3>
+                        <p>Type what you want to do, not how to do it. "find all large files" becomes the right command for your system.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">&#129504;</div>
+                        <h3>Multiple AI Providers</h3>
+                        <p>Choose from OpenAI (GPT-4), Anthropic (Claude), or xAI (Grok). Switch providers and models on the fly.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">&#127760;</div>
+                        <h3>Context-Aware</h3>
+                        <p>Automatically detects your OS, shell type, working directory, and command history for accurate suggestions.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">&#128065;</div>
+                        <h3>Review Before Execute</h3>
+                        <p>Generated commands appear in your terminal for review. Edit, execute, or cancel - you're always in control.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">&#9889;</div>
+                        <h3>Real-time Streaming</h3>
+                        <p>Watch commands generate character-by-character with streaming AI responses.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">&#128295;</div>
+                        <h3>Cross-Platform</h3>
+                        <p>Works on macOS, Windows, and Linux with support for bash, zsh, PowerShell, fish, and cmd.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="technical">
+                <h2>Technical Details</h2>
+                <div class="tech-grid">
+                    <div class="tech-item">
+                        <h4>Supported AI Providers</h4>
+                        <ul>
+                            <li>OpenAI (GPT-4, GPT-4o, GPT-3.5)</li>
+                            <li>Anthropic (Claude Sonnet 4.5, Opus 4.1)</li>
+                            <li>xAI (Grok-4, Grok-beta, Grok-code)</li>
+                        </ul>
+                    </div>
+                    <div class="tech-item">
+                        <h4>Context Information</h4>
+                        <ul>
+                            <li>Operating System</li>
+                            <li>Shell Type & Version</li>
+                            <li>Current Working Directory</li>
+                            <li>Recent Command History</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <section class="usage">
+                <h2>How It Works</h2>
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h3>Activate</h3>
+                            <p>Press <kbd>CMD+K</kbd> in any VS Code terminal</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h3>Describe</h3>
+                            <p>Type what you want to do in natural language</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h3>Review</h3>
+                            <p>See the generated command appear in your terminal</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <h3>Execute</h3>
+                            <p>Press Enter to run or edit first - you're in control</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="install">
+                <h2>Get Started</h2>
+                <div class="install-box">
+                    <p>Install from the VS Code Marketplace or download the .vsix file</p>
+                    <div class="install-buttons">
+                        <a href="#" class="btn btn-primary">VS Code Marketplace</a>
+                        <a href="https://github.com/LakshmanTurlapati/cmd-k-terminal" class="btn btn-secondary">View on GitHub</a>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <div class="footer-content">
+                <p class="author">
+                    Created by <strong>Lakshman Turlapati</strong>
+                </p>
+                <p class="version">Version 0.2.0</p>
+                <div class="links">
+                    <a href="https://github.com/LakshmanTurlapati/cmd-k-terminal">GitHub</a>
+                    <span class="separator">|</span>
+                    <a href="#">Documentation</a>
+                    <span class="separator">|</span>
+                    <a href="#">License (MIT)</a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CMD+K Terminal Overlay</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--vscode-font-family);
+            background: transparent;
+            overflow: hidden;
+        }
+
+        .overlay-container {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--vscode-editor-background);
+            border-top: 2px solid var(--vscode-focusBorder);
+            box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
+            animation: slideUp 0.2s ease-out;
+            padding: 16px;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(100%);
+            }
+            to {
+                transform: translateY(0);
+            }
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .provider-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        select {
+            background: var(--vscode-dropdown-background);
+            color: var(--vscode-dropdown-foreground);
+            border: 1px solid var(--vscode-dropdown-border);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            outline: none;
+        }
+
+        select:focus {
+            border-color: var(--vscode-focusBorder);
+        }
+
+        #providerSelect {
+            min-width: 100px;
+        }
+
+        #modelSelect {
+            min-width: 150px;
+        }
+
+        .settings-hint {
+            font-size: 11px;
+            color: var(--vscode-descriptionForeground);
+            margin-left: 8px;
+        }
+
+        .keyboard-hint {
+            font-size: 11px;
+            color: var(--vscode-descriptionForeground);
+            display: flex;
+            gap: 8px;
+        }
+
+        .key {
+            padding: 2px 6px;
+            background: var(--vscode-button-secondaryBackground);
+            border-radius: 3px;
+            font-family: monospace;
+        }
+
+        .input-container {
+            position: relative;
+        }
+
+        #promptInput {
+            width: 100%;
+            padding: 12px 12px 12px 40px;
+            background: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: var(--vscode-font-family);
+            outline: none;
+        }
+
+        #promptInput:focus {
+            border-color: var(--vscode-focusBorder);
+        }
+
+        #promptInput::placeholder {
+            color: var(--vscode-input-placeholderForeground);
+        }
+
+        .spinner {
+            display: none;
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 20px;
+        }
+
+        .spinner.active {
+            display: inline-block;
+        }
+
+        .spinner::after,
+        .spinner::before {
+            content: '';
+            box-sizing: border-box;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--vscode-focusBorder);
+            position: absolute;
+            left: 0;
+            top: 0;
+            animation: animloader 2s linear infinite;
+        }
+
+        .spinner::after {
+            animation-delay: 1s;
+        }
+
+        @keyframes animloader {
+            0% {
+                transform: scale(0);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 0;
+            }
+        }
+
+        .error-container {
+            display: none;
+            margin-top: 12px;
+            padding: 12px;
+            background: var(--vscode-inputValidation-errorBackground);
+            color: var(--vscode-inputValidation-errorForeground);
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .error-container.active {
+            display: block;
+        }
+
+        .no-providers-message {
+            display: none;
+            margin-top: 12px;
+            padding: 12px;
+            background: var(--vscode-inputValidation-warningBackground);
+            color: var(--vscode-inputValidation-warningForeground);
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .no-providers-message.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="overlay-container">
+        <div class="header">
+            <div class="provider-selector">
+                <select id="providerSelect">
+                    <option value="">Loading...</option>
+                </select>
+                <select id="modelSelect">
+                    <option value="">Select model...</option>
+                </select>
+                <span class="settings-hint">Type /settings for more options</span>
+            </div>
+            <div class="keyboard-hint">
+                <span><span class="key">Esc</span> Cancel</span>
+                <span><span class="key">⏎</span> Generate</span>
+            </div>
+        </div>
+
+        <div class="input-container">
+            <span class="spinner" id="spinner"></span>
+            <input
+                type="text"
+                id="promptInput"
+                placeholder="Describe the command you want to generate... or type /settings"
+                autofocus
+            />
+        </div>
+
+        <div class="no-providers-message" id="noProvidersMessage">
+            No AI providers configured. Type /settings to configure API keys.
+        </div>
+
+        <div class="error-container" id="errorContainer">
+            <span id="errorMessage"></span>
+        </div>
+    </div>
+
+    <script>
+        const vscode = acquireVsCodeApi();
+        let currentCommand = '';
+        let availableProviders = [];
+        let selectedProvider = '';
+        let selectedModel = '';
+        let isGenerating = false;
+
+        const promptInput = document.getElementById('promptInput');
+        const providerSelect = document.getElementById('providerSelect');
+        const modelSelect = document.getElementById('modelSelect');
+        const spinner = document.getElementById('spinner');
+        const errorContainer = document.getElementById('errorContainer');
+        const errorMessage = document.getElementById('errorMessage');
+        const noProvidersMessage = document.getElementById('noProvidersMessage');
+
+        // Focus input on load
+        promptInput.focus();
+
+        // Handle messages from extension
+        window.addEventListener('message', event => {
+            const message = event.data;
+            switch (message.command) {
+                case 'setAvailableProviders':
+                    handleAvailableProviders(message.providers, message.currentProvider, message.currentModel);
+                    break;
+                case 'streamStart':
+                    handleStreamStart();
+                    break;
+                case 'streamComplete':
+                    handleStreamComplete(message.commandText);
+                    break;
+                case 'error':
+                    handleError(message.error);
+                    break;
+            }
+        });
+
+        // Handle provider selection change
+        providerSelect.addEventListener('change', () => {
+            selectedProvider = providerSelect.value;
+            vscode.postMessage({ command: 'providerChanged', provider: selectedProvider });
+        });
+
+        // Handle model selection change
+        modelSelect.addEventListener('change', () => {
+            selectedModel = modelSelect.value;
+            vscode.postMessage({ command: 'modelChanged', model: selectedModel });
+        });
+
+        // Keyboard handlers
+        promptInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+
+                // If command is ready, execute it
+                if (isGenerating === 'complete') {
+                    if (e.metaKey || e.ctrlKey) {
+                        // Cmd/Ctrl+Enter to execute
+                        vscode.postMessage({ command: 'execute', commandText: currentCommand });
+                        return;
+                    }
+                    // Just Enter to execute as well
+                    vscode.postMessage({ command: 'execute', commandText: currentCommand });
+                    return;
+                }
+
+                // Otherwise start generation
+                const input = promptInput.value.trim();
+
+                // Check for /settings command
+                if (input === '/settings') {
+                    vscode.postMessage({ command: 'openSettings' });
+                    return;
+                }
+
+                if (!isGenerating) {
+                    startGeneration();
+                }
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                cancel();
+            }
+        });
+
+        function handleAvailableProviders(providers, currentProvider, currentModel) {
+            availableProviders = providers;
+
+            if (providers.length === 0) {
+                noProvidersMessage.classList.add('active');
+                providerSelect.disabled = true;
+                modelSelect.disabled = true;
+                promptInput.disabled = true;
+                return;
+            }
+
+            noProvidersMessage.classList.remove('active');
+            providerSelect.disabled = false;
+            modelSelect.disabled = false;
+            promptInput.disabled = false;
+
+            // Populate provider dropdown
+            providerSelect.innerHTML = '';
+            providers.forEach(p => {
+                const option = document.createElement('option');
+                option.value = p.id;
+                option.textContent = p.name;
+                if (p.id === currentProvider) {
+                    option.selected = true;
+                }
+                providerSelect.appendChild(option);
+            });
+
+            selectedProvider = currentProvider;
+            updateModelList(currentProvider, providers, currentModel);
+        }
+
+        function updateModelList(providerId, providers, currentModel) {
+            const provider = providers.find(p => p.id === providerId);
+            if (!provider) return;
+
+            modelSelect.innerHTML = '';
+            provider.models.forEach(m => {
+                const option = document.createElement('option');
+                option.value = m.id;
+                option.textContent = m.name;
+                if (m.id === currentModel) {
+                    option.selected = true;
+                }
+                modelSelect.appendChild(option);
+            });
+
+            selectedModel = currentModel;
+        }
+
+        function startGeneration() {
+            const prompt = promptInput.value.trim();
+            if (!prompt) return;
+
+            if (availableProviders.length === 0) {
+                handleError('No AI providers configured. Please configure API keys in settings.');
+                return;
+            }
+
+            isGenerating = true;
+            promptInput.disabled = true;
+            promptInput.value = '';
+            promptInput.placeholder = 'Generating command...';
+            spinner.classList.add('active');
+            errorContainer.classList.remove('active');
+
+            vscode.postMessage({
+                command: 'generate',
+                prompt,
+                provider: selectedProvider,
+                model: selectedModel
+            });
+        }
+
+        function handleStreamStart() {
+            isGenerating = true;
+            currentCommand = '';
+        }
+
+        function handleStreamComplete(command) {
+            currentCommand = command;
+            isGenerating = 'complete';
+            spinner.classList.remove('active');
+            promptInput.placeholder = 'Press Enter to run, or Esc to cancel';
+            promptInput.disabled = false;
+        }
+
+        function handleError(error) {
+            isGenerating = false;
+            spinner.classList.remove('active');
+            errorContainer.classList.add('active');
+            errorMessage.textContent = error;
+            promptInput.disabled = false;
+            promptInput.placeholder = 'Describe the command you want to generate... or type /settings';
+            promptInput.focus();
+        }
+
+        function cancel() {
+            vscode.postMessage({ command: 'cancel' });
+        }
+
+        // Request current provider info on load
+        vscode.postMessage({ command: 'ready' });
+    </script>
+</body>
+</html>

@@ -1,0 +1,271 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  background: rgba(0, 0, 0, 0.001);
+  color: #fff;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+}
+
+#app {
+  background: rgba(30, 30, 30, 0.95);
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  overflow: visible;
+  -webkit-app-region: no-drag;
+  pointer-events: auto;
+}
+
+.view {
+  display: none;
+}
+
+.view.active {
+  display: block;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  -webkit-app-region: drag;
+  cursor: grab;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.hint {
+  font-size: 11px;
+  color: #aaa;
+}
+
+input[type="text"],
+input[type="password"] {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: #fff;
+  outline: none;
+  -webkit-app-region: no-drag;
+  pointer-events: auto;
+  user-select: text;
+  cursor: text;
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus {
+  border-color: #007AFF;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+input::placeholder {
+  color: #999;
+}
+
+select {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: #fff;
+  outline: none;
+  -webkit-app-region: no-drag;
+  cursor: pointer;
+}
+
+select:focus {
+  border-color: #007AFF;
+}
+
+select option {
+  background: #2a2a2a;
+  color: #fff;
+}
+
+.status {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #aaa;
+  min-height: 18px;
+}
+
+.status.error {
+  color: #ff6b6b;
+}
+
+.status.success {
+  color: #51cf66;
+}
+
+.command-display {
+  padding: 12px 16px;
+  background: rgba(0, 122, 255, 0.15);
+  border: 1px solid rgba(0, 122, 255, 0.3);
+  border-radius: 8px;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 14px;
+  color: #fff;
+  word-break: break-all;
+  margin-bottom: 12px;
+}
+
+.form-group {
+  margin-bottom: 12px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 12px;
+  color: #aaa;
+  margin-bottom: 6px;
+}
+
+.button-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.btn {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: background 0.2s;
+}
+
+.btn.primary {
+  background: #007AFF;
+  color: #fff;
+}
+
+.btn.primary:hover {
+  background: #0066d6;
+}
+
+.btn:not(.primary) {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.btn:not(.primary):hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Loading spinner */
+.loading {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 0.8s linear infinite;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Input wrapper for suggestions positioning */
+.input-wrapper {
+  position: relative;
+  -webkit-app-region: no-drag;
+}
+
+/* Suggestions dropdown */
+.suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: rgba(40, 40, 40, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  margin-top: 8px;
+  display: none;
+  overflow: hidden;
+  z-index: 1000;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.suggestions.active {
+  display: block;
+}
+
+.suggestion-item {
+  padding: 10px 16px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  -webkit-app-region: no-drag;
+}
+
+.suggestion-item:first-child {
+  border-radius: 7px 7px 0 0;
+}
+
+.suggestion-item:last-child {
+  border-radius: 0 0 7px 7px;
+}
+
+.suggestion-item:only-child {
+  border-radius: 7px;
+}
+
+.suggestion-item:hover,
+.suggestion-item.selected {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.suggestion-cmd {
+  color: #fff;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.suggestion-desc {
+  color: #888;
+  font-size: 12px;
+}
+
+.suggestion-hint {
+  color: #666;
+  font-size: 11px;
+  margin-left: auto;
+  padding-left: 12px;
+}

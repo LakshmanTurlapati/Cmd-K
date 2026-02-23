@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+  <title>CMD+K</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Main View -->
+    <div id="main-view" class="view active">
+      <div class="header">
+        <span class="title">CMD+K</span>
+        <span class="hint">ESC to close</span>
+      </div>
+      <div class="input-wrapper">
+        <div id="suggestions" class="suggestions"></div>
+        <input
+          type="text"
+          id="command-input"
+          placeholder="Describe the command... or type / for commands"
+          autocomplete="off"
+          autofocus
+        >
+      </div>
+      <div id="status" class="status"></div>
+    </div>
+
+    <!-- Result View -->
+    <div id="result-view" class="view">
+      <div class="header">
+        <span class="title">Command Ready</span>
+      </div>
+      <div id="result-command" class="command-display"></div>
+      <div class="button-row">
+        <button id="paste-btn" class="btn primary">Paste to Terminal</button>
+        <button id="cancel-btn" class="btn">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Settings View -->
+    <div id="settings-view" class="view">
+      <div class="header">
+        <span class="title">Settings</span>
+      </div>
+      <div class="form-group">
+        <label>Provider</label>
+        <select id="provider-select">
+          <option value="openai">OpenAI</option>
+          <option value="anthropic">Anthropic</option>
+          <option value="xai">xAI</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Model</label>
+        <select id="model-select"></select>
+      </div>
+      <div class="form-group">
+        <label>API Key</label>
+        <input type="password" id="api-key-input" placeholder="Enter API key...">
+      </div>
+      <div class="button-row">
+        <button id="save-settings-btn" class="btn primary">Save</button>
+        <button id="back-settings-btn" class="btn">Back</button>
+      </div>
+      <div id="settings-status" class="status"></div>
+    </div>
+
+    <!-- Models View -->
+    <div id="models-view" class="view">
+      <div class="header">
+        <span class="title">Select Default Model</span>
+      </div>
+      <div class="form-group">
+        <label>Available Models</label>
+        <select id="default-model-select"></select>
+      </div>
+      <div class="button-row">
+        <button id="set-default-btn" class="btn primary">Set as Default</button>
+        <button id="back-models-btn" class="btn">Back</button>
+      </div>
+      <div id="models-status" class="status"></div>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

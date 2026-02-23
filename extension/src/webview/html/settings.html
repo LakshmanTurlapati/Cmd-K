@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CMD+K Settings</title>
+    <style>
+        body {
+            font-family: var(--vscode-font-family);
+            color: var(--vscode-foreground);
+            background-color: var(--vscode-editor-background);
+            padding: 20px;
+            margin: 0;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--vscode-foreground);
+        }
+
+        .subtitle {
+            color: var(--vscode-descriptionForeground);
+            margin-bottom: 30px;
+            font-size: 13px;
+        }
+
+        .section {
+            background: var(--vscode-editor-background);
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 6px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .status {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        .status.connected {
+            background: var(--vscode-testing-iconPassed);
+            color: var(--vscode-editor-background);
+        }
+
+        .status.not-configured {
+            background: var(--vscode-inputValidation-warningBackground);
+            color: var(--vscode-inputValidation-warningForeground);
+        }
+
+        .status.error {
+            background: var(--vscode-inputValidation-errorBackground);
+            color: var(--vscode-inputValidation-errorForeground);
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        input[type="text"],
+        input[type="password"],
+        select {
+            width: 100%;
+            padding: 8px 12px;
+            background: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 4px;
+            font-size: 13px;
+            box-sizing: border-box;
+        }
+
+        input[type="text"]:focus,
+        input[type="password"]:focus,
+        select:focus {
+            outline: none;
+            border-color: var(--vscode-focusBorder);
+        }
+
+        .input-with-toggle {
+            display: flex;
+            gap: 8px;
+        }
+
+        .input-with-toggle input {
+            flex: 1;
+        }
+
+        .toggle-btn {
+            padding: 8px 12px;
+            background: var(--vscode-button-secondaryBackground);
+            color: var(--vscode-button-secondaryForeground);
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .toggle-btn:hover {
+            background: var(--vscode-button-secondaryHoverBackground);
+        }
+
+        .default-provider {
+            margin-bottom: 30px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 30px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .btn-primary {
+            background: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            flex: 1;
+        }
+
+        .btn-primary:hover {
+            background: var(--vscode-button-hoverBackground);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: var(--vscode-button-secondaryBackground);
+            color: var(--vscode-button-secondaryForeground);
+        }
+
+        .btn-secondary:hover {
+            background: var(--vscode-button-secondaryHoverBackground);
+        }
+
+        .message {
+            padding: 12px;
+            border-radius: 4px;
+            margin-top: 16px;
+            font-size: 13px;
+            display: none;
+        }
+
+        .message.success {
+            background: var(--vscode-testing-iconPassed);
+            color: var(--vscode-editor-background);
+            display: block;
+        }
+
+        .message.error {
+            background: var(--vscode-inputValidation-errorBackground);
+            color: var(--vscode-inputValidation-errorForeground);
+            display: block;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid var(--vscode-button-foreground);
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 0.6s linear infinite;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .help-text {
+            font-size: 12px;
+            color: var(--vscode-descriptionForeground);
+            margin-top: 4px;
+        }
+
+        .api-link {
+            color: var(--vscode-textLink-foreground);
+            text-decoration: none;
+            font-size: 12px;
+        }
+
+        .api-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CMD+K Settings</h1>
+        <p class="subtitle">Configure your AI providers and API keys</p>
+
+        <div class="default-provider">
+            <div class="form-group">
+                <label for="defaultProvider">Default Provider</label>
+                <select id="defaultProvider">
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="xai">xAI</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- OpenAI Section -->
+        <div class="section">
+            <div class="section-header">
+                <span class="section-title">OpenAI</span>
+                <span class="status" id="openai-status">Not configured</span>
+            </div>
+
+            <div class="form-group">
+                <label for="openai-key">API Key</label>
+                <div class="input-with-toggle">
+                    <input type="password" id="openai-key" placeholder="sk-..." />
+                    <button type="button" class="toggle-btn" onclick="toggleVisibility('openai-key')">Show</button>
+                </div>
+                <p class="help-text">
+                    Get your API key from <a href="https://platform.openai.com/api-keys" class="api-link" onclick="openExternal(event)">OpenAI Platform</a>
+                </p>
+            </div>
+
+            <div class="form-group">
+                <label for="openai-model">Model</label>
+                <select id="openai-model">
+                    <option value="gpt-4o">GPT-4o</option>
+                    <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                    <option value="gpt-4">GPT-4</option>
+                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Anthropic Section -->
+        <div class="section">
+            <div class="section-header">
+                <span class="section-title">Anthropic</span>
+                <span class="status" id="anthropic-status">Not configured</span>
+            </div>
+
+            <div class="form-group">
+                <label for="anthropic-key">API Key</label>
+                <div class="input-with-toggle">
+                    <input type="password" id="anthropic-key" placeholder="sk-ant-..." />
+                    <button type="button" class="toggle-btn" onclick="toggleVisibility('anthropic-key')">Show</button>
+                </div>
+                <p class="help-text">
+                    Get your API key from <a href="https://console.anthropic.com" class="api-link" onclick="openExternal(event)">Anthropic Console</a>
+                </p>
+            </div>
+
+            <div class="form-group">
+                <label for="anthropic-model">Model</label>
+                <select id="anthropic-model">
+                    <option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5</option>
+                    <option value="claude-opus-4-20250514">Claude Opus 4.1</option>
+                    <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
+                    <option value="claude-3-opus-20240229">Claude 3 Opus</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- xAI Section -->
+        <div class="section">
+            <div class="section-header">
+                <span class="section-title">xAI</span>
+                <span class="status" id="xai-status">Not configured</span>
+            </div>
+
+            <div class="form-group">
+                <label for="xai-key">API Key</label>
+                <div class="input-with-toggle">
+                    <input type="password" id="xai-key" placeholder="xai-..." />
+                    <button type="button" class="toggle-btn" onclick="toggleVisibility('xai-key')">Show</button>
+                </div>
+                <p class="help-text">
+                    Get your API key from <a href="https://console.x.ai" class="api-link" onclick="openExternal(event)">xAI Console</a>
+                </p>
+            </div>
+
+            <div class="form-group">
+                <label for="xai-model">Model</label>
+                <select id="xai-model">
+                    <option value="grok-beta">Grok Beta</option>
+                    <option value="grok-4">Grok 4</option>
+                    <option value="grok-4-fast-reasoning">Grok 4 Fast Reasoning</option>
+                    <option value="grok-4-fast-non-reasoning">Grok 4 Fast Non-Reasoning</option>
+                    <option value="grok-code-fast-1">Grok Code Fast 1</option>
+                    <option value="grok-3">Grok 3</option>
+                    <option value="grok-3-mini">Grok 3 Mini</option>
+                    <option value="grok-2-latest">Grok 2 Latest</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button type="button" class="btn-primary" id="applyBtn" onclick="applySettings()">
+                Apply & Test Connection
+                <span class="loading" id="applyLoading" style="display: none;"></span>
+            </button>
+            <button type="button" class="btn-secondary" onclick="resetSettings()">Reset</button>
+        </div>
+
+        <div class="message" id="message"></div>
+    </div>
+
+    <script>
+        const vscode = acquireVsCodeApi();
+
+        // Load current settings on startup
+        window.addEventListener('DOMContentLoaded', () => {
+            vscode.postMessage({ command: 'loadSettings' });
+        });
+
+        // Handle messages from extension
+        window.addEventListener('message', event => {
+            const message = event.data;
+            switch (message.command) {
+                case 'settingsLoaded':
+                    populateSettings(message.settings);
+                    break;
+                case 'validationResult':
+                    handleValidationResult(message);
+                    break;
+            }
+        });
+
+        function populateSettings(settings) {
+            document.getElementById('defaultProvider').value = settings.provider;
+            document.getElementById('openai-key').value = settings.openai.apiKey;
+            document.getElementById('openai-model').value = settings.openai.model;
+            document.getElementById('anthropic-key').value = settings.anthropic.apiKey;
+            document.getElementById('anthropic-model').value = settings.anthropic.model;
+            document.getElementById('xai-key').value = settings.xai.apiKey;
+            document.getElementById('xai-model').value = settings.xai.model;
+
+            updateStatuses(settings);
+        }
+
+        function updateStatuses(settings) {
+            updateStatus('openai', settings.openai.apiKey);
+            updateStatus('anthropic', settings.anthropic.apiKey);
+            updateStatus('xai', settings.xai.apiKey);
+        }
+
+        function updateStatus(provider, apiKey) {
+            const statusEl = document.getElementById(`${provider}-status`);
+            if (apiKey && apiKey.trim() !== '') {
+                statusEl.textContent = 'Configured';
+                statusEl.className = 'status connected';
+            } else {
+                statusEl.textContent = 'Not configured';
+                statusEl.className = 'status not-configured';
+            }
+        }
+
+        function toggleVisibility(inputId) {
+            const input = document.getElementById(inputId);
+            const btn = input.nextElementSibling.nextElementSibling;
+            if (input.type === 'password') {
+                input.type = 'text';
+                btn.textContent = 'Hide';
+            } else {
+                input.type = 'password';
+                btn.textContent = 'Show';
+            }
+        }
+
+        function applySettings() {
+            const btn = document.getElementById('applyBtn');
+            const loading = document.getElementById('applyLoading');
+            const messageEl = document.getElementById('message');
+
+            btn.disabled = true;
+            loading.style.display = 'inline-block';
+            messageEl.style.display = 'none';
+
+            const settings = {
+                provider: document.getElementById('defaultProvider').value,
+                openai: {
+                    apiKey: document.getElementById('openai-key').value,
+                    model: document.getElementById('openai-model').value
+                },
+                anthropic: {
+                    apiKey: document.getElementById('anthropic-key').value,
+                    model: document.getElementById('anthropic-model').value
+                },
+                xai: {
+                    apiKey: document.getElementById('xai-key').value,
+                    model: document.getElementById('xai-model').value
+                }
+            };
+
+            vscode.postMessage({ command: 'applySettings', settings });
+        }
+
+        function handleValidationResult(message) {
+            const btn = document.getElementById('applyBtn');
+            const loading = document.getElementById('applyLoading');
+            const messageEl = document.getElementById('message');
+
+            btn.disabled = false;
+            loading.style.display = 'none';
+
+            if (message.success) {
+                messageEl.className = 'message success';
+                messageEl.textContent = message.message || 'Settings saved and connection tested successfully!';
+
+                // Update statuses
+                message.statuses.forEach(status => {
+                    const statusEl = document.getElementById(`${status.provider}-status`);
+                    statusEl.textContent = status.valid ? 'Connected' : 'Error';
+                    statusEl.className = status.valid ? 'status connected' : 'status error';
+                });
+            } else {
+                messageEl.className = 'message error';
+                messageEl.textContent = message.message || 'Failed to save settings. Please check your API keys.';
+            }
+
+            messageEl.style.display = 'block';
+        }
+
+        function resetSettings() {
+            vscode.postMessage({ command: 'loadSettings' });
+            document.getElementById('message').style.display = 'none';
+        }
+
+        function openExternal(event) {
+            event.preventDefault();
+            vscode.postMessage({ command: 'openExternal', url: event.target.href });
+        }
+    </script>
+</body>
+</html>

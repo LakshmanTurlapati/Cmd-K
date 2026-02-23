@@ -1,0 +1,159 @@
+{
+  "name": "cmd-k",
+  "displayName": "CMD + K",
+  "description": "AI-powered terminal command generation with CMD+K - supports OpenAI, Anthropic, and xAI",
+  "version": "0.2.0",
+  "publisher": "lakshman-turlapati",
+  "author": "Lakshman Turlapati",
+  "icon": "icons/icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "terminal",
+    "ai",
+    "command",
+    "openai",
+    "anthropic",
+    "xai",
+    "gpt",
+    "claude",
+    "grok"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "terminalAI.generateCommand",
+        "title": "CMD+K: Generate Command"
+      },
+      {
+        "command": "terminalAI.openSettings",
+        "title": "CMD+K: Open Settings"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "terminalAI.generateCommand",
+        "key": "ctrl+k",
+        "mac": "cmd+k",
+        "when": "terminalFocus"
+      }
+    ],
+    "configuration": {
+      "title": "CMD+K",
+      "properties": {
+        "terminalAI.provider": {
+          "type": "string",
+          "default": "openai",
+          "enum": [
+            "openai",
+            "anthropic",
+            "xai"
+          ],
+          "description": "Default AI provider to use for command generation"
+        },
+        "terminalAI.openai.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "OpenAI API Key"
+        },
+        "terminalAI.openai.model": {
+          "type": "string",
+          "default": "gpt-4o",
+          "enum": [
+            "gpt-4o",
+            "gpt-4-turbo",
+            "gpt-4",
+            "gpt-3.5-turbo"
+          ],
+          "description": "OpenAI model to use"
+        },
+        "terminalAI.anthropic.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Anthropic API Key"
+        },
+        "terminalAI.anthropic.model": {
+          "type": "string",
+          "default": "claude-sonnet-4-5-20250929",
+          "enum": [
+            "claude-sonnet-4-5-20250929",
+            "claude-opus-4-20250514",
+            "claude-3-5-sonnet-20241022",
+            "claude-3-opus-20240229"
+          ],
+          "description": "Anthropic model to use"
+        },
+        "terminalAI.xai.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "xAI API Key"
+        },
+        "terminalAI.xai.model": {
+          "type": "string",
+          "default": "grok-beta",
+          "enum": [
+            "grok-beta",
+            "grok-4",
+            "grok-4-fast-reasoning",
+            "grok-4-fast-non-reasoning",
+            "grok-code-fast-1",
+            "grok-3",
+            "grok-3-mini",
+            "grok-2-latest"
+          ],
+          "description": "xAI model to use"
+        },
+        "terminalAI.maxHistoryLines": {
+          "type": "number",
+          "default": 20,
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Maximum number of terminal history lines to include in context"
+        },
+        "terminalAI.showPreviewBox": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show preview box when generating commands"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "20.x",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.3",
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.4",
+    "ts-loader": "^9.5.1",
+    "@vscode/test-cli": "^0.0.4",
+    "@vscode/test-electron": "^2.3.8"
+  },
+  "dependencies": {
+    "openai": "^4.77.0",
+    "@anthropic-ai/sdk": "^0.32.1",
+    "axios": "^1.7.9"
+  }
+}
