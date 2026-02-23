@@ -76,9 +76,8 @@ export function CommandInput({ onSubmit }: CommandInputProps) {
     }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      // Block submission during streaming or result display to prevent
-      // accidental resubmission of the same query (which would re-paste)
-      if (displayMode !== "input") return;
+      // Block submission during active streaming (AI still generating)
+      if (displayMode === "streaming") return;
       if (inputValue.trim()) {
         onSubmit(inputValue);
       } else {
