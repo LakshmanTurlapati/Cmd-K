@@ -115,10 +115,11 @@ Plans:
   2. Pasting works for Terminal.app and iTerm2 via AppleScript
   3. When auto-paste unavailable (unsupported terminal), fallback to clipboard with notification
   4. Focus returns to terminal after paste completes
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] TBD during phase planning
+- [ ] 06-01-PLAN.md -- Rust paste_to_terminal command (AppleScript dispatch) + autoPasteEnabled Zustand state, settings toggle, startup load
+- [ ] 06-02-PLAN.md -- Wire paste trigger into submitQuery completion path + human verification of end-to-end auto-paste
 
 ## Progress
 
@@ -132,4 +133,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Terminal Context Reading | 2/5 | In Progress|  |
 | 4. AI Command Generation | 3/3 | Complete    | 2026-02-23 |
 | 5. Safety Layer | 2/2 | Complete    | 2026-02-23 |
-| 6. Terminal Pasting | 0/TBD | Not started | - |
+| 6. Terminal Pasting | 0/2 | Not started | - |
