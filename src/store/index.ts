@@ -411,6 +411,7 @@ export const useOverlayStore = create<OverlayState>((set) => ({
             streamingText: fullText,
             turnHistory: trimmedHistory,
             isDestructive: true,
+            inputValue: "",
           });
         } else if (fullText) {
           // Safe: synchronized reveal + paste at ~400 chars/sec
@@ -440,6 +441,7 @@ export const useOverlayStore = create<OverlayState>((set) => ({
                 displayMode: "result",
                 streamingText: fullText,
                 turnHistory: trimmedHistory,
+                inputValue: "",
               });
             } else {
               set({ streamingText: fullText.slice(0, idx) });
@@ -451,6 +453,7 @@ export const useOverlayStore = create<OverlayState>((set) => ({
             displayMode: "result",
             streamingText: "",
             turnHistory: trimmedHistory,
+            inputValue: "",
           });
         }
       } catch (err) {
