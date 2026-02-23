@@ -92,18 +92,19 @@ Plans:
 - [x] 04-03-PLAN.md -- CSS polish (shake animation) + human verification of complete Phase 4 experience (22 checks) (completed 2026-02-23)
 
 ### Phase 5: Safety Layer
-**Goal**: Destructive commands are flagged with warnings before user can execute them
+**Goal**: Destructive commands are flagged with informational warning badges after generation completes
 **Depends on**: Phase 4 (needs command generation)
 **Requirements**: AICG-03
 **Success Criteria** (what must be TRUE):
-  1. Commands containing rm -rf, DROP TABLE, git push --force trigger warning UI
-  2. User must explicitly confirm destructive command before copying to clipboard
-  3. Warning displays what the command will do in plain language
-  4. User can configure destructive pattern detection sensitivity
-**Plans**: TBD
+  1. Commands containing rm -rf, DROP TABLE, git push --force trigger red "Destructive" badge in results header
+  2. Warning badge informs user of destructive commands (copy is never blocked)
+  3. Badge tooltip displays AI-generated plain-language explanation of what the command does
+  4. User can toggle destructive pattern detection on/off in Settings > Preferences
+**Plans**: 2 plans
 
 Plans:
-- [ ] TBD during phase planning
+- [ ] 05-01-PLAN.md -- Rust safety.rs (regex pattern detection + AI explanation IPC), Zustand state extension, settings toggle, startup preference loading
+- [ ] 05-02-PLAN.md -- DestructiveBadge component (Radix tooltip), Overlay integration, submitQuery detection wiring + human verification
 
 ### Phase 6: Terminal Pasting
 **Goal**: Generated command is automatically pasted into active terminal for immediate execution
@@ -130,5 +131,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Settings & Configuration | 2/3 | Complete    | 2026-02-21 |
 | 3. Terminal Context Reading | 2/5 | In Progress|  |
 | 4. AI Command Generation | 3/3 | Complete    | 2026-02-23 |
-| 5. Safety Layer | 0/TBD | Not started | - |
+| 5. Safety Layer | 0/2 | Not started | - |
 | 6. Terminal Pasting | 0/TBD | Not started | - |
