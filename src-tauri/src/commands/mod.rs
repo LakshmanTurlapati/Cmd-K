@@ -1,6 +1,7 @@
 pub mod ai;
 pub mod hotkey;
 pub mod keychain;
+pub mod paste;
 pub mod permissions;
 pub mod safety;
 pub mod terminal;
