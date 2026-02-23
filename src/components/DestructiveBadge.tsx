@@ -42,7 +42,7 @@ export function DestructiveBadge() {
           <span
             className={[
               "text-[11px] font-mono px-1.5 py-0.5 rounded",
-              "bg-red-500/20 text-red-400 border border-red-500/30",
+              "bg-red-500/20 text-red-400 border border-red-500/30 ml-auto",
               "cursor-pointer transition-opacity duration-200",
               visible ? "opacity-100" : "opacity-0",
             ].join(" ")}
