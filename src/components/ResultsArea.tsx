@@ -81,7 +81,7 @@ export function ResultsArea() {
             <pre className="font-mono text-sm text-white/90 whitespace-pre-wrap break-words m-0">
               {streamingText ? highlightShell(streamingText) : null}
               {isStreaming && (
-                <span className="inline-block w-[0.6em] h-[1.1em] bg-white/80 animate-pulse align-text-bottom ml-px" />
+                <span className="inline-block w-[0.55em] h-[1.15em] bg-white rounded-[1px] animate-[cursor-blink_1s_step-end_infinite] align-text-bottom ml-px" />
               )}
             </pre>
           </div>

@@ -81,13 +81,17 @@ export function Overlay({ onSubmit }: OverlayProps) {
         // command mode (default)
         <>
           {mode === "command" && !accessibilityGranted && (
-            <div
-              className="flex items-center gap-2 px-3 py-2 bg-amber-900/40 border border-amber-500/30 rounded-lg text-xs text-amber-200 cursor-pointer"
-              onClick={() => {
-                invoke("open_accessibility_settings");
-              }}
-            >
-              <span>Enable Accessibility for terminal context</span>
+            <div className="text-red-400/70 text-xs font-mono">
+              Accessibility permission required.{" "}
+              <button
+                type="button"
+                className="text-white/50 underline underline-offset-2 hover:text-white/70 transition-colors cursor-pointer bg-transparent border-none p-0"
+                onClick={() => {
+                  invoke("open_accessibility_settings");
+                }}
+              >
+                Open Settings
+              </button>
             </div>
           )}
           {hotkeyConfigOpen ? (
