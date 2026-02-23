@@ -48,6 +48,10 @@ pub struct AppContext {
     pub console_detected: bool,
     /// Last line from browser console output (filtered for sensitive data).
     pub console_last_line: Option<String>,
+    /// Visible text from any non-terminal app, read via generic AX tree walking.
+    /// Populated for apps like Notion, browsers, editors that expose text via Accessibility.
+    /// Up to ~4KB of concatenated text from AXStaticText, AXTextField, AXTextArea elements.
+    pub visible_text: Option<String>,
 }
 
 /// Public API: terminal detection with 500ms hard timeout.
@@ -80,13 +84,13 @@ pub fn detect(previous_app_pid: i32) -> Option<TerminalContext> {
 /// - Browser console detection state if the app is a known browser
 ///
 /// Returns None only if the timeout expires before detection completes.
-pub fn detect_full(previous_app_pid: i32) -> Option<AppContext> {
+pub fn detect_full(previous_app_pid: i32, pre_captured_text: Option<String>) -> Option<AppContext> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
-        let result = detect_app_context(previous_app_pid);
+        let result = detect_app_context(previous_app_pid, pre_captured_text);
         let _ = tx.send(result);
     });
-    rx.recv_timeout(Duration::from_millis(500)).ok().flatten()
+    rx.recv_timeout(Duration::from_millis(750)).ok().flatten()
 }
 
 /// Inner detection logic (runs on background thread spawned by detect()).
@@ -150,7 +154,7 @@ fn detect_inner(previous_app_pid: i32) -> Option<TerminalContext> {
 /// 3. For AX-capable terminals, read visible output.
 /// 4. For known browsers without a shell, attempt DevTools console detection.
 /// 5. Return AppContext wrapping all gathered state.
-fn detect_app_context(previous_app_pid: i32) -> Option<AppContext> {
+fn detect_app_context(previous_app_pid: i32, pre_captured_text: Option<String>) -> Option<AppContext> {
     eprintln!("[detect_app_context] starting for pid {}", previous_app_pid);
 
     // 1. Get bundle ID and display name.
@@ -211,10 +215,31 @@ fn detect_app_context(previous_app_pid: i32) -> Option<AppContext> {
         (false, None)
     };
 
+    // 5. Generic AX text reading for non-terminal apps that have no visible_output.
+    //    This gives the AI actual screen context for apps like Notion, browsers, etc.
+    //    Prefer pre-captured text (read before overlay stole focus) over live read.
+    let has_visible_output = terminal
+        .as_ref()
+        .and_then(|t| t.visible_output.as_ref())
+        .is_some();
+    let visible_text = if !is_terminal && !has_visible_output {
+        if let Some(pre) = pre_captured_text {
+            eprintln!("[detect_app_context] using pre-captured text ({} bytes)", pre.len());
+            Some(filter::filter_sensitive(&pre))
+        } else {
+            ax_reader::read_focused_text(previous_app_pid)
+                .map(|text| filter::filter_sensitive(&text))
+        }
+    } else {
+        None
+    };
+    eprintln!("[detect_app_context] visible_text len={:?}", visible_text.as_ref().map(|t| t.len()));
+
     Some(AppContext {
         app_name,
         terminal,
         console_detected,
         console_last_line,
+        visible_text,
     })
 }

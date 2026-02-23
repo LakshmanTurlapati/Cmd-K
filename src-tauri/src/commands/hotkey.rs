@@ -4,6 +4,7 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 use crate::commands::window::toggle_overlay;
 use crate::state::AppState;
+use crate::terminal::ax_reader;
 
 /// Capture the PID of the frontmost application using NSWorkspace via ObjC FFI.
 ///
@@ -122,6 +123,22 @@ pub fn register_hotkey(app: AppHandle, shortcut_str: String) -> Result<(), Strin
                                 *prev = Some(pid);
                             }
                         }
+
+                        // Pre-capture AX text BEFORE toggle_overlay steals focus.
+                        let pre_text = ax_reader::read_focused_text_fast(pid);
+                        if let Some(ref text) = pre_text {
+                            eprintln!(
+                                "[hotkey] pre-captured {} bytes of AX text from pid {}",
+                                text.len(),
+                                pid
+                            );
+                        }
+                        if let Some(state) = app_handle.try_state::<AppState>() {
+                            if let Ok(mut pt) = state.pre_captured_text.lock() {
+                                *pt = pre_text;
+                            }
+                        }
+
                     }
                 } else {
                     eprintln!("[hotkey] overlay visible, hiding (no PID capture)");

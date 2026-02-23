@@ -17,6 +17,10 @@ pub struct AppState {
     /// Populated in hotkey handler before show_and_make_key().
     /// Used by get_terminal_context to detect which terminal was active.
     pub previous_app_pid: Mutex<Option<i32>>,
+    /// Pre-captured AX text from the frontmost app, read BEFORE the overlay
+    /// steals focus. Written by the hotkey handler, consumed (`.take()`) by
+    /// `get_app_context` so it is used at most once.
+    pub pre_captured_text: Mutex<Option<String>>,
 }
 
 impl Default for AppState {
@@ -26,6 +30,7 @@ impl Default for AppState {
             last_hotkey_trigger: Mutex::new(None),
             overlay_visible: Mutex::new(false),
             previous_app_pid: Mutex::new(None),
+            pre_captured_text: Mutex::new(None),
         }
     }
 }

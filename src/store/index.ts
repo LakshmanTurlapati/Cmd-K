@@ -20,6 +20,7 @@ export interface AppContext {
   terminal: TerminalContext | null;
   console_detected: boolean;
   console_last_line: string | null;
+  visible_text: string | null;
 }
 
 /** Resolve the badge text from AppContext using priority: shell > console > app name */
@@ -361,10 +362,30 @@ export const useOverlayStore = create<OverlayState>((set) => ({
 
     (async () => {
       try {
+        // Wait for context detection to finish (max 2s) so the AI gets terminal context
+        console.log("[submitQuery] isDetectingContext:", useOverlayStore.getState().isDetectingContext);
+        if (useOverlayStore.getState().isDetectingContext) {
+          console.log("[submitQuery] waiting for context detection...");
+          await new Promise<void>((resolve) => {
+            const timeout = setTimeout(resolve, 2000);
+            const check = () => {
+              if (!useOverlayStore.getState().isDetectingContext) {
+                clearTimeout(timeout);
+                resolve();
+              } else {
+                setTimeout(check, 50);
+              }
+            };
+            check();
+          });
+          console.log("[submitQuery] context detection finished, appContext:", JSON.stringify(useOverlayStore.getState().appContext));
+        }
+
         const state = useOverlayStore.getState();
         const selectedModel = state.selectedModel ?? "grok-3";
         const appContext = state.appContext;
         const contextJson = appContext ? JSON.stringify(appContext) : "{}";
+        console.log("[submitQuery] context sent to AI:", contextJson);
         const history = state.turnHistory;
 
         // Stream tokens to overlay in real-time so the cursor is visible

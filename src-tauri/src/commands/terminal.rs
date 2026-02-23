@@ -62,7 +62,15 @@ pub fn get_app_context(app: AppHandle) -> Option<terminal::AppContext> {
     eprintln!("[terminal] get_app_context called, previous_app_pid={:?}", pid_opt);
 
     let pid = pid_opt?;
-    let result = terminal::detect_full(pid);
+
+    // Consume pre-captured AX text (one-time use via .take() to prevent stale data)
+    let pre_captured = state
+        .pre_captured_text
+        .lock()
+        .ok()
+        .and_then(|mut pt| pt.take());
+
+    let result = terminal::detect_full(pid, pre_captured);
     eprintln!(
         "[terminal] detect_full({}) returned: {:?}",
         pid,

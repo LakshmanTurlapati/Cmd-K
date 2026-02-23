@@ -36,6 +36,7 @@ struct AppContextView {
     terminal: Option<TerminalContextView>,
     console_detected: bool,
     console_last_line: Option<String>,
+    visible_text: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -102,6 +103,16 @@ fn build_user_message(query: &str, ctx: &AppContextView) -> String {
                 parts.push(format!("Console last line: {}", line));
             }
         }
+        if let Some(text) = &ctx.visible_text {
+            let lines: Vec<&str> = text.lines().collect();
+            let start = lines.len().saturating_sub(50);
+            let slice = &lines[start..];
+            parts.push(format!(
+                "Screen content ({} lines):\n{}",
+                slice.len(),
+                slice.join("\n")
+            ));
+        }
         parts.push(query.to_string());
     }
 
@@ -143,6 +154,7 @@ pub async fn stream_ai_response(
             terminal: None,
             console_detected: false,
             console_last_line: None,
+            visible_text: None,
         }
     });
 
