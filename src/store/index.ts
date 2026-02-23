@@ -95,6 +95,7 @@ interface OverlayState {
 
   // Auto-paste preference
   autoPasteEnabled: boolean;
+  isPasting: boolean;
   setAutoPasteEnabled: (enabled: boolean) => void;
 
   // Actions
@@ -188,6 +189,7 @@ export const useOverlayStore = create<OverlayState>((set) => ({
 
   // Auto-paste preference initial state
   autoPasteEnabled: true,
+  isPasting: false,
 
   show: () => {
     clearRevealTimer();
@@ -214,6 +216,7 @@ export const useOverlayStore = create<OverlayState>((set) => ({
       isDestructive: false,
       destructiveExplanation: null,
       destructiveDismissed: false,
+      isPasting: false,
     }));
 
     // Fire-and-forget context detection (non-blocking)
@@ -255,6 +258,7 @@ export const useOverlayStore = create<OverlayState>((set) => ({
       isDestructive: false,
       destructiveExplanation: null,
       destructiveDismissed: false,
+      isPasting: false,
     }));
   },
 
@@ -363,11 +367,13 @@ export const useOverlayStore = create<OverlayState>((set) => ({
         const contextJson = appContext ? JSON.stringify(appContext) : "{}";
         const history = state.turnHistory;
 
-        // Buffer tokens locally -- revealed at controlled speed after generation
+        // Stream tokens to overlay in real-time so the cursor is visible
+        // throughout the entire AI generation (1-3 seconds).
         let fullText = "";
         const onToken = new Channel<string>();
         onToken.onmessage = (token: string) => {
           fullText += token;
+          set({ streamingText: fullText });
         };
 
         await invoke("stream_ai_response", {
@@ -390,7 +396,7 @@ export const useOverlayStore = create<OverlayState>((set) => ({
             ? updatedHistory.slice(updatedHistory.length - 14)
             : updatedHistory;
 
-        // Destructive check BEFORE any display or paste
+        // Destructive check BEFORE paste
         let destructive = false;
         const pasteState = useOverlayStore.getState();
         if (pasteState.destructiveDetectionEnabled && fullText) {
@@ -404,56 +410,43 @@ export const useOverlayStore = create<OverlayState>((set) => ({
         }
 
         if (destructive) {
-          // Destructive: show full text immediately with badge, no paste
+          // Destructive: mark with badge, no paste
           set({
             isStreaming: false,
             displayMode: "result",
             streamingText: fullText,
             turnHistory: trimmedHistory,
             isDestructive: true,
-            inputValue: "",
           });
         } else if (fullText) {
-          // Safe: synchronized reveal + paste at ~400 chars/sec
-          // 7 chars per 16ms tick = ~437 chars/sec (matches AppleScript batch pace)
-          const CHARS_PER_TICK = 7;
-          const TICK_MS = 16;
-          let idx = 0;
-
-          // Fire paste to terminal simultaneously (types at same speed)
+          // Safe: paste to terminal, text already visible in overlay
           const afterCheck = useOverlayStore.getState();
           if (afterCheck.autoPasteEnabled) {
-            invoke("paste_to_terminal", { command: fullText }).catch((err) => {
-              console.error(
-                "[store] auto-paste failed (clipboard fallback available):",
-                err
-              );
-            });
+            set({ isPasting: true });
+            invoke("paste_to_terminal", { command: fullText })
+              .catch((err) => {
+                console.error(
+                  "[store] auto-paste failed (clipboard fallback available):",
+                  err
+                );
+              })
+              .finally(() => {
+                set({ isPasting: false });
+              });
           }
 
-          // Reveal text in overlay at matching speed
-          _revealTimer = setInterval(() => {
-            idx = Math.min(idx + CHARS_PER_TICK, fullText.length);
-            if (idx >= fullText.length) {
-              clearRevealTimer();
-              set({
-                isStreaming: false,
-                displayMode: "result",
-                streamingText: fullText,
-                turnHistory: trimmedHistory,
-                inputValue: "",
-              });
-            } else {
-              set({ streamingText: fullText.slice(0, idx) });
-            }
-          }, TICK_MS);
+          set({
+            isStreaming: false,
+            displayMode: "result",
+            streamingText: fullText,
+            turnHistory: trimmedHistory,
+          });
         } else {
           set({
             isStreaming: false,
             displayMode: "result",
             streamingText: "",
             turnHistory: trimmedHistory,
-            inputValue: "",
           });
         }
       } catch (err) {
