@@ -8,24 +8,11 @@ export function useKeyboard(): void {
   const show = useOverlayStore((state) => state.show);
 
   useEffect(() => {
-    // Handle Escape key globally -- two-Escape state machine:
-    // streaming -> cancel (return to input)
-    // result    -> returnToInput (restore previous query)
-    // input     -> close overlay
+    // Escape always closes the overlay regardless of display mode
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        const state = useOverlayStore.getState();
-        if (state.displayMode === "streaming") {
-          // During streaming: cancel and return to input
-          state.cancelStreaming();
-        } else if (state.displayMode === "result") {
-          // In result mode: return to input with previous query
-          state.returnToInput();
-        } else {
-          // In input mode: close the overlay
-          invoke("hide_overlay").catch(console.error);
-          hide();
-        }
+        invoke("hide_overlay").catch(console.error);
+        hide();
       }
     };
 

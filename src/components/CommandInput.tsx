@@ -47,6 +47,19 @@ export function CommandInput({ onSubmit }: CommandInputProps) {
     }
   }, [displayMode]);
 
+  const handleMouseUp = () => {
+    // Only applies when output is showing (streaming/result)
+    if (displayMode === "input") return;
+    const el = textareaRef.current;
+    if (!el) return;
+    // Click at end of text = edit mode (keep text, cursor stays)
+    // Click anywhere else = clear input
+    if (el.selectionStart !== inputValue.length) {
+      setInputValue("");
+      el.focus();
+    }
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputValue(e.target.value);
     // Auto-grow: reset height then expand to scrollHeight
@@ -101,6 +114,7 @@ export function CommandInput({ onSubmit }: CommandInputProps) {
         value={inputValue}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
+        onMouseUp={handleMouseUp}
         placeholder="Ask anything..."
         className={[
           "w-full",

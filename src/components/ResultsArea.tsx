@@ -10,11 +10,6 @@ export function ResultsArea() {
 
   const [copiedVisible, setCopiedVisible] = useState(false);
 
-  // Only render when in streaming or result mode
-  if (displayMode !== "streaming" && displayMode !== "result") {
-    return null;
-  }
-
   const handleClick = () => {
     // Click-to-copy only available in result mode (not during streaming)
     if (displayMode !== "result" || !streamingText) return;

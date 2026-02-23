@@ -91,10 +91,8 @@ export function Overlay({ onSubmit }: OverlayProps) {
             <HotkeyConfig />
           ) : (
             <>
-              {/* Input and output alternate in the same slot based on displayMode */}
-              {displayMode === "input" ? (
-                <CommandInput onSubmit={onSubmit} />
-              ) : (
+              <CommandInput onSubmit={onSubmit} />
+              {(displayMode === "streaming" || displayMode === "result") && (
                 <ResultsArea />
               )}
               {/* Badge stays visible in ALL display modes below input/output */}

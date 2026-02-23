@@ -207,6 +207,11 @@ export const useOverlayStore = create<OverlayState>((set) => ({
           ? "onboarding"
           : "command",
       hotkeyConfigOpen: false,
+      // Reset streaming state on close
+      isStreaming: false,
+      displayMode: "input",
+      streamingText: "",
+      streamError: null,
     })),
 
   setInputValue: (value: string) => set({ inputValue: value }),
@@ -292,13 +297,14 @@ export const useOverlayStore = create<OverlayState>((set) => ({
       return;
     }
 
-    // Transition to streaming state
+    // Transition to streaming state (keep inputValue so the field shows the query)
     set({
       isStreaming: true,
       displayMode: "streaming",
       streamingText: "",
       streamError: null,
       previousQuery: query,
+      inputValue: query,
       submitted: true,
       showApiWarning: false,
     });
