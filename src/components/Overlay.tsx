@@ -6,6 +6,7 @@ import { ResultsArea } from "./ResultsArea";
 import { HotkeyConfig } from "./HotkeyConfig";
 import { SettingsPanel } from "./Settings/SettingsPanel";
 import { OnboardingWizard } from "./Onboarding/OnboardingWizard";
+import { DestructiveBadge } from "./DestructiveBadge";
 
 type AnimationPhase = "entering" | "visible" | "exiting" | "hidden";
 
@@ -21,6 +22,8 @@ export function Overlay({ onSubmit }: OverlayProps) {
   const appContext = useOverlayStore((s) => s.appContext);
   const isDetecting = useOverlayStore((s) => s.isDetectingContext);
   const accessibilityGranted = useOverlayStore((s) => s.accessibilityGranted);
+  const isDestructive = useOverlayStore((s) => s.isDestructive);
+  const destructiveDismissed = useOverlayStore((s) => s.destructiveDismissed);
   const badgeText = resolveBadge(appContext);
   const [animPhase, setAnimPhase] = useState<AnimationPhase>("hidden");
 
@@ -105,6 +108,9 @@ export function Overlay({ onSubmit }: OverlayProps) {
                       {badgeText}
                     </span>
                   ) : null}
+                  {!destructiveDismissed && isDestructive && displayMode === "result" && (
+                    <DestructiveBadge />
+                  )}
                 </div>
               )}
             </>

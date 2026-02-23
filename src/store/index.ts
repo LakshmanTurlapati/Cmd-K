@@ -324,6 +324,7 @@ export const useOverlayStore = create<OverlayState>((set) => ({
     }
 
     // Transition to streaming state (keep inputValue so the field shows the query)
+    // Also reset destructive detection state for this new query
     set({
       isStreaming: true,
       displayMode: "streaming",
@@ -333,6 +334,9 @@ export const useOverlayStore = create<OverlayState>((set) => ({
       inputValue: query,
       submitted: true,
       showApiWarning: false,
+      isDestructive: false,
+      destructiveExplanation: null,
+      destructiveDismissed: false,
     });
 
     // Run the async streaming operation
@@ -385,6 +389,19 @@ export const useOverlayStore = create<OverlayState>((set) => ({
           navigator.clipboard.writeText(finalText).catch((err) => {
             console.error("[store] clipboard auto-copy failed:", err);
           });
+        }
+
+        // Check for destructive command after streaming completes
+        const detectionState = useOverlayStore.getState();
+        if (detectionState.destructiveDetectionEnabled && finalText) {
+          invoke<boolean>("check_destructive", { command: finalText })
+            .then((isDestructive) => {
+              if (isDestructive) {
+                useOverlayStore.getState().setIsDestructive(true);
+                // Explanation is loaded eagerly by DestructiveBadge on mount
+              }
+            })
+            .catch(console.error);
         }
       } catch (err) {
         const errorMessage =
