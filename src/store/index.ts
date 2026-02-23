@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, Channel } from "@tauri-apps/api/core";
 
 export type OverlayMode = "command" | "onboarding" | "settings";
 
@@ -44,6 +44,11 @@ export function resolveBadge(ctx: AppContext | null): string | null {
   return null;
 }
 
+export interface TurnMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 interface OverlayState {
   // Overlay visibility
   visible: boolean;
@@ -74,6 +79,14 @@ interface OverlayState {
   isDetectingContext: boolean;
   accessibilityGranted: boolean;
 
+  // Streaming state
+  streamingText: string;
+  isStreaming: boolean;
+  displayMode: "input" | "streaming" | "result";
+  previousQuery: string;
+  turnHistory: TurnMessage[];
+  streamError: string | null;
+
   // Actions
   show: () => void;
   hide: () => void;
@@ -101,6 +114,13 @@ interface OverlayState {
   setAppContext: (ctx: AppContext | null) => void;
   setIsDetectingContext: (detecting: boolean) => void;
   setAccessibilityGranted: (granted: boolean) => void;
+
+  // Streaming actions
+  appendToken: (token: string) => void;
+  submitQuery: (query: string) => void;
+  cancelStreaming: () => void;
+  returnToInput: () => void;
+  setStreamError: (error: string | null) => void;
 }
 
 export const useOverlayStore = create<OverlayState>((set) => ({
@@ -126,6 +146,14 @@ export const useOverlayStore = create<OverlayState>((set) => ({
   isDetectingContext: false,
   accessibilityGranted: false,
 
+  // Streaming initial state
+  streamingText: "",
+  isStreaming: false,
+  displayMode: "input",
+  previousQuery: "",
+  turnHistory: [],
+  streamError: null,
+
   show: () => {
     set((state) => ({
       visible: true,
@@ -139,6 +167,13 @@ export const useOverlayStore = create<OverlayState>((set) => ({
       showApiWarning: false,
       appContext: null,
       isDetectingContext: true,
+      // Reset streaming state on each overlay open
+      streamingText: "",
+      isStreaming: false,
+      displayMode: "input",
+      previousQuery: "",
+      turnHistory: [],
+      streamError: null,
     }));
 
     // Fire-and-forget context detection (non-blocking)
@@ -237,4 +272,116 @@ export const useOverlayStore = create<OverlayState>((set) => ({
   setIsDetectingContext: (detecting) => set({ isDetectingContext: detecting }),
 
   setAccessibilityGranted: (granted) => set({ accessibilityGranted: granted }),
+
+  // Streaming action implementations
+  appendToken: (token) =>
+    set((state) => ({
+      streamingText: state.streamingText + token,
+    })),
+
+  submitQuery: (query: string) => {
+    const currentState = useOverlayStore.getState();
+
+    // Validate API key status before proceeding
+    if (currentState.apiKeyStatus !== "valid") {
+      set({
+        streamError: "No API key configured. Open Settings to add one.",
+        displayMode: "result",
+        submitted: true,
+      });
+      return;
+    }
+
+    // Transition to streaming state
+    set({
+      isStreaming: true,
+      displayMode: "streaming",
+      streamingText: "",
+      streamError: null,
+      previousQuery: query,
+      submitted: true,
+      showApiWarning: false,
+    });
+
+    // Run the async streaming operation
+    (async () => {
+      try {
+        const state = useOverlayStore.getState();
+        const selectedModel = state.selectedModel ?? "grok-3";
+        const appContext = state.appContext;
+        const contextJson = appContext ? JSON.stringify(appContext) : "{}";
+        const history = state.turnHistory;
+
+        // Create a Tauri Channel for token streaming
+        const onToken = new Channel<string>();
+        onToken.onmessage = (token: string) => {
+          useOverlayStore.getState().appendToken(token);
+        };
+
+        await invoke("stream_ai_response", {
+          query,
+          model: selectedModel,
+          contextJson,
+          history,
+          onToken,
+        });
+
+        // Success: transition to result mode
+        const finalState = useOverlayStore.getState();
+        const finalText = finalState.streamingText;
+
+        // Build updated turn history (max 7 turns = 14 messages)
+        const updatedHistory = [
+          ...finalState.turnHistory,
+          { role: "user" as const, content: query },
+          { role: "assistant" as const, content: finalText },
+        ];
+        // Trim oldest turn if we exceed 14 messages (7 turns)
+        const trimmedHistory =
+          updatedHistory.length > 14
+            ? updatedHistory.slice(updatedHistory.length - 14)
+            : updatedHistory;
+
+        set({
+          isStreaming: false,
+          displayMode: "result",
+          turnHistory: trimmedHistory,
+        });
+
+        // Auto-copy completed response to clipboard
+        if (finalText) {
+          navigator.clipboard.writeText(finalText).catch((err) => {
+            console.error("[store] clipboard auto-copy failed:", err);
+          });
+        }
+      } catch (err) {
+        const errorMessage =
+          typeof err === "string" ? err : "An error occurred. Try again.";
+        set({
+          isStreaming: false,
+          displayMode: "result",
+          streamError: errorMessage,
+        });
+      }
+    })();
+  },
+
+  cancelStreaming: () =>
+    set({
+      isStreaming: false,
+      displayMode: "input",
+      streamingText: "",
+      streamError: null,
+    }),
+
+  returnToInput: () =>
+    set((state) => ({
+      displayMode: "input",
+      inputValue: state.previousQuery,
+      streamingText: "",
+      streamError: null,
+      isStreaming: false,
+    })),
+
+  setStreamError: (error) => set({ streamError: error }),
 }));

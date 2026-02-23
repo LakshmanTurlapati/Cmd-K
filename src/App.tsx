@@ -10,7 +10,7 @@ import { Overlay } from "@/components/Overlay";
 function App() {
   const hide = useOverlayStore((state) => state.hide);
   const show = useOverlayStore((state) => state.show);
-  const submit = useOverlayStore((state) => state.submit);
+  const submitQuery = useOverlayStore((state) => state.submitQuery);
   const openSettings = useOverlayStore((state) => state.openSettings);
   const openOnboarding = useOverlayStore((state) => state.openOnboarding);
   const setCurrentHotkey = useOverlayStore((state) => state.setCurrentHotkey);
@@ -153,7 +153,7 @@ function App() {
       return;
     }
     if (trimmed) {
-      submit();
+      submitQuery(trimmed);
     }
   };
 
