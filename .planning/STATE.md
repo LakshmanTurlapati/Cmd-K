@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 4 of 6 (AI Command Generation)
-Plan: 1 of 3 in current phase (04-01 complete, ready for 04-02)
-Status: In progress -- 04-01 complete, ready for 04-02 (frontend streaming UI)
-Last activity: 2026-02-23 - Executed Phase 4 Plan 1 (stream_ai_response Rust command, SSE streaming, two-mode system prompts)
+Plan: 2 of 3 in current phase (04-02 complete, ready for 04-03)
+Status: In progress -- 04-02 complete, ready for 04-03 (clipboard/paste integration)
+Last activity: 2026-02-23 - Executed Phase 4 Plan 2 (frontend streaming UI: Zustand state machine, ResultsArea renderer, two-Escape keyboard)
 
 Progress: [█████████░] 85%
 
@@ -30,10 +30,10 @@ Progress: [█████████░] 85%
 | 01-foundation-overlay | 3 | 22 min | 7 min |
 | 02-settings-configuration | 2 | 24 min | 12 min |
 | 03-terminal-context-reading | 4 | 27 min | 7 min |
-| 04-ai-command-generation | 1 | 8 min | 8 min |
+| 04-ai-command-generation | 2 | 10 min | 5 min |
 
 **Recent Trend:**
-- Last 5 plans: 4 min (03-02), 15 min (03-03), 4 min (03-04), 8 min (04-01)
+- Last 5 plans: 15 min (03-03), 4 min (03-04), 8 min (04-01), 2 min (04-02)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -83,6 +83,9 @@ Recent decisions affecting current work:
 - AppContextView lightweight deserialization: only fields needed for prompt building declared in ai.rs; fallback to assistant mode on parse failure
 - Keychain account name corrected to xai_api_key: plan had wrong value 'api-key'; must match keychain.rs ACCOUNT constant exactly
 - Two-mode AI system prompt: terminal mode (command-only with {shell_type} substitution) vs assistant mode (2-3 sentence conversational)
+- [Phase 04-02]: submitQuery reads fresh state via useOverlayStore.getState() inside async IIFE to avoid stale closures
+- [Phase 04-02]: displayMode state machine ('input'|'streaming'|'result') replaces submitted/showApiWarning booleans for slot switching
+- [Phase 04-02]: show() resets turnHistory: [] to clear session on each overlay open
 
 ### Pending Todos
 
@@ -107,10 +110,11 @@ None yet.
 - Phase 3 Plan 4 COMPLETE: AppContext struct, browser.rs DevTools detection, get_app_context IPC command, app name resolution via NSRunningApplication.localizedName
 - Phase 3: darwin-libproc crate incompatible (memchr conflict); raw FFI approach used instead, works identically
 - Phase 4 Plan 1 COMPLETE: stream_ai_response Rust command with eventsource-stream SSE parsing, Channel<String> token streaming, two-mode system prompts, 10s timeout, Keychain API key read
+- Phase 4 Plan 2 COMPLETE: Frontend streaming UI -- Zustand displayMode state machine, ResultsArea monospace renderer with block cursor, two-Escape keyboard flow, session history (7 turns), auto-copy + click-to-copy
 - Phase 5: AppleScript command injection must be solved before any terminal pasting
 
 ## Session Continuity
 
-Last session: 2026-02-23 (Phase 4 Plan 1 execution)
-Stopped at: Completed 04-01-PLAN.md (stream_ai_response Rust backend done, ready for 04-02 frontend streaming UI)
+Last session: 2026-02-23 (Phase 4 Plan 2 execution)
+Stopped at: Completed 04-02-PLAN.md (frontend streaming UI done, ready for 04-03 clipboard/paste integration)
 Resume file: None

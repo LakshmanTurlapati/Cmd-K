@@ -129,6 +129,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Foundation & Overlay | 2/3 (3rd at checkpoint) | Complete    | 2026-02-21 |
 | 2. Settings & Configuration | 2/3 | Complete    | 2026-02-21 |
 | 3. Terminal Context Reading | 2/5 | In Progress|  |
-| 4. AI Command Generation | 1/3 | In Progress | - |
+| 4. AI Command Generation | 2/3 | In Progress|  |
 | 5. Safety Layer | 0/TBD | Not started | - |
 | 6. Terminal Pasting | 0/TBD | Not started | - |
