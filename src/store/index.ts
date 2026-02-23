@@ -93,6 +93,10 @@ interface OverlayState {
   destructiveDismissed: boolean;
   destructiveDetectionEnabled: boolean;
 
+  // Auto-paste preference
+  autoPasteEnabled: boolean;
+  setAutoPasteEnabled: (enabled: boolean) => void;
+
   // Actions
   show: () => void;
   hide: () => void;
@@ -171,6 +175,9 @@ export const useOverlayStore = create<OverlayState>((set) => ({
   destructiveExplanation: null,
   destructiveDismissed: false,
   destructiveDetectionEnabled: true,
+
+  // Auto-paste preference initial state
+  autoPasteEnabled: true,
 
   show: () => {
     set((state) => ({
@@ -439,4 +446,7 @@ export const useOverlayStore = create<OverlayState>((set) => ({
   setDestructiveExplanation: (explanation) => set({ destructiveExplanation: explanation }),
   dismissDestructiveBadge: () => set({ destructiveDismissed: true }),
   setDestructiveDetectionEnabled: (enabled) => set({ destructiveDetectionEnabled: enabled }),
+
+  // Auto-paste preference action implementation
+  setAutoPasteEnabled: (enabled) => set({ autoPasteEnabled: enabled }),
 }));

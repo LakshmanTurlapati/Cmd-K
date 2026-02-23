@@ -58,6 +58,10 @@ function App() {
           const destructiveEnabled = await store.get<boolean>("destructiveDetectionEnabled");
           useOverlayStore.getState().setDestructiveDetectionEnabled(destructiveEnabled ?? true);
 
+          // Load persisted auto-paste preference
+          const autoPaste = await store.get<boolean>("autoPasteEnabled");
+          useOverlayStore.getState().setAutoPasteEnabled(autoPaste ?? true);
+
           // Check if API key already exists (edge case: user saved key then closed)
           try {
             const existingKey = await invoke<string | null>("get_api_key");
@@ -107,6 +111,10 @@ function App() {
           // Load persisted destructive detection preference
           const destructiveEnabled = await store.get<boolean>("destructiveDetectionEnabled");
           useOverlayStore.getState().setDestructiveDetectionEnabled(destructiveEnabled ?? true);
+
+          // Load persisted auto-paste preference
+          const autoPaste = await store.get<boolean>("autoPasteEnabled");
+          useOverlayStore.getState().setAutoPasteEnabled(autoPaste ?? true);
         }
       } catch (err) {
         // Non-fatal: fall back to default command mode
