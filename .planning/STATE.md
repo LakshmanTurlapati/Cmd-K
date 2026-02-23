@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Phase 3 - Terminal Context Reading
+**Current focus:** Phase 4 - AI Command Generation
 
 ## Current Position
 
-Phase: 3 of 6 (Terminal Context Reading)
-Plan: 4 of 5 in current phase
-Status: In progress -- 03-01, 03-02, 03-03, 03-04 complete, ready for 03-05 (frontend update)
-Last activity: 2026-02-22 - Executed Phase 3 Plan 4 (AppContext struct, browser console detection, app name resolution, get_app_context IPC)
+Phase: 4 of 6 (AI Command Generation)
+Plan: 1 of 3 in current phase (04-01 complete, ready for 04-02)
+Status: In progress -- 04-01 complete, ready for 04-02 (frontend streaming UI)
+Last activity: 2026-02-23 - Executed Phase 4 Plan 1 (stream_ai_response Rust command, SSE streaming, two-mode system prompts)
 
-Progress: [████████░░] 75%
+Progress: [█████████░] 85%
 
 ## Performance Metrics
 
@@ -30,9 +30,10 @@ Progress: [████████░░] 75%
 | 01-foundation-overlay | 3 | 22 min | 7 min |
 | 02-settings-configuration | 2 | 24 min | 12 min |
 | 03-terminal-context-reading | 4 | 27 min | 7 min |
+| 04-ai-command-generation | 1 | 8 min | 8 min |
 
 **Recent Trend:**
-- Last 5 plans: 12 min (02-02), 4 min (03-01), 4 min (03-02), 15 min (03-03), 4 min (03-04)
+- Last 5 plans: 4 min (03-02), 15 min (03-03), 4 min (03-04), 8 min (04-01)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -78,6 +79,10 @@ Recent decisions affecting current work:
 - AX window title heuristic for DevTools detection: simpler and browser-agnostic vs deep AX tree walk; works for Chrome/Safari/Firefox
 - detect_full() as new public API alongside detect(): AppContext for all apps, TerminalContext for backward compatibility
 - AppContext wraps terminal and browser state: frontend gets one unified response for badges and context display
+- context_json String parameter for AppContext IPC boundary: avoids Deserialize coupling to Rust struct (AppContext only derives Serialize)
+- AppContextView lightweight deserialization: only fields needed for prompt building declared in ai.rs; fallback to assistant mode on parse failure
+- Keychain account name corrected to xai_api_key: plan had wrong value 'api-key'; must match keychain.rs ACCOUNT constant exactly
+- Two-mode AI system prompt: terminal mode (command-only with {shell_type} substitution) vs assistant mode (2-3 sentence conversational)
 
 ### Pending Todos
 
@@ -101,10 +106,11 @@ None yet.
 - Phase 3 Plan 3 AUTOMATION COMPLETE (awaiting human verify): Zustand store wired to Rust detection (terminalContext, isDetectingContext, accessibilityGranted), Overlay.tsx shell label + spinner + accessibility banner, lsof/pgrep fallbacks for robust shell detection
 - Phase 3 Plan 4 COMPLETE: AppContext struct, browser.rs DevTools detection, get_app_context IPC command, app name resolution via NSRunningApplication.localizedName
 - Phase 3: darwin-libproc crate incompatible (memchr conflict); raw FFI approach used instead, works identically
+- Phase 4 Plan 1 COMPLETE: stream_ai_response Rust command with eventsource-stream SSE parsing, Channel<String> token streaming, two-mode system prompts, 10s timeout, Keychain API key read
 - Phase 5: AppleScript command injection must be solved before any terminal pasting
 
 ## Session Continuity
 
-Last session: 2026-02-22 (Phase 3 Plan 4 execution)
-Stopped at: Completed 03-04-PLAN.md (all tasks done, ready for 03-05)
+Last session: 2026-02-23 (Phase 4 Plan 1 execution)
+Stopped at: Completed 04-01-PLAN.md (stream_ai_response Rust backend done, ready for 04-02 frontend streaming UI)
 Resume file: None
