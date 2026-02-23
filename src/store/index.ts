@@ -391,24 +391,48 @@ export const useOverlayStore = create<OverlayState>((set) => ({
           turnHistory: trimmedHistory,
         });
 
-        // Auto-copy completed response to clipboard
+        // Auto-copy completed response to clipboard (always runs first)
         if (finalText) {
           navigator.clipboard.writeText(finalText).catch((err) => {
             console.error("[store] clipboard auto-copy failed:", err);
           });
         }
 
-        // Check for destructive command after streaming completes
-        const detectionState = useOverlayStore.getState();
-        if (detectionState.destructiveDetectionEnabled && finalText) {
-          invoke<boolean>("check_destructive", { command: finalText })
-            .then((isDestructive) => {
-              if (isDestructive) {
-                useOverlayStore.getState().setIsDestructive(true);
-                // Explanation is loaded eagerly by DestructiveBadge on mount
+        // Check destructive, then conditionally auto-paste
+        const pasteState = useOverlayStore.getState();
+        if (pasteState.destructiveDetectionEnabled && finalText) {
+          try {
+            const destructive = await invoke<boolean>("check_destructive", { command: finalText });
+            if (destructive) {
+              useOverlayStore.getState().setIsDestructive(true);
+              // Destructive: do NOT auto-paste. User copies manually.
+            } else {
+              // Safe command: auto-paste if enabled
+              const afterCheck = useOverlayStore.getState();
+              if (afterCheck.autoPasteEnabled && finalText) {
+                invoke("paste_to_terminal", { command: finalText }).catch((err) => {
+                  console.error("[store] auto-paste failed (clipboard fallback available):", err);
+                });
               }
-            })
-            .catch(console.error);
+            }
+          } catch (err) {
+            console.error("[store] check_destructive failed:", err);
+            // On detection failure, still attempt paste (fail-open for paste, fail-closed for safety badge)
+            const afterErr = useOverlayStore.getState();
+            if (afterErr.autoPasteEnabled && finalText) {
+              invoke("paste_to_terminal", { command: finalText }).catch((pasteErr) => {
+                console.error("[store] auto-paste failed:", pasteErr);
+              });
+            }
+          }
+        } else if (finalText) {
+          // Detection disabled: auto-paste if enabled (no safety check)
+          const nocheckState = useOverlayStore.getState();
+          if (nocheckState.autoPasteEnabled) {
+            invoke("paste_to_terminal", { command: finalText }).catch((err) => {
+              console.error("[store] auto-paste failed (clipboard fallback available):", err);
+            });
+          }
         }
       } catch (err) {
         const errorMessage =
