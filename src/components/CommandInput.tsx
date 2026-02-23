@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef, useMemo, useState } from "react";
 import { useOverlayStore } from "@/store";
 
 const COMMANDS = ["/settings"];
@@ -12,6 +12,8 @@ export function CommandInput({ onSubmit }: CommandInputProps) {
   const inputValue = useOverlayStore((state) => state.inputValue);
   const setInputValue = useOverlayStore((state) => state.setInputValue);
   const visible = useOverlayStore((state) => state.visible);
+  const displayMode = useOverlayStore((state) => state.displayMode);
+  const [shaking, setShaking] = useState(false);
 
   const suggestion = useMemo(() => {
     if (!inputValue.startsWith("/") || inputValue.length < 1) return "";
@@ -35,6 +37,16 @@ export function CommandInput({ onSubmit }: CommandInputProps) {
     }
   }, [visible]);
 
+  // Re-focus when returning to input mode from result mode
+  useEffect(() => {
+    if (displayMode === "input") {
+      const timer = setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [displayMode]);
+
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputValue(e.target.value);
     // Auto-grow: reset height then expand to scrollHeight
@@ -53,6 +65,10 @@ export function CommandInput({ onSubmit }: CommandInputProps) {
       e.preventDefault();
       if (inputValue.trim()) {
         onSubmit(inputValue);
+      } else {
+        // Empty input: trigger shake animation
+        setShaking(true);
+        setTimeout(() => setShaking(false), 300);
       }
     }
     // Shift+Enter: default textarea behavior inserts a newline
@@ -60,7 +76,15 @@ export function CommandInput({ onSubmit }: CommandInputProps) {
   };
 
   return (
-    <div className="relative w-full">
+    <div
+      className={[
+        "relative",
+        "w-full",
+        shaking ? "animate-[shake_0.3s_ease-in-out]" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       {/* Ghost suggestion layer */}
       {suggestion && (
         <div
@@ -77,7 +101,7 @@ export function CommandInput({ onSubmit }: CommandInputProps) {
         value={inputValue}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
-        placeholder="Describe a task or type a command..."
+        placeholder="Ask anything..."
         className={[
           "w-full",
           "bg-transparent",

@@ -17,6 +17,7 @@ export function Overlay({ onSubmit }: OverlayProps) {
   const visible = useOverlayStore((state) => state.visible);
   const hotkeyConfigOpen = useOverlayStore((state) => state.hotkeyConfigOpen);
   const mode = useOverlayStore((state) => state.mode);
+  const displayMode = useOverlayStore((state) => state.displayMode);
   const appContext = useOverlayStore((s) => s.appContext);
   const isDetecting = useOverlayStore((s) => s.isDetectingContext);
   const accessibilityGranted = useOverlayStore((s) => s.accessibilityGranted);
@@ -90,7 +91,13 @@ export function Overlay({ onSubmit }: OverlayProps) {
             <HotkeyConfig />
           ) : (
             <>
-              <CommandInput onSubmit={onSubmit} />
+              {/* Input and output alternate in the same slot based on displayMode */}
+              {displayMode === "input" ? (
+                <CommandInput onSubmit={onSubmit} />
+              ) : (
+                <ResultsArea />
+              )}
+              {/* Badge stays visible in ALL display modes below input/output */}
               {mode === "command" && (
                 <div className="flex items-center gap-2 min-h-[20px]">
                   {isDetecting ? (
@@ -102,7 +109,6 @@ export function Overlay({ onSubmit }: OverlayProps) {
                   ) : null}
                 </div>
               )}
-              <ResultsArea />
             </>
           )}
         </>
