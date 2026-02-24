@@ -2,11 +2,13 @@ import { useOverlayStore } from "@/store";
 import { AccountTab } from "./AccountTab";
 import { ModelTab } from "./ModelTab";
 import { PreferencesTab } from "./PreferencesTab";
+import { AdvancedTab } from "./AdvancedTab";
 
 const TABS = [
   { id: "account", label: "Account" },
   { id: "model", label: "Model" },
   { id: "preferences", label: "Preferences" },
+  { id: "advanced", label: "Advanced" },
 ] as const;
 
 export function SettingsPanel() {
@@ -54,6 +56,13 @@ export function SettingsPanel() {
       {settingsTab === "account" && <AccountTab />}
       {settingsTab === "model" && <ModelTab />}
       {settingsTab === "preferences" && <PreferencesTab />}
+      {settingsTab === "advanced" && <AdvancedTab />}
+
+      {/* Footer */}
+      <div className="flex flex-col items-center gap-1 mt-6 pt-3 border-t border-white/5">
+        <img src="/K-white.png" alt="CMD+K" className="h-12 opacity-25" />
+        <span className="text-white/25 text-[10px]">v{__APP_VERSION__} | Made by Lakshman Turlapati</span>
+      </div>
     </div>
   );
 }
