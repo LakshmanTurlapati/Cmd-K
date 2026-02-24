@@ -1,6 +1,10 @@
 <div align="center">
 
-<img src="K.png" alt="CMD+K Logo" width="200">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="K-white.png">
+  <source media="(prefers-color-scheme: light)" srcset="K.png">
+  <img src="K.png" alt="CMD+K Logo" width="200">
+</picture>
 
 # CMD+K
 
@@ -8,14 +12,14 @@
 
 Press Cmd+K from anywhere on your Mac. Type what you want. Get a working command. That's it.
 
-![macOS](https://img.shields.io/badge/macOS-000000?style=for-the-badge&logo=apple&logoColor=white)
+![macOS](https://img.shields.io/badge/macOS-555555?style=for-the-badge&logo=apple&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-Coming_Soon-555555?style=for-the-badge&logo=windows&logoColor=white)
 ![Linux](https://img.shields.io/badge/Linux-Coming_Soon-555555?style=for-the-badge&logo=linux&logoColor=white)
 
-[![Stars](https://img.shields.io/github/stars/LakshmanTurlapati/Cmd-K?style=for-the-badge&logo=github&logoColor=white&color=0a1628)](https://github.com/LakshmanTurlapati/Cmd-K/stargazers)
-[![Forks](https://img.shields.io/github/forks/LakshmanTurlapati/Cmd-K?style=for-the-badge&logo=github&logoColor=white&color=162040)](https://github.com/LakshmanTurlapati/Cmd-K/network/members)
-[![Issues](https://img.shields.io/github/issues/LakshmanTurlapati/Cmd-K?style=for-the-badge&logo=github&logoColor=white&color=0a1628)](https://github.com/LakshmanTurlapati/Cmd-K/issues)
-[![Last Commit](https://img.shields.io/github/last-commit/LakshmanTurlapati/Cmd-K?style=for-the-badge&logo=github&logoColor=white&color=162040)](https://github.com/LakshmanTurlapati/Cmd-K/commits/main)
+[![Stars](https://img.shields.io/github/stars/LakshmanTurlapati/Cmd-K?style=for-the-badge&logo=github&logoColor=white&color=555555)](https://github.com/LakshmanTurlapati/Cmd-K/stargazers)
+[![Forks](https://img.shields.io/github/forks/LakshmanTurlapati/Cmd-K?style=for-the-badge&logo=github&logoColor=white&color=555555)](https://github.com/LakshmanTurlapati/Cmd-K/network/members)
+[![Issues](https://img.shields.io/github/issues/LakshmanTurlapati/Cmd-K?style=for-the-badge&logo=github&logoColor=white&color=555555)](https://github.com/LakshmanTurlapati/Cmd-K/issues)
+[![Last Commit](https://img.shields.io/github/last-commit/LakshmanTurlapati/Cmd-K?style=for-the-badge&logo=github&logoColor=white&color=555555)](https://github.com/LakshmanTurlapati/Cmd-K/commits/main)
 
 </div>
 
@@ -132,9 +136,9 @@ graph TB
 
 **Backend (Rust)**
 
-![Rust](https://img.shields.io/badge/Rust-000000?style=flat-square&logo=rust&logoColor=white)
+![Rust](https://img.shields.io/badge/Rust-555555?style=flat-square&logo=rust&logoColor=white)
 ![Tauri 2](https://img.shields.io/badge/Tauri_2-24C8D8?style=flat-square&logo=tauri&logoColor=white)
-![Tokio](https://img.shields.io/badge/Tokio-232323?style=flat-square&logo=rust&logoColor=white)
+![Tokio](https://img.shields.io/badge/Tokio-555555?style=flat-square&logo=rust&logoColor=white)
 ![Serde](https://img.shields.io/badge/Serde-D4A017?style=flat-square&logo=rust&logoColor=white)
 
 **Frontend**
@@ -142,12 +146,12 @@ graph TB
 ![React 19](https://img.shields.io/badge/React_19-61DAFB?style=flat-square&logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
 ![Tailwind CSS 4](https://img.shields.io/badge/Tailwind_CSS_4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
-![Zustand](https://img.shields.io/badge/Zustand-433D37?style=flat-square&logo=react&logoColor=white)
-![Radix UI](https://img.shields.io/badge/Radix_UI-161618?style=flat-square&logo=radixui&logoColor=white)
+![Zustand](https://img.shields.io/badge/Zustand-555555?style=flat-square&logo=react&logoColor=white)
+![Radix UI](https://img.shields.io/badge/Radix_UI-555555?style=flat-square&logo=radixui&logoColor=white)
 
 **AI**
 
-![xAI](https://img.shields.io/badge/xAI_Grok-000000?style=flat-square&logo=x&logoColor=white)
+![xAI](https://img.shields.io/badge/xAI_Grok-555555?style=flat-square&logo=x&logoColor=white)
 ![SSE Streaming](https://img.shields.io/badge/SSE_Streaming-FF6600?style=flat-square&logo=lightning&logoColor=white)
 
 ---
