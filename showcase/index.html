@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CMD+K -- AI-Powered Terminal Commands</title>
+  <meta name="description" content="Press Cmd+K from anywhere on your Mac. Type what you want. Get a working terminal command. Open source, built with Tauri 2 and Rust.">
+  <meta name="theme-color" content="#000000">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="CMD+K -- AI-Powered Terminal Commands">
+  <meta property="og:description" content="System-wide overlay that turns natural language into shell commands. Built with Tauri 2, Rust, React 19.">
+  <meta property="og:type" content="website">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/home.css">
+
+  <!-- Favicon -->
+  <link rel="icon" href="assets/K.png" type="image/png">
+</head>
+<body>
+
+  <!-- ====== Mobile Gate ====== -->
+  <div id="mobile-gate">
+    <div class="mobile-gate-card">
+      <div class="mobile-gate-icon">
+        <div class="morph-device">
+          <div class="morph-arrow morph-arrow-left"></div>
+          <div class="morph-screen"></div>
+          <div class="morph-arrow morph-arrow-right"></div>
+        </div>
+      </div>
+      <p class="mobile-gate-text">
+        Website designed strictly for Desktop.<br>
+        Switch to a wider screen to appreciate fully.
+      </p>
+      <span class="mobile-gate-sig">&mdash;LT</span>
+    </div>
+    <div class="mobile-gate-footer">
+      <div class="mobile-gate-brand">
+        <img src="assets/K-white.png" alt="CMD+K" class="logo-dark">
+        <img src="assets/K.png" alt="CMD+K" class="logo-light">
+      </div>
+      <span class="mobile-gate-version">v0.1.0</span>
+    </div>
+  </div>
+
+  <!-- ====== Nav ====== -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="#" class="nav-brand">
+        <img src="assets/K-white.png" alt="CMD+K" class="logo-dark">
+        <img src="assets/K.png" alt="CMD+K" class="logo-light">
+      </a>
+
+      <div class="nav-overlay"></div>
+
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#how-it-works">How It Works</a>
+        <a href="#demo">Demo</a>
+        <a href="#tech-stack">Tech Stack</a>
+        <a href="https://github.com/LakshmanTurlapati/Cmd-K" target="_blank" rel="noopener" class="nav-cta">
+          GitHub
+        </a>
+      </div>
+
+      <button class="hamburger" aria-label="Toggle navigation">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ====== Hero ====== -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-badge reveal">
+        <kbd>&#8984;</kbd> + <kbd>K</kbd> from anywhere on your Mac
+      </div>
+
+      <h1 class="reveal reveal-delay-1">AI-Powered<br>Terminal Commands</h1>
+
+      <p class="hero-subtitle reveal reveal-delay-2">
+        A native macOS overlay that turns natural language into working shell commands. No plugins. No browser. Just press a key.
+      </p>
+
+      <div class="hero-buttons reveal reveal-delay-3">
+        <a href="https://github.com/LakshmanTurlapati/Cmd-K/releases" target="_blank" rel="noopener" class="btn btn-primary">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download for macOS
+        </a>
+        <a href="https://github.com/LakshmanTurlapati/Cmd-K" target="_blank" rel="noopener" class="btn btn-secondary">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+          View Source
+        </a>
+      </div>
+
+      <!-- Hero Terminal Mockup -->
+      <div class="hero-terminal reveal reveal-delay-4">
+        <div class="terminal-mockup">
+          <div class="terminal-titlebar">
+            <div class="terminal-dots">
+              <span></span><span></span><span></span>
+            </div>
+            <span class="terminal-title">Terminal -- zsh</span>
+          </div>
+          <div class="terminal-body" id="hero-terminal-body">
+            <div class="terminal-line"><span class="prompt">~</span> <span class="cmd">git</span> <span class="flag">log</span> <span class="flag">--oneline</span> <span class="flag">-5</span></div>
+            <div class="terminal-line"><span class="hash">c91b934</span> <span class="output">docs: rewrite README with architecture</span></div>
+            <div class="terminal-line"><span class="hash">0578c92</span> <span class="output">fix: streaming cursor and a11y styling</span></div>
+            <div class="terminal-line"><span class="hash">f964dca</span> <span class="output">fix: Enter-to-confirm and dismiss races</span></div>
+            <div class="terminal-line"><span class="hash">d47dd7d</span> <span class="output">feat: real-time token streaming</span></div>
+            <div class="terminal-line"><span class="hash">5733218</span> <span class="output">feat: PID-targeted paste & confirm</span></div>
+            <div class="terminal-line hero-prompt-line" style="margin-top:8px"><span class="prompt">~</span> <span class="demo-term-cursor"></span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Overlay Mockup floating below terminal (1:1 match with demo overlay) -->
+      <div class="hero-overlay-wrapper reveal reveal-delay-5">
+        <div class="overlay-mockup">
+          <div class="overlay-input" id="hero-overlay-input"></div>
+          <div class="overlay-divider"></div>
+          <div class="overlay-result" id="hero-overlay-result"></div>
+          <div class="overlay-footer">
+            <span class="overlay-badge-ctx">zsh</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====== Features ====== -->
+  <section id="features" class="features">
+    <div class="container">
+      <div class="features-header">
+        <div class="section-label reveal">Features</div>
+        <h2 class="section-title reveal reveal-delay-1">Everything you need,<br>nothing you don't</h2>
+        <p class="section-subtitle reveal reveal-delay-2">
+          A lightweight overlay that stays out of your way until you need it.
+        </p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card reveal reveal-delay-1">
+          <div class="feature-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          </div>
+          <h3>System-Wide Overlay</h3>
+          <p>Always one keystroke away, no matter what app you're in. A minimal command bar that appears when you need it and vanishes when you don't.</p>
+        </div>
+
+        <div class="feature-card reveal reveal-delay-2">
+          <div class="feature-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <h3>Natural Language to Commands</h3>
+          <p>Just describe what you want in plain English. A working terminal command streams back in real time -- no syntax lookup required.</p>
+        </div>
+
+        <div class="feature-card reveal reveal-delay-3">
+          <div class="feature-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/><path d="M17.599 6.5a3 3 0 0 0 .399-1.375"/><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/><path d="M3.477 10.896a4 4 0 0 1 .585-.396"/><path d="M19.938 10.5a4 4 0 0 1 .585.396"/><path d="M6 18a4 4 0 0 1-1.967-.516"/><path d="M19.967 17.484A4 4 0 0 1 18 18"/></svg>
+          </div>
+          <h3>Zero-Config Context</h3>
+          <p>Automatically understands what you're working on and where. No shell plugins to install, no config files to edit.</p>
+        </div>
+
+        <div class="feature-card reveal reveal-delay-4">
+          <div class="feature-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+          </div>
+          <h3>Multi-Terminal Support</h3>
+          <p>Compatible with all major macOS terminals and recognizes shells embedded in popular code editors.</p>
+        </div>
+
+        <div class="feature-card reveal reveal-delay-5">
+          <div class="feature-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+          <h3>Destructive Command Safety</h3>
+          <p>Potentially destructive commands are caught before execution and flagged with a clear warning so you know exactly what you're running.</p>
+        </div>
+
+        <div class="feature-card reveal reveal-delay-6">
+          <div class="feature-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
+          <h3>Secure by Design</h3>
+          <p>Credentials are stored in the system keychain and never leave the native backend. No plaintext secrets, ever.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====== How It Works ====== -->
+  <section id="how-it-works" class="how-it-works">
+    <div class="container">
+      <div class="how-it-works-header">
+        <div class="section-label reveal">How It Works</div>
+        <h2 class="section-title reveal reveal-delay-1">Three steps. Zero friction.</h2>
+        <p class="section-subtitle reveal reveal-delay-2">
+          From thought to terminal command in seconds.
+        </p>
+      </div>
+
+      <div class="steps-row reveal reveal-delay-3">
+        <div class="step-item">
+          <div class="step-number">1</div>
+          <h3>Press <kbd>Cmd</kbd>+<kbd>K</kbd></h3>
+          <p>The overlay appears centered on your active screen, no matter what app you're in.</p>
+        </div>
+
+        <div class="step-arrow">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </div>
+
+        <div class="step-item">
+          <div class="step-number">2</div>
+          <h3>Type What You Want</h3>
+          <p>Describe the task in natural language. CMD+K captures your terminal context automatically.</p>
+        </div>
+
+        <div class="step-arrow">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </div>
+
+        <div class="step-item">
+          <div class="step-number">3</div>
+          <h3>Run or Copy</h3>
+          <p>Press <kbd>Enter</kbd> to paste into your terminal, <kbd>Tab</kbd> to copy, or <kbd>Esc</kbd> to dismiss.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====== Demo ====== -->
+  <section id="demo" class="demo-section">
+    <div class="container">
+      <div class="demo-header">
+        <div class="section-label reveal">See It In Action</div>
+        <h2 class="section-title reveal reveal-delay-1">From query to command</h2>
+        <p class="section-subtitle reveal reveal-delay-2">
+          Watch CMD+K detect context, generate a command, flag a safety warning, and execute.
+        </p>
+      </div>
+
+      <div class="demo-desktop reveal reveal-delay-3">
+        <!-- Desktop Screen with wallpaper -->
+        <div class="desktop-screen">
+          <!-- macOS Menu Bar -->
+          <div class="desktop-menubar">
+            <div class="menubar-left">
+              <span class="menubar-apple">
+                <svg width="12" height="14" viewBox="0 0 814 1000" fill="currentColor"><path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76.5 0-103.7 40.8-165.9 40.8s-105.6-57.8-155.5-127.4C46.7 771.7 0 620.4 0 477.9 0 306.1 96.3 214.5 191.2 214.5c62.8 0 114.9 42.1 154.2 42.1 37.3 0 95.8-44.7 167.6-44.7 27.1 0 124.5 1.9 188.1 76.1z M554.1 0c4.5 0 9 0 13.5 0 3.2 72.5-26.5 127.4-61 167.6-37.3 42.7-92.2 75.8-148.4 73.9-5.1-2.5-5.1-7.7-5.1-12.8C353.1 160.5 416.2 67.9 554.1 0z"/></svg>
+              </span>
+              <span class="menubar-app-name">Terminal</span>
+              <span class="menubar-menu">Shell</span>
+              <span class="menubar-menu">Edit</span>
+              <span class="menubar-menu">View</span>
+              <span class="menubar-menu">Window</span>
+              <span class="menubar-menu">Help</span>
+            </div>
+            <div class="menubar-right">
+              <svg class="menubar-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+              <span class="menubar-clock" id="demo-menubar-clock"></span>
+            </div>
+          </div>
+          <!-- Terminal window (left side) -->
+          <div class="demo-term-window">
+            <div class="terminal-titlebar">
+              <div class="terminal-dots">
+                <span></span><span></span><span></span>
+              </div>
+              <span class="terminal-title">Terminal -- zsh</span>
+            </div>
+            <div class="terminal-body" id="demo-terminal-body">
+              <div class="demo-term-line"><span class="prompt">~/projects/app $</span> <span class="demo-term-cursor"></span></div>
+            </div>
+          </div>
+
+          <!-- CMD+K Overlay (pixel-perfect match) -->
+          <div class="demo-overlay" id="demo-overlay" style="opacity:0; pointer-events:none;">
+            <div class="demo-overlay-input" id="demo-overlay-input"></div>
+            <div class="demo-overlay-divider"></div>
+            <div class="demo-overlay-result" id="demo-overlay-result"></div>
+            <div class="demo-overlay-footer">
+              <span class="demo-overlay-badge-ctx" id="demo-ctx-badge"></span>
+              <span class="demo-overlay-badge-destructive" id="demo-destructive-badge" style="opacity:0;">Destructive</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====== Tech Stack ====== -->
+  <section id="tech-stack" class="tech-stack">
+    <div class="container">
+      <div class="tech-stack-header">
+        <div class="section-label reveal">Tech Stack</div>
+        <h2 class="section-title reveal reveal-delay-1">Built with modern tools</h2>
+        <p class="section-subtitle reveal reveal-delay-2">
+          Native performance meets modern web technologies.
+        </p>
+      </div>
+
+      <div class="tech-grid">
+        <div class="tech-card reveal reveal-delay-1">
+          <div class="tech-card-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="8 21 12 17 16 21"/></svg>
+          </div>
+          <h3>Tauri 2 + Rust</h3>
+          <p>Native macOS backend with NSPanel overlay, Accessibility API integration, Keychain storage, and process introspection. No Electron. No bundled Chromium.</p>
+        </div>
+
+        <div class="tech-card reveal reveal-delay-2">
+          <div class="tech-card-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          </div>
+          <h3>React 19 + TypeScript</h3>
+          <p>Modern frontend with Zustand state management, Radix UI primitives, and Tailwind CSS 4. Vite for lightning-fast HMR during development.</p>
+        </div>
+
+        <div class="tech-card reveal reveal-delay-3">
+          <div class="tech-card-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          </div>
+          <h3>xAI Grok Streaming</h3>
+          <p>Server-sent events stream commands token-by-token with shell syntax highlighting. Two-mode prompts: terminal commands and browser DevTools assistance.</p>
+        </div>
+      </div>
+
+      <div class="terminal-tags-label reveal reveal-delay-4">Supported Terminals & IDEs</div>
+      <div class="carousel-wrapper reveal reveal-delay-5">
+        <div class="carousel-track">
+          <!-- 15 original items -->
+          <span class="terminal-tag"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M2 12.5l4.5-4.5L2 3.5l1-1L8.5 8 3 13.5zM8 13h6v1H8z"/></svg> Terminal.app</span>
+          <span class="terminal-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M24 5.359v13.282A5.36 5.36 0 0 1 18.641 24H5.359A5.36 5.36 0 0 1 0 18.641V5.359A5.36 5.36 0 0 1 5.359 0h13.282A5.36 5.36 0 0 1 24 5.359m-.932-.233A4.196 4.196 0 0 0 18.874.932H5.126A4.196 4.196 0 0 0 .932 5.126v13.748a4.196 4.196 0 0 0 4.194 4.194h13.748a4.196 4.196 0 0 0 4.194-4.194zm-.816.233v13.282a3.613 3.613 0 0 1-3.611 3.611H5.359a3.613 3.613 0 0 1-3.611-3.611V5.359a3.613 3.613 0 0 1 3.611-3.611h13.282a3.613 3.613 0 0 1 3.611 3.611M8.854 4.194v6.495h.962V4.194zM5.483 9.493v1.085h.597V9.48q.283-.037.508-.133.373-.165.575-.448.208-.284.208-.649a.9.9 0 0 0-.171-.568 1.4 1.4 0 0 0-.426-.388 3 3 0 0 0-.544-.261 32 32 0 0 0-.545-.209 1.8 1.8 0 0 1-.426-.216q-.164-.12-.164-.284 0-.223.179-.351.18-.126.485-.127.344 0 .575.105.239.105.5.298l.433-.5a2.3 2.3 0 0 0-.605-.433 1.6 1.6 0 0 0-.582-.159v-.968h-.597v.978a2 2 0 0 0-.477.127 1.2 1.2 0 0 0-.545.411q-.194.268-.194.634 0 .335.164.56.164.224.418.38a4 4 0 0 0 .552.262q.291.104.545.209.261.104.425.238a.39.39 0 0 1 .165.321q0 .225-.187.359-.18.134-.537.134-.381 0-.717-.134a4.4 4.4 0 0 1-.649-.351l-.388.589q.209.173.477.306.276.135.575.217.191.046.373.064"/></svg> iTerm2</span>
+          <span class="terminal-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="m10.065 0-8.57 21.269h3.595l6.91-16.244 6.91 16.244h3.594l-8.57-21.269zm1.935 9.935c-0.76666 1.8547-1.5334 3.7094-2.298 5.565 1.475 4.54 1.475 4.54 2.298 8.5 0.823-3.96 0.823-3.96 2.297-8.5-0.76637-1.8547-1.5315-3.7099-2.297-5.565z"/></svg> Alacritty</span>
+          <span class="terminal-tag"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4.5 4C4.5 4 5.5 2 8 2s3.5 2 3.5 2l.5 2.5s-.8-.5-2-.5c-.6 0-1.2.2-2 .5-.8-.3-1.4-.5-2-.5-1.2 0-2 .5-2 .5L4.5 4zM4 7.5c.8 0 1.5.4 2 .8V10c-.6-.5-1.2-.8-2-.8-.5 0-1 .2-1 .2L3.5 7s.2-.15.5-.15V7.5zm8 0c-.8 0-1.5.4-2 .8V10c.6-.5 1.2-.8 2-.8.5 0 1 .2 1 .2L12.5 7s-.2-.15-.5-.15V7.5zM5 11.5s1 1.5 3 1.5 3-1.5 3-1.5c0 1.5-1.5 3-3 3s-3-1.5-3-3z"/></svg> kitty</span>
+          <span class="terminal-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3.27 8.524c0-.623.62-1.007 2.123-1.007l-.5 2.757c-.931-.623-1.624-1.199-1.624-1.75zm4.008 6.807c0 .647-.644 1.079-2.123 1.15l.524-2.924c.931.624 1.6 1.175 1.6 1.774zm-2.625 5.992.454-2.708c3.603-.336 5.01-1.798 5.01-3.404 0-1.653-2.004-2.948-3.841-4.074l.668-3.548c.764.072 1.67.216 2.744.432l.31-2.469c-.81-.12-1.575-.168-2.29-.216L8.257 2.7l-2.363-.024-.453 2.684C1.838 5.648.43 7.158.43 8.764c0 1.63 2.004 2.876 3.841 3.954l-.668 3.716c-.859-.048-1.908-.192-3.125-.408L0 18.495c1.026.12 1.98.192 2.84.216l-.525 2.588zm15.553-1.894h2.673c.334-2.804.81-8.46 1.121-14.86h-2.553c-.071 1.51-.334 10.498-.43 11.241h-.071c-.644-2.42-1.169-4.386-1.813-6.782h-1.456c-.62 2.396-1.05 4.194-1.694 6.782h-.096c-.071-.743-.477-9.73-.525-11.24h-2.648c.31 6.399.763 12.055 1.097 14.86h2.625l1.838-7.12z"/></svg> WezTerm</span>
+          <span class="terminal-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M13.565 17.91H24v1.964H13.565zm-3.201-5.09l-9.187 8.003 2.86-7.004L0 11.179l9.187-8.002-3.11 7.451z"/></svg> Hyper</span>
+          <span class="terminal-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12.035 2.723h9.253A2.712 2.712 0 0 1 24 5.435v10.529a2.712 2.712 0 0 1-2.712 2.713H8.047Zm-1.681 2.6L6.766 19.677h5.598l-.399 1.6H2.712A2.712 2.712 0 0 1 0 18.565V8.036a2.712 2.712 0 0 1 2.712-2.712Z"/></svg> Warp</span>
+          <span class="terminal-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C6.7 0 2.4 4.3 2.4 9.6v11.146c0 1.772 1.45 3.267 3.222 3.254a3.18 3.18 0 0 0 1.955-.686 1.96 1.96 0 0 1 2.444 0 3.18 3.18 0 0 0 1.976.686c.75 0 1.436-.257 1.98-.686.715-.563 1.71-.587 2.419-.018.59.476 1.355.743 2.182.699 1.705-.094 3.022-1.537 3.022-3.244V9.601C21.6 4.3 17.302 0 12 0M6.069 6.562a1 1 0 0 1 .46.131l3.578 2.065v.002a.974.974 0 0 1 0 1.687L6.53 12.512a.975.975 0 0 1-.976-1.687L7.67 9.602 5.553 8.38a.975.975 0 0 1 .515-1.818m7.438 2.063h4.7a.975.975 0 1 1 0 1.95h-4.7a.975.975 0 0 1 0-1.95"/></svg> Ghostty</span>
+          <span class="terminal-tag"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M2 12.5l4.5-4.5L2 3.5l1-1L8.5 8 3 13.5zM9 12h5v1.5H9z"/></svg> Rio</span>
+          <span class="terminal-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M23.15 2.587L18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .326 8.74L3.899 12 .326 15.26a1 1 0 0 0 .001 1.479L1.65 17.94a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zm-5.146 14.861L10.826 12l7.178-5.448v10.896z"/></svg> VS Code</span>
+          <span class="terminal-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23"/></svg> Cursor</span>
+          <span class="terminal-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M2.25 1.5a.75.75 0 0 0-.75.75v16.5H0V2.25A2.25 2.25 0 0 1 2.25 0h20.095c1.002 0 1.504 1.212.795 1.92L10.764 14.298h3.486V12.75h1.5v1.922a1.125 1.125 0 0 1-1.125 1.125H9.264l-2.578 2.578h11.689V9h1.5v9.375a1.5 1.5 0 0 1-1.5 1.5H5.185L2.562 22.5H21.75a.75.75 0 0 0 .75-.75V5.25H24v16.5A2.25 2.25 0 0 1 21.75 24H1.655C.653 24 .151 22.788.86 22.08L13.19 9.75H9.75v1.5h-1.5V9.375A1.125 1.125 0 0 1 9.375 8.25h5.314l2.625-2.625H5.625V15h-1.5V5.625a1.5 1.5 0 0 1 1.5-1.5h13.19L21.438 1.5z"/></svg> Zed</span>
+          <span class="terminal-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M23.55 5.067c-1.2038-.002-2.1806.973-2.1806 2.1765v4.8676c0 .972-.8035 1.7594-1.7597 1.7594-.568 0-1.1352-.286-1.4718-.7659l-4.9713-7.1003c-.4125-.5896-1.0837-.941-1.8103-.941-1.1334 0-2.1533.9635-2.1533 2.153v4.8957c0 .972-.7969 1.7594-1.7596 1.7594-.57 0-1.1363-.286-1.4728-.7658L.4076 5.1598C.2822 4.9798 0 5.0688 0 5.2882v4.2452c0 .2147.0656.4228.1884.599l5.4748 7.8183c.3234.462.8006.8052 1.3509.9298 1.3771.313 2.6446-.747 2.6446-2.0977v-4.893c0-.972.7875-1.7593 1.7596-1.7593h.003a1.798 1.798 0 0 1 1.4718.7658l4.9723 7.0994c.4135.5905 1.05.941 1.8093.941 1.1587 0 2.1515-.9645 2.1515-2.153v-4.8948c0-.972.7875-1.7594 1.7596-1.7594h.194a.22.22 0 0 0 .2204-.2202v-4.622a.22.22 0 0 0-.2203-.2203Z"/></svg> Windsurf</span>
+          <span class="terminal-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M0 0v24h24V0zm3.723 3.111h5v1.834h-1.39v6.277h1.39v1.834h-5v-1.834h1.444V4.945H3.723zm11.055 0H17v6.5c0 .612-.055 1.111-.222 1.556-.167.444-.39.777-.723 1.11-.277.279-.666.557-1.11.668a3.933 3.933 0 0 1-1.445.278c-.778 0-1.444-.167-1.944-.445a4.81 4.81 0 0 1-1.279-1.056l1.39-1.555c.277.334.555.555.833.722.277.167.611.278.945.278.389 0 .721-.111 1-.389.221-.278.333-.667.333-1.278zM2.222 19.5h9V21h-9z"/></svg> IntelliJ IDEA</span>
+          <span class="terminal-tag"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20.953.004a.397.397 0 0 0-.18.017L3.225 5.585c-.175.055-.323.214-.402.398a.42.42 0 0 0-.06.22v5.726a.42.42 0 0 0 .06.22c.079.183.227.341.402.397l7.454 2.364-7.454 2.363c-.255.08-.463.374-.463.655v5.688c0 .282.208.444.463.363l17.55-5.565c.237-.075.426-.336.452-.6.003-.022.013-.04.013-.065V12.06c0-.281-.208-.575-.463-.656L13.4 9.065l7.375-2.339c.255-.08.462-.375.462-.656V.384c0-.211-.117-.355-.283-.38z"/></svg> Sublime Text</span>
+          <!-- Duplicated items for seamless loop -->
+          <span class="terminal-tag" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M2 12.5l4.5-4.5L2 3.5l1-1L8.5 8 3 13.5zM8 13h6v1H8z"/></svg> Terminal.app</span>
+          <span class="terminal-tag" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M24 5.359v13.282A5.36 5.36 0 0 1 18.641 24H5.359A5.36 5.36 0 0 1 0 18.641V5.359A5.36 5.36 0 0 1 5.359 0h13.282A5.36 5.36 0 0 1 24 5.359m-.932-.233A4.196 4.196 0 0 0 18.874.932H5.126A4.196 4.196 0 0 0 .932 5.126v13.748a4.196 4.196 0 0 0 4.194 4.194h13.748a4.196 4.196 0 0 0 4.194-4.194zm-.816.233v13.282a3.613 3.613 0 0 1-3.611 3.611H5.359a3.613 3.613 0 0 1-3.611-3.611V5.359a3.613 3.613 0 0 1 3.611-3.611h13.282a3.613 3.613 0 0 1 3.611 3.611M8.854 4.194v6.495h.962V4.194zM5.483 9.493v1.085h.597V9.48q.283-.037.508-.133.373-.165.575-.448.208-.284.208-.649a.9.9 0 0 0-.171-.568 1.4 1.4 0 0 0-.426-.388 3 3 0 0 0-.544-.261 32 32 0 0 0-.545-.209 1.8 1.8 0 0 1-.426-.216q-.164-.12-.164-.284 0-.223.179-.351.18-.126.485-.127.344 0 .575.105.239.105.5.298l.433-.5a2.3 2.3 0 0 0-.605-.433 1.6 1.6 0 0 0-.582-.159v-.968h-.597v.978a2 2 0 0 0-.477.127 1.2 1.2 0 0 0-.545.411q-.194.268-.194.634 0 .335.164.56.164.224.418.38a4 4 0 0 0 .552.262q.291.104.545.209.261.104.425.238a.39.39 0 0 1 .165.321q0 .225-.187.359-.18.134-.537.134-.381 0-.717-.134a4.4 4.4 0 0 1-.649-.351l-.388.589q.209.173.477.306.276.135.575.217.191.046.373.064"/></svg> iTerm2</span>
+          <span class="terminal-tag" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="m10.065 0-8.57 21.269h3.595l6.91-16.244 6.91 16.244h3.594l-8.57-21.269zm1.935 9.935c-0.76666 1.8547-1.5334 3.7094-2.298 5.565 1.475 4.54 1.475 4.54 2.298 8.5 0.823-3.96 0.823-3.96 2.297-8.5-0.76637-1.8547-1.5315-3.7099-2.297-5.565z"/></svg> Alacritty</span>
+          <span class="terminal-tag" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4.5 4C4.5 4 5.5 2 8 2s3.5 2 3.5 2l.5 2.5s-.8-.5-2-.5c-.6 0-1.2.2-2 .5-.8-.3-1.4-.5-2-.5-1.2 0-2 .5-2 .5L4.5 4zM4 7.5c.8 0 1.5.4 2 .8V10c-.6-.5-1.2-.8-2-.8-.5 0-1 .2-1 .2L3.5 7s.2-.15.5-.15V7.5zm8 0c-.8 0-1.5.4-2 .8V10c.6-.5 1.2-.8 2-.8.5 0 1 .2 1 .2L12.5 7s-.2-.15-.5-.15V7.5zM5 11.5s1 1.5 3 1.5 3-1.5 3-1.5c0 1.5-1.5 3-3 3s-3-1.5-3-3z"/></svg> kitty</span>
+          <span class="terminal-tag" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3.27 8.524c0-.623.62-1.007 2.123-1.007l-.5 2.757c-.931-.623-1.624-1.199-1.624-1.75zm4.008 6.807c0 .647-.644 1.079-2.123 1.15l.524-2.924c.931.624 1.6 1.175 1.6 1.774zm-2.625 5.992.454-2.708c3.603-.336 5.01-1.798 5.01-3.404 0-1.653-2.004-2.948-3.841-4.074l.668-3.548c.764.072 1.67.216 2.744.432l.31-2.469c-.81-.12-1.575-.168-2.29-.216L8.257 2.7l-2.363-.024-.453 2.684C1.838 5.648.43 7.158.43 8.764c0 1.63 2.004 2.876 3.841 3.954l-.668 3.716c-.859-.048-1.908-.192-3.125-.408L0 18.495c1.026.12 1.98.192 2.84.216l-.525 2.588zm15.553-1.894h2.673c.334-2.804.81-8.46 1.121-14.86h-2.553c-.071 1.51-.334 10.498-.43 11.241h-.071c-.644-2.42-1.169-4.386-1.813-6.782h-1.456c-.62 2.396-1.05 4.194-1.694 6.782h-.096c-.071-.743-.477-9.73-.525-11.24h-2.648c.31 6.399.763 12.055 1.097 14.86h2.625l1.838-7.12z"/></svg> WezTerm</span>
+          <span class="terminal-tag" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M13.565 17.91H24v1.964H13.565zm-3.201-5.09l-9.187 8.003 2.86-7.004L0 11.179l9.187-8.002-3.11 7.451z"/></svg> Hyper</span>
+          <span class="terminal-tag" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12.035 2.723h9.253A2.712 2.712 0 0 1 24 5.435v10.529a2.712 2.712 0 0 1-2.712 2.713H8.047Zm-1.681 2.6L6.766 19.677h5.598l-.399 1.6H2.712A2.712 2.712 0 0 1 0 18.565V8.036a2.712 2.712 0 0 1 2.712-2.712Z"/></svg> Warp</span>
+          <span class="terminal-tag" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C6.7 0 2.4 4.3 2.4 9.6v11.146c0 1.772 1.45 3.267 3.222 3.254a3.18 3.18 0 0 0 1.955-.686 1.96 1.96 0 0 1 2.444 0 3.18 3.18 0 0 0 1.976.686c.75 0 1.436-.257 1.98-.686.715-.563 1.71-.587 2.419-.018.59.476 1.355.743 2.182.699 1.705-.094 3.022-1.537 3.022-3.244V9.601C21.6 4.3 17.302 0 12 0M6.069 6.562a1 1 0 0 1 .46.131l3.578 2.065v.002a.974.974 0 0 1 0 1.687L6.53 12.512a.975.975 0 0 1-.976-1.687L7.67 9.602 5.553 8.38a.975.975 0 0 1 .515-1.818m7.438 2.063h4.7a.975.975 0 1 1 0 1.95h-4.7a.975.975 0 0 1 0-1.95"/></svg> Ghostty</span>
+          <span class="terminal-tag" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M2 12.5l4.5-4.5L2 3.5l1-1L8.5 8 3 13.5zM9 12h5v1.5H9z"/></svg> Rio</span>
+          <span class="terminal-tag" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M23.15 2.587L18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .326 8.74L3.899 12 .326 15.26a1 1 0 0 0 .001 1.479L1.65 17.94a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zm-5.146 14.861L10.826 12l7.178-5.448v10.896z"/></svg> VS Code</span>
+          <span class="terminal-tag" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23"/></svg> Cursor</span>
+          <span class="terminal-tag" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M2.25 1.5a.75.75 0 0 0-.75.75v16.5H0V2.25A2.25 2.25 0 0 1 2.25 0h20.095c1.002 0 1.504 1.212.795 1.92L10.764 14.298h3.486V12.75h1.5v1.922a1.125 1.125 0 0 1-1.125 1.125H9.264l-2.578 2.578h11.689V9h1.5v9.375a1.5 1.5 0 0 1-1.5 1.5H5.185L2.562 22.5H21.75a.75.75 0 0 0 .75-.75V5.25H24v16.5A2.25 2.25 0 0 1 21.75 24H1.655C.653 24 .151 22.788.86 22.08L13.19 9.75H9.75v1.5h-1.5V9.375A1.125 1.125 0 0 1 9.375 8.25h5.314l2.625-2.625H5.625V15h-1.5V5.625a1.5 1.5 0 0 1 1.5-1.5h13.19L21.438 1.5z"/></svg> Zed</span>
+          <span class="terminal-tag" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M23.55 5.067c-1.2038-.002-2.1806.973-2.1806 2.1765v4.8676c0 .972-.8035 1.7594-1.7597 1.7594-.568 0-1.1352-.286-1.4718-.7659l-4.9713-7.1003c-.4125-.5896-1.0837-.941-1.8103-.941-1.1334 0-2.1533.9635-2.1533 2.153v4.8957c0 .972-.7969 1.7594-1.7596 1.7594-.57 0-1.1363-.286-1.4728-.7658L.4076 5.1598C.2822 4.9798 0 5.0688 0 5.2882v4.2452c0 .2147.0656.4228.1884.599l5.4748 7.8183c.3234.462.8006.8052 1.3509.9298 1.3771.313 2.6446-.747 2.6446-2.0977v-4.893c0-.972.7875-1.7593 1.7596-1.7593h.003a1.798 1.798 0 0 1 1.4718.7658l4.9723 7.0994c.4135.5905 1.05.941 1.8093.941 1.1587 0 2.1515-.9645 2.1515-2.153v-4.8948c0-.972.7875-1.7594 1.7596-1.7594h.194a.22.22 0 0 0 .2204-.2202v-4.622a.22.22 0 0 0-.2203-.2203Z"/></svg> Windsurf</span>
+          <span class="terminal-tag" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M0 0v24h24V0zm3.723 3.111h5v1.834h-1.39v6.277h1.39v1.834h-5v-1.834h1.444V4.945H3.723zm11.055 0H17v6.5c0 .612-.055 1.111-.222 1.556-.167.444-.39.777-.723 1.11-.277.279-.666.557-1.11.668a3.933 3.933 0 0 1-1.445.278c-.778 0-1.444-.167-1.944-.445a4.81 4.81 0 0 1-1.279-1.056l1.39-1.555c.277.334.555.555.833.722.277.167.611.278.945.278.389 0 .721-.111 1-.389.221-.278.333-.667.333-1.278zM2.222 19.5h9V21h-9z"/></svg> IntelliJ IDEA</span>
+          <span class="terminal-tag" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20.953.004a.397.397 0 0 0-.18.017L3.225 5.585c-.175.055-.323.214-.402.398a.42.42 0 0 0-.06.22v5.726a.42.42 0 0 0 .06.22c.079.183.227.341.402.397l7.454 2.364-7.454 2.363c-.255.08-.463.374-.463.655v5.688c0 .282.208.444.463.363l17.55-5.565c.237-.075.426-.336.452-.6.003-.022.013-.04.013-.065V12.06c0-.281-.208-.575-.463-.656L13.4 9.065l7.375-2.339c.255-.08.462-.375.462-.656V.384c0-.211-.117-.355-.283-.38z"/></svg> Sublime Text</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====== CTA ====== -->
+  <section class="cta-section">
+    <div class="container">
+      <div class="cta-box reveal">
+        <h2 class="cta-title">Open Source. MIT Licensed.<br>Built for Everyone.</h2>
+        <p class="cta-subtitle">Star the repo, open an issue, or submit a PR. Contributions welcome.</p>
+        <div class="cta-buttons">
+          <a href="https://github.com/LakshmanTurlapati/Cmd-K" target="_blank" rel="noopener" class="btn btn-primary">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+            Star on GitHub
+          </a>
+          <a href="https://github.com/LakshmanTurlapati/Cmd-K/releases" target="_blank" rel="noopener" class="btn btn-secondary">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====== Footer ====== -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <div class="footer-brand-logo">
+          <img src="assets/K-white.png" alt="CMD+K" class="logo-dark">
+          <img src="assets/K.png" alt="CMD+K" class="logo-light">
+        </div>
+        <p>AI-powered terminal commands, one keystroke away. A native macOS overlay built with Tauri 2 and Rust.</p>
+      </div>
+
+      <div class="footer-col">
+        <h4>Navigate</h4>
+        <a href="#features">Features</a>
+        <a href="#how-it-works">How It Works</a>
+        <a href="#demo">Demo</a>
+        <a href="#tech-stack">Tech Stack</a>
+      </div>
+
+      <div class="footer-col">
+        <h4>Project</h4>
+        <a href="https://github.com/LakshmanTurlapati/Cmd-K" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/LakshmanTurlapati/Cmd-K/issues" target="_blank" rel="noopener">Issues</a>
+        <a href="https://github.com/LakshmanTurlapati/Cmd-K/blob/main/LICENSE" target="_blank" rel="noopener">License (MIT)</a>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <span>Built by <a href="https://github.com/LakshmanTurlapati" target="_blank" rel="noopener">Lakshman Turlapati</a></span>
+      <span>v0.1.0</span>
+    </div>
+  </footer>
+
+  <!-- Theme toggle -->
+  <button class="theme-toggle" aria-label="Toggle theme">
+    <!-- Sun icon (shown in light mode) -->
+    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="5"/>
+      <line x1="12" y1="1" x2="12" y2="3"/>
+      <line x1="12" y1="21" x2="12" y2="23"/>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+      <line x1="1" y1="12" x2="3" y2="12"/>
+      <line x1="21" y1="12" x2="23" y2="12"/>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+    </svg>
+    <!-- Moon icon (shown in dark mode) -->
+    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+    </svg>
+  </button>
+
+  <!-- Scripts -->
+  <script src="js/main.js"></script>
+  <script src="js/demo.js"></script>
+</body>
+</html>
