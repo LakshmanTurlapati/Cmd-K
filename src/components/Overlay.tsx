@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import * as Tooltip from "@radix-ui/react-tooltip";
+import { ShieldAlert } from "lucide-react";
 import { useOverlayStore, resolveBadge } from "@/store";
 import { CommandInput } from "./CommandInput";
 import { ResultsArea } from "./ResultsArea";
@@ -43,6 +45,22 @@ export function Overlay({ onSubmit }: OverlayProps) {
     }
   };
 
+  // Background polling: auto-hide accessibility badge when permission is granted
+  useEffect(() => {
+    if (accessibilityGranted) return;
+    const intervalId = setInterval(async () => {
+      try {
+        const result = await invoke<boolean>("check_accessibility_permission");
+        if (result) {
+          useOverlayStore.getState().setAccessibilityGranted(true);
+        }
+      } catch {
+        // Silent
+      }
+    }, 5000);
+    return () => clearInterval(intervalId);
+  }, [accessibilityGranted]);
+
   if (animPhase === "hidden") {
     return null;
   }
@@ -80,19 +98,30 @@ export function Overlay({ onSubmit }: OverlayProps) {
       ) : (
         // command mode (default)
         <>
-          {mode === "command" && !accessibilityGranted && (
-            <div className="text-red-400/70 text-xs font-mono">
-              Accessibility permission required.{" "}
-              <button
-                type="button"
-                className="text-white/50 underline underline-offset-2 hover:text-white/70 transition-colors cursor-pointer bg-transparent border-none p-0"
-                onClick={() => {
-                  invoke("open_accessibility_settings");
-                }}
-              >
-                Open Settings
-              </button>
-            </div>
+          {mode === "command" && !accessibilityGranted && !isDetecting && (
+            <Tooltip.Provider delayDuration={300}>
+              <Tooltip.Root>
+                <Tooltip.Trigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => invoke("open_accessibility_settings")}
+                    className="flex items-center gap-1 text-amber-400/70 hover:text-amber-400 transition-colors cursor-default bg-transparent border-none p-0"
+                  >
+                    <ShieldAlert size={12} />
+                    <span className="text-[11px] font-mono">No AX access</span>
+                  </button>
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Content
+                    className="bg-black/90 text-white/70 text-xs px-2 py-1.5 rounded border border-white/10 max-w-[220px] leading-relaxed"
+                    sideOffset={4}
+                  >
+                    Terminal context and paste require Accessibility permission. Click to open System Settings.
+                    <Tooltip.Arrow className="fill-black/90" />
+                  </Tooltip.Content>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+            </Tooltip.Provider>
           )}
           {hotkeyConfigOpen ? (
             <HotkeyConfig />

@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Check, ExternalLink, RefreshCw } from "lucide-react";
+import { useOverlayStore } from "@/store";
 
 interface StepAccessibilityProps {
   onNext: () => void;
@@ -9,13 +10,45 @@ interface StepAccessibilityProps {
 export function StepAccessibility({ onNext }: StepAccessibilityProps) {
   const [granted, setGranted] = useState<boolean | null>(null);
   const [checking, setChecking] = useState(false);
+  const [pollingActive, setPollingActive] = useState<boolean>(false);
+  const mountedRef = useRef<boolean>(true);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // Polling effect: starts when pollingActive becomes true after clicking "Open System Settings"
+  useEffect(() => {
+    if (!pollingActive) return;
+    const intervalId = setInterval(async () => {
+      if (!mountedRef.current) return;
+      try {
+        const result = await invoke<boolean>("check_accessibility_permission");
+        if (result && mountedRef.current) {
+          clearInterval(intervalId);
+          setGranted(true);
+          useOverlayStore.getState().setAccessibilityGranted(true);
+          setTimeout(() => {
+            if (mountedRef.current) onNext();
+          }, 1000);
+        }
+      } catch {
+        // Silent -- keep polling
+      }
+    }, 1500);
+    return () => clearInterval(intervalId);
+  }, [pollingActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const checkPermission = async () => {
     setChecking(true);
     try {
-      const result = await invoke<boolean>("check_accessibility_permission");
+      const result = await invoke<boolean>("request_accessibility_permission", { prompt: true });
       setGranted(result);
       if (result) {
+        // Sync global store so command mode knows permission is granted
+        useOverlayStore.getState().setAccessibilityGranted(true);
         // Auto-advance after 1s if already granted
         setTimeout(() => {
           onNext();
@@ -38,6 +71,7 @@ export function StepAccessibility({ onNext }: StepAccessibilityProps) {
     } catch {
       // Best-effort
     }
+    setPollingActive(true);
   };
 
   const handleCheckAgain = async () => {
