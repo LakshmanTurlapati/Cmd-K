@@ -41,7 +41,7 @@ export function OnboardingWizard() {
     setMode("command");
   };
 
-  const stepLabels = ["Accessibility", "API Key", "Model", "Done"];
+  const stepLabels = ["API Key", "Model", "Accessibility", "Done"];
 
   return (
     <div className="flex flex-col gap-4">
@@ -112,9 +112,9 @@ export function OnboardingWizard() {
 
       {/* Step content */}
       <div className="flex flex-col">
-        {onboardingStep === 0 && <StepAccessibility onNext={handleNext} />}
-        {onboardingStep === 1 && <StepApiKey onNext={handleNext} />}
-        {onboardingStep === 2 && <StepModelSelect onNext={handleNext} />}
+        {onboardingStep === 0 && <StepApiKey onNext={handleNext} />}
+        {onboardingStep === 1 && <StepModelSelect onNext={handleNext} />}
+        {onboardingStep === 2 && <StepAccessibility onNext={handleNext} />}
         {onboardingStep === 3 && <StepDone onComplete={handleComplete} />}
       </div>
 

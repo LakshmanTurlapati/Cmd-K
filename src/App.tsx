@@ -74,10 +74,10 @@ function App() {
               setApiKeyStatus("valid");
               setModels(models);
               setApiKeyLast4(existingKey.slice(-4));
-              // If step was on apikey step or earlier, advance past it
+              // API Key is now step 0. If step was on API key step or earlier, advance past it.
               const effectiveStep =
-                onboardingStep <= 1
-                  ? Math.max(onboardingStep, 1)
+                onboardingStep <= 0
+                  ? 1  // skip past API key step since key exists
                   : onboardingStep;
               openOnboarding(effectiveStep);
             } else {
@@ -89,6 +89,14 @@ function App() {
           // Show the native window so the onboarding wizard is visible
           await invoke("show_overlay");
         } else {
+          // Pre-check accessibility so the warning doesn't flash on first show()
+          try {
+            const hasAccess = await invoke<boolean>("check_accessibility_permission");
+            useOverlayStore.getState().setAccessibilityGranted(hasAccess);
+          } catch {
+            // Non-fatal: store stays false, warning will show if needed
+          }
+
           // Onboarding done -- load API key status and models for settings panel
           try {
             const existingKey = await invoke<string | null>("get_api_key");
