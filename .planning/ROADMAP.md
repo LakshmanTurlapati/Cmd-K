@@ -134,3 +134,14 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 4. AI Command Generation | 3/3 | Complete    | 2026-02-23 |
 | 5. Safety Layer | 2/2 | Complete    | 2026-02-23 |
 | 6. Terminal Pasting | 1/2 | In Progress|  |
+
+### Phase 7: Fix accessibility permission detection and move accessibility step to second-to-last in onboarding
+
+**Goal:** Accessibility permission detection works reliably on unsigned production builds (AX probe fallback), onboarding step order is API Key -> Model -> Accessibility -> Done, and overlay shows compact auto-disappearing badge instead of multi-line banner
+**Depends on:** Phase 6
+**Requirements:** SETT-04
+**Plans:** 2 plans
+
+Plans:
+- [ ] 07-01-PLAN.md -- Rust dual-check AX probe fallback + onboarding step reorder + effectiveStep fix
+- [ ] 07-02-PLAN.md -- StepAccessibility auto-polling + compact Overlay badge with Radix tooltip + background badge polling + human verification
