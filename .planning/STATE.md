@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Phase 6 - Terminal Pasting (in progress)
+**Current focus:** Phase 7 - Fix Accessibility Permission Detection and Reorder Onboarding
 
 ## Current Position
 
-Phase: 6 of 6 (Terminal Pasting) -- IN PROGRESS
-Plan: 1 of 2 in current phase (06-01 complete)
-Status: Phase 6 Plan 1 COMPLETE -- paste_to_terminal Rust command registered; autoPasteEnabled Zustand state + PreferencesTab Terminal toggle + App.tsx startup load complete
-Last activity: 2026-02-23 - Executed Phase 6 Plan 1 (paste_to_terminal Rust command + autoPasteEnabled frontend infrastructure)
+Phase: 7 of 7 (Fix Accessibility Permission Detection) -- IN PROGRESS
+Plan: 1 of 1 in current phase (07-01 complete)
+Status: Phase 7 Plan 1 COMPLETE -- AX probe fallback in permissions.rs (dual-check); onboarding reordered API Key -> Model -> Accessibility -> Done; effectiveStep logic fixed
+Last activity: 2026-02-26 - Executed Phase 7 Plan 1 (AX probe fallback + onboarding reorder)
 
 Progress: [██████████] 100%
 
@@ -39,6 +39,7 @@ Progress: [██████████] 100%
 
 *Updated after each plan completion*
 | Phase 06-terminal-pasting P01 | 8 | 2 tasks | 6 files |
+| Phase 07-fix-accessibility P01 | 3 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -104,6 +105,13 @@ Recent decisions affecting current work:
 - [Phase 06-terminal-pasting]: paste_to_terminal reads previous_app_pid from AppState at paste time (not re-detected) to avoid race conditions
 - [Phase 06-terminal-pasting]: iTerm2 AppleScript uses write text newline NO; Terminal.app uses Ctrl+U then keystroke -- neither uses do script which executes immediately
 - [Phase 06-terminal-pasting]: autoPasteEnabled defaults to true; blue toggle in PreferencesTab Terminal section
+- [Phase 07-fix-accessibility]: ax_probe_self uses own PID; returns true for all AX error codes except kAXErrorNotTrusted (-25211) because WKWebView may not expose AXRole -- -25211 is the only definitive no-permission code
+- [Phase 07-fix-accessibility]: In-place replacement of check_accessibility_permission function body -- no frontend call site changes needed; all existing invoke sites pick up dual-check automatically
+- [Phase 07-fix-accessibility]: effectiveStep changed from onboardingStep <= 1 to <= 0 because API Key moved from step 1 to step 0 in new onboarding order
+
+### Roadmap Evolution
+
+- Phase 7 added: Fix accessibility permission detection and move accessibility step to second-to-last in onboarding
 
 ### Pending Todos
 
@@ -136,9 +144,10 @@ None yet.
 - Phase 5 COMPLETE: All AICG-03 requirements satisfied; full safety layer operational
 - Phase 5: AppleScript command injection must be solved before any terminal pasting
 - Phase 6 Plan 1 COMPLETE: paste_to_terminal Rust command (AppleScript dispatch for iTerm2 + Terminal.app); autoPasteEnabled Zustand state + PreferencesTab Terminal section + App.tsx startup load
+- Phase 7 Plan 1 COMPLETE: ax_probe_self() AX probe fallback in permissions.rs (dual-check: AXIsProcessTrusted + own-PID AX call); onboarding reordered API Key -> Model -> Accessibility -> Done; effectiveStep logic corrected
 
 ## Session Continuity
 
-Last session: 2026-02-23 (Phase 6 Plan 1 execution)
-Stopped at: Completed 06-01-PLAN.md (paste_to_terminal Rust command + autoPasteEnabled frontend infrastructure; ready for Plan 02 wiring)
+Last session: 2026-02-26 (Phase 7 Plan 1 execution)
+Stopped at: Completed 07-01-PLAN.md (AX probe fallback in permissions.rs + onboarding step reorder + effectiveStep fix)
 Resume file: None
