@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 7 of 7 (Fix Accessibility Permission Detection) -- IN PROGRESS
-Plan: 1 of 1 in current phase (07-01 complete)
-Status: Phase 7 Plan 1 COMPLETE -- AX probe fallback in permissions.rs (dual-check); onboarding reordered API Key -> Model -> Accessibility -> Done; effectiveStep logic fixed
-Last activity: 2026-02-26 - Executed Phase 7 Plan 1 (AX probe fallback + onboarding reorder)
+Plan: 2 of 2 in current phase (07-02 automation complete; awaiting human-verify checkpoint)
+Status: Phase 7 Plan 2 AUTOMATION COMPLETE -- auto-polling in StepAccessibility (1.5s), compact Radix Tooltip badge in Overlay replacing multi-line banner, 5s background polling; awaiting human verification
+Last activity: 2026-02-26 - Executed Phase 7 Plan 2 (auto-polling + compact overlay badge)
 
 Progress: [██████████] 100%
 
@@ -40,6 +40,7 @@ Progress: [██████████] 100%
 *Updated after each plan completion*
 | Phase 06-terminal-pasting P01 | 8 | 2 tasks | 6 files |
 | Phase 07-fix-accessibility P01 | 3 | 2 tasks | 3 files |
+| Phase 07 P02 | 2 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -108,6 +109,8 @@ Recent decisions affecting current work:
 - [Phase 07-fix-accessibility]: ax_probe_self uses own PID; returns true for all AX error codes except kAXErrorNotTrusted (-25211) because WKWebView may not expose AXRole -- -25211 is the only definitive no-permission code
 - [Phase 07-fix-accessibility]: In-place replacement of check_accessibility_permission function body -- no frontend call site changes needed; all existing invoke sites pick up dual-check automatically
 - [Phase 07-fix-accessibility]: effectiveStep changed from onboardingStep <= 1 to <= 0 because API Key moved from step 1 to step 0 in new onboarding order
+- [Phase 07]: pollingActive bool state gate: polling useEffect returns early when pollingActive=false, starts only after explicit user action (Open System Settings)
+- [Phase 07]: Compact overlay badge with Radix Tooltip (ShieldAlert + 'No AX access') replaces multi-line banner; 5s background polling auto-hides badge on permission grant
 
 ### Roadmap Evolution
 

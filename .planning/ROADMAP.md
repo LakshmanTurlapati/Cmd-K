@@ -140,7 +140,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 **Goal:** Accessibility permission detection works reliably on unsigned production builds (AX probe fallback), onboarding step order is API Key -> Model -> Accessibility -> Done, and overlay shows compact auto-disappearing badge instead of multi-line banner
 **Depends on:** Phase 6
 **Requirements:** SETT-04
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 07-01-PLAN.md -- Rust dual-check AX probe fallback + onboarding step reorder + effectiveStep fix
