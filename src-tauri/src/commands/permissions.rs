@@ -97,11 +97,12 @@ pub fn check_accessibility_permission() -> bool {
 #[cfg(target_os = "macos")]
 pub fn request_accessibility_permission(prompt: bool) -> bool {
     use core_foundation_sys::base::{CFRelease, kCFAllocatorDefault};
-    use core_foundation_sys::dictionary::CFDictionaryCreate;
-    use core_foundation_sys::number::{kCFBooleanTrue, kCFBooleanFalse};
+    use core_foundation_sys::dictionary::{
+        CFDictionaryCreate, kCFTypeDictionaryKeyCallBacks, kCFTypeDictionaryValueCallBacks,
+    };
+    use core_foundation_sys::number::{kCFBooleanFalse, kCFBooleanTrue};
     use core_foundation_sys::string::CFStringCreateWithCString;
     use std::ffi::CString;
-    use std::ptr;
 
     unsafe {
         extern "C" {
@@ -118,6 +119,11 @@ pub fn request_accessibility_permission(prompt: bool) -> bool {
             core_foundation_sys::string::kCFStringEncodingUTF8,
         );
 
+        if key.is_null() {
+            eprintln!("[permissions] CFStringCreateWithCString returned null, falling back");
+            return accessibility_sys::AXIsProcessTrusted();
+        }
+
         let value = if prompt {
             kCFBooleanTrue
         } else {
@@ -132,9 +138,15 @@ pub fn request_accessibility_permission(prompt: bool) -> bool {
             keys.as_ptr(),
             values.as_ptr(),
             1,
-            ptr::null(),
-            ptr::null(),
+            &kCFTypeDictionaryKeyCallBacks,
+            &kCFTypeDictionaryValueCallBacks,
         );
+
+        if options.is_null() {
+            eprintln!("[permissions] CFDictionaryCreate returned null, falling back");
+            CFRelease(key as *const std::ffi::c_void);
+            return accessibility_sys::AXIsProcessTrusted();
+        }
 
         let trusted = AXIsProcessTrustedWithOptions(options);
 
