@@ -194,12 +194,29 @@ pub fn paste_to_terminal(app: AppHandle, command: String) -> Result<(), String> 
     }
 
     if output.status.success() {
-        eprintln!("[paste] paste succeeded for bundle: {}", bundle_id);
+        eprintln!(
+            "[paste] paste succeeded | bundle={} | pid={} | chars={}",
+            bundle_id, pid, command.len()
+        );
         Ok(())
     } else {
+        let exit_code = output.status.code().map_or("signal".to_string(), |c| c.to_string());
         let stderr = String::from_utf8_lossy(&output.stderr);
-        eprintln!("[paste] paste failed for bundle {}: {}", bundle_id, stderr.trim());
-        Err(format!("osascript failed: {}", stderr.trim()))
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        eprintln!(
+            "[paste] osascript FAILED | exit={} | bundle={} | pid={} | stderr={} | stdout={} | script_len={}",
+            exit_code,
+            bundle_id,
+            pid,
+            stderr.trim(),
+            stdout.trim(),
+            script.len()
+        );
+        eprintln!(
+            "[paste] TCC hint: if exit=1 and stderr mentions 'not allowed', reset permissions with: tccutil reset AppleEvents {}",
+            bundle_id
+        );
+        Err(format!("osascript failed (exit {}): {}", exit_code, stderr.trim()))
     }
 }
 
