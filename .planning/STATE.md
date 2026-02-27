@@ -115,6 +115,7 @@ Recent decisions affecting current work:
 ### Roadmap Evolution
 
 - Phase 7 added: Fix accessibility permission detection and move accessibility step to second-to-last in onboarding
+- Phase 07.1 inserted after Phase 07: Debug and fix AI streaming failure on production DMG builds (URGENT)
 
 ### Pending Todos
 
