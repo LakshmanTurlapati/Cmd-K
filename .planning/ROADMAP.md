@@ -145,3 +145,13 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 Plans:
 - [ ] 07-01-PLAN.md -- Rust dual-check AX probe fallback + onboarding step reorder + effectiveStep fix
 - [ ] 07-02-PLAN.md -- StepAccessibility auto-polling + compact Overlay badge with Radix tooltip + background badge polling + human verification
+
+### Phase 07.1: Debug and fix terminal pasting failure on production DMG builds (INSERTED)
+
+**Goal:** Fix macOS TCC identity mismatch that causes AppleScript terminal pasting to fail in production DMG builds -- add NSAppleEventsUsageDescription to Info.plist, re-sign with stable bundle identifier and embedded entitlements, and enhance error logging
+**Depends on:** Phase 7
+**Requirements:** SETT-04, TERM-01
+**Plans:** 1 plan
+
+Plans:
+- [ ] 07.1-01-PLAN.md -- Fix code signing (explicit identifier + entitlements), add Info.plist privacy string, create build-dmg.sh, enhance paste.rs error logging + human verification of production DMG pasting
