@@ -41,10 +41,10 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["../K.png"],
+    "resources": ["../K.png", "../K-white.png"],
     "macOS": {
       "entitlements": "entitlements.plist",
-      "signingIdentity": null
+      "signingIdentity": "-"
     }
   }
 }
