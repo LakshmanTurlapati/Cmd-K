@@ -15,6 +15,7 @@ Press Cmd+K from anywhere on your Mac. Type what you want. Get a working command
 ![macOS](https://img.shields.io/badge/macOS-555555?style=for-the-badge&logo=apple&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-Coming_Soon-555555?style=for-the-badge&logo=windows&logoColor=white)
 ![Linux](https://img.shields.io/badge/Linux-Coming_Soon-555555?style=for-the-badge&logo=linux&logoColor=white)
+[![Website](https://img.shields.io/badge/Website-cmd--k.site-555555?style=for-the-badge&logo=safari&logoColor=white)](https://www.cmd-k.site)
 
 [![Stars](https://img.shields.io/github/stars/LakshmanTurlapati/Cmd-K?style=for-the-badge&logo=github&logoColor=white&color=555555)](https://github.com/LakshmanTurlapati/Cmd-K/stargazers)
 [![Forks](https://img.shields.io/github/forks/LakshmanTurlapati/Cmd-K?style=for-the-badge&logo=github&logoColor=white&color=555555)](https://github.com/LakshmanTurlapati/Cmd-K/network/members)
@@ -27,7 +28,7 @@ Press Cmd+K from anywhere on your Mac. Type what you want. Get a working command
 
 <div align="center">
 
-[Features](#features) · [How It Works](#how-it-works) · [Architecture](#architecture) · [Tech Stack](#tech-stack) · [Quick Start](#quick-start) · [Project Structure](#project-structure) · [Contributing](#contributing)
+[Website](https://www.cmd-k.site) · [Features](#features) · [How It Works](#how-it-works) · [Architecture](#architecture) · [Tech Stack](#tech-stack) · [Quick Start](#quick-start) · [Project Structure](#project-structure) · [Contributing](#contributing)
 
 </div>
 
