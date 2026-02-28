@@ -332,6 +332,7 @@ name = "cmd-k"
 version = "0.1.0"
 dependencies = [
  "accessibility-sys",
+ "core-foundation-sys",
  "eventsource-stream",
  "futures-util",
  "keyring",
