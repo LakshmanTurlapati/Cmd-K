@@ -21,7 +21,7 @@ pub struct XaiModelWithMeta {
 
 /// Map a raw model id to its display label.
 fn model_label(id: &str) -> String {
-    if id.contains("grok-code-fast") {
+    if id.contains("grok-4") && id.contains("non-reasoning") {
         "Recommended".to_string()
     } else if id.contains("grok-4") {
         "Most capable".to_string()
@@ -79,7 +79,7 @@ async fn fallback_validate_and_models(
                 "grok-3-mini",
                 "grok-4",
                 "grok-4-fast",
-                "grok-code-fast-1",
+                "grok-4-fast-non-reasoning",
             ];
             let models = hardcoded
                 .into_iter()
