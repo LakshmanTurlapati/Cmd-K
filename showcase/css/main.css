@@ -373,47 +373,6 @@ button {
 .reveal-delay-5 { transition-delay: 0.5s; }
 .reveal-delay-6 { transition-delay: 0.6s; }
 
-/* ---------- Theme toggle ---------- */
-.theme-toggle {
-  position: fixed;
-  bottom: 24px;
-  left: 24px;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 999;
-  transition: all var(--duration-normal) var(--ease-out);
-  box-shadow: var(--shadow-md);
-}
-
-.theme-toggle:hover {
-  border-color: var(--accent);
-  transform: scale(1.1);
-}
-
-.theme-toggle svg {
-  width: 20px;
-  height: 20px;
-  color: var(--text-secondary);
-  transition: color var(--duration-fast);
-}
-
-.theme-toggle:hover svg {
-  color: var(--accent);
-}
-
-.theme-toggle .icon-sun  { display: none; }
-.theme-toggle .icon-moon { display: block; }
-
-[data-theme="light"] .theme-toggle .icon-sun  { display: block; }
-[data-theme="light"] .theme-toggle .icon-moon { display: none; }
-
 /* ---------- Footer ---------- */
 .footer {
   margin-top: var(--section-gap);

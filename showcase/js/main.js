@@ -1,38 +1,28 @@
 /* ============================================
    CMD+K Showcase -- main.js
    Nav scroll, mobile menu, scroll reveal,
-   theme toggle, smooth scroll
+   smooth scroll
    ============================================ */
 
 (function () {
   'use strict';
 
-  // ---- Theme ----
-  const STORAGE_KEY = 'cmdk-showcase-theme';
-
-  function getPreferredTheme() {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) return stored;
-    return 'dark'; // default dark
+  // ---- Theme (follows OS preference) ----
+  function getSystemTheme() {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   }
 
   function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem(STORAGE_KEY, theme);
   }
 
-  applyTheme(getPreferredTheme());
+  applyTheme(getSystemTheme());
+
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function (e) {
+    applyTheme(e.matches ? 'dark' : 'light');
+  });
 
   document.addEventListener('DOMContentLoaded', function () {
-    // ---- Theme toggle ----
-    const toggle = document.querySelector('.theme-toggle');
-    if (toggle) {
-      toggle.addEventListener('click', function () {
-        const current = document.documentElement.getAttribute('data-theme');
-        applyTheme(current === 'dark' ? 'light' : 'dark');
-      });
-    }
-
     // ---- Nav scroll effect ----
     const nav = document.querySelector('.nav');
     if (nav) {
