@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy -- Command-K</title>
+  <meta name="description" content="Privacy policy for CMD+K, the open-source macOS overlay that turns natural language into terminal commands.">
+  <meta name="theme-color" content="#000000">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Privacy Policy -- Command-K">
+  <meta property="og:description" content="How CMD+K handles your data. No servers, no accounts, no analytics.">
+  <meta property="og:type" content="website">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/privacy.css">
+
+  <!-- Favicon (theme-aware) -->
+  <link rel="icon" href="assets/K.png" type="image/png" media="(prefers-color-scheme: light)">
+  <link rel="icon" href="assets/K-white.png" type="image/png" media="(prefers-color-scheme: dark)">
+</head>
+<body>
+
+  <!-- ====== Mobile Gate ====== -->
+  <div id="mobile-gate">
+    <div class="mobile-gate-card">
+      <div class="mobile-gate-icon">
+        <div class="morph-device">
+          <div class="morph-arrow morph-arrow-left"></div>
+          <div class="morph-screen"></div>
+          <div class="morph-arrow morph-arrow-right"></div>
+        </div>
+      </div>
+      <p class="mobile-gate-text">
+        Website designed strictly for Desktop.<br>
+        Switch to a wider screen to appreciate fully.
+      </p>
+      <span class="mobile-gate-sig">&mdash;LT</span>
+    </div>
+    <div class="mobile-gate-footer">
+      <div class="mobile-gate-brand">
+        <img src="assets/K-white.png" alt="CMD+K" class="logo-dark">
+        <img src="assets/K.png" alt="CMD+K" class="logo-light">
+      </div>
+      <span class="mobile-gate-version">v0.1.0</span>
+    </div>
+  </div>
+
+  <!-- ====== Nav ====== -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-brand">
+        <img src="assets/K-white.png" alt="CMD+K" class="logo-dark">
+        <img src="assets/K.png" alt="CMD+K" class="logo-light">
+      </a>
+
+      <div class="nav-overlay"></div>
+
+      <div class="nav-links">
+        <a href="index.html#features">Features</a>
+        <a href="index.html#how-it-works">How It Works</a>
+        <a href="index.html#demo">Demo</a>
+        <a href="index.html#tech-stack">Tech Stack</a>
+        <a href="https://github.com/LakshmanTurlapati/Cmd-K" target="_blank" rel="noopener" class="nav-cta">
+          GitHub
+        </a>
+      </div>
+
+      <button class="hamburger" aria-label="Toggle navigation">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ====== Privacy Policy ====== -->
+  <main class="privacy-page">
+    <div class="container">
+      <div class="privacy-header">
+        <div class="section-label">Legal</div>
+        <h1 class="section-title">Privacy Policy</h1>
+        <p class="privacy-last-updated">Last updated: February 27, 2026</p>
+      </div>
+
+      <div class="privacy-content">
+        <!-- TL;DR -->
+        <div class="privacy-callout">
+          <p><strong>TL;DR</strong> -- CMD+K runs entirely on your Mac. No servers, no accounts, no analytics. You bring your own xAI API key. Data goes directly from your Mac to xAI's API -- nowhere else.</p>
+        </div>
+
+        <!-- How CMD+K Works -->
+        <h2>How CMD+K Works</h2>
+        <p>CMD+K is a native macOS overlay application. You press a global hotkey, type a natural-language description of what you want to do, and CMD+K generates a working terminal command using xAI's Grok models. The entire application runs locally on your Mac -- there is no CMD+K server in between.</p>
+
+        <!-- What Is Sent to the AI Provider -->
+        <h2>What Is Sent to the AI Provider</h2>
+        <p>When you submit a query, CMD+K sends context to the xAI API so the model can generate an accurate command. The exact data depends on which mode you are using.</p>
+
+        <h3>Terminal Mode</h3>
+        <ul>
+          <li>Terminal application name (e.g., Terminal.app, iTerm2)</li>
+          <li>Shell type (e.g., zsh, bash)</li>
+          <li>Current working directory</li>
+          <li>Last 25 lines of visible terminal output</li>
+          <li>Running process name</li>
+          <li>Your query text</li>
+          <li>Session history (last 7 conversation turns)</li>
+        </ul>
+
+        <h3>Assistant Mode</h3>
+        <ul>
+          <li>Active application name</li>
+          <li>Browser console last line (if DevTools is open)</li>
+          <li>Visible screen text (approximately 4 KB)</li>
+          <li>Your question</li>
+        </ul>
+
+        <p>All data is sent over HTTPS directly to <code>api.x.ai</code>. No data passes through any CMD+K-operated server.</p>
+
+        <!-- What Is Automatically Filtered -->
+        <h2>What Is Automatically Filtered</h2>
+        <p>Before any context is sent to the AI provider, CMD+K automatically scans for and redacts common secret patterns, including:</p>
+        <ul>
+          <li>AWS access keys</li>
+          <li>Generic API tokens</li>
+          <li>xAI API tokens</li>
+          <li>OpenAI API keys</li>
+          <li>GitHub personal access tokens</li>
+          <li>PEM-encoded private keys</li>
+          <li>Shell exports containing secret-like variable names</li>
+        </ul>
+        <p>Matched values are replaced with <code>[REDACTED]</code> before the request leaves your machine.</p>
+
+        <!-- What Is NOT Sent -->
+        <h2>What Is NOT Sent</h2>
+        <p>The following information never leaves your Mac:</p>
+        <ul>
+          <li>Your API key (stored in macOS Keychain, never included in prompts)</li>
+          <li>File contents from your filesystem</li>
+          <li>Browsing history</li>
+          <li>Location data</li>
+          <li>Device identifiers</li>
+          <li>Network configuration or IP addresses</li>
+          <li>System hardware information</li>
+          <li>Hotkey preferences or app settings</li>
+        </ul>
+
+        <!-- Where Your Data Is Stored -->
+        <h2>Where Your Data Is Stored</h2>
+        <p>All persistent data is stored locally on your Mac:</p>
+        <ul>
+          <li><strong>macOS Keychain</strong> -- Your xAI API key, encrypted by the operating system</li>
+          <li><strong>Local settings file</strong> -- Model preference, hotkey binding, feature toggles</li>
+        </ul>
+        <p>There is no CMD+K server, no cloud database, no remote backup, and no sync service.</p>
+
+        <!-- Third-Party Services -->
+        <h2>Third-Party Services</h2>
+        <p>CMD+K connects to exactly one external service: the <strong>xAI API</strong> (<code>api.x.ai</code>). Your queries and the context described above are sent to xAI to generate command suggestions. Once data reaches xAI, their privacy policy applies.</p>
+        <p>You can review xAI's privacy policy at <a href="https://x.ai/legal/privacy-policy" target="_blank" rel="noopener">x.ai/legal/privacy-policy</a>.</p>
+
+        <!-- Permissions -->
+        <h2>Permissions</h2>
+        <p>CMD+K uses the macOS Accessibility API to read terminal output and detect the active application. This permission must be explicitly granted by you in System Settings &gt; Privacy &amp; Security &gt; Accessibility. You can revoke it at any time, which will prevent CMD+K from capturing terminal context.</p>
+
+        <!-- No Telemetry -->
+        <h2>No Telemetry</h2>
+        <p>CMD+K includes zero telemetry. There are no analytics SDKs, no tracking pixels, no cookies, no crash reporters, and no usage data transmitted anywhere. The application makes network requests only when you explicitly submit a query, and only to the xAI API.</p>
+
+        <!-- Open Source -->
+        <h2>Open Source</h2>
+        <p>CMD+K is fully open source under the MIT license. The entire codebase is available on <a href="https://github.com/LakshmanTurlapati/Cmd-K" target="_blank" rel="noopener">GitHub</a>. Anyone can audit exactly what data is collected, how it is processed, and where it is sent.</p>
+
+        <!-- Changes -->
+        <h2>Changes to This Policy</h2>
+        <p>If this policy is updated, the changes will be reflected by the "Last updated" date at the top of this page. Significant changes will also be noted in the project's GitHub release notes.</p>
+
+        <!-- Contact -->
+        <h2>Contact</h2>
+        <p>If you have questions about this privacy policy or CMD+K's data handling, please open an issue on <a href="https://github.com/LakshmanTurlapati/Cmd-K/issues" target="_blank" rel="noopener">GitHub Issues</a>.</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- ====== Footer ====== -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <div class="footer-brand-logo">
+          <img src="assets/K-white.png" alt="CMD+K" class="logo-dark">
+          <img src="assets/K.png" alt="CMD+K" class="logo-light">
+        </div>
+        <p>AI-powered terminal commands, one keystroke away. A native macOS overlay built with Tauri 2 and Rust.</p>
+      </div>
+
+      <div class="footer-col">
+        <h4>Navigate</h4>
+        <a href="index.html#features">Features</a>
+        <a href="index.html#how-it-works">How It Works</a>
+        <a href="index.html#demo">Demo</a>
+        <a href="index.html#tech-stack">Tech Stack</a>
+      </div>
+
+      <div class="footer-col">
+        <h4>Project</h4>
+        <a href="https://github.com/LakshmanTurlapati/Cmd-K" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/LakshmanTurlapati/Cmd-K/issues" target="_blank" rel="noopener">Issues</a>
+        <a href="https://github.com/LakshmanTurlapati/Cmd-K/blob/main/LICENSE" target="_blank" rel="noopener">License (MIT)</a>
+        <a href="privacy.html">Privacy Policy</a>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <span>Built by <a href="https://github.com/LakshmanTurlapati" target="_blank" rel="noopener">Lakshman Turlapati</a></span>
+      <span>v0.1.0</span>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="js/main.js"></script>
+</body>
+</html>
