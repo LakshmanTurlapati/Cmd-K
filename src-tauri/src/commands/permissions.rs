@@ -8,14 +8,17 @@ pub fn open_accessibility_settings() {
         .ok();
 }
 
-/// Probes actual AX API access on our own PID.
-/// AXIsProcessTrusted can return false for unsigned builds even when
-/// permission is genuinely granted (TCC identity mismatch). This function
-/// attempts a real AX call and checks the error code directly.
+/// Probes actual AX API access on an EXTERNAL process (Dock).
+/// Probing our own PID can produce false positives -- an app can read its
+/// own AX attributes without full Accessibility permission on some macOS
+/// versions/signing contexts.  By probing Dock (always running, stable),
+/// we force a genuine cross-process AX call that REQUIRES Accessibility
+/// permission to succeed.
+///
 /// Returns false ONLY when error is kAXErrorNotTrusted (-25211).
 /// All other codes (success, attribute-absent, etc.) mean permission is granted.
 #[cfg(target_os = "macos")]
-fn ax_probe_self() -> bool {
+fn ax_probe_external() -> bool {
     use std::ffi::{c_void, CString};
 
     extern "C" {
@@ -28,9 +31,32 @@ fn ax_probe_self() -> bool {
         fn CFRelease(cf: *const c_void);
     }
 
-    let pid = std::process::id() as i32;
+    // Find Dock's PID -- it is always running on macOS.
+    let dock_pid = match std::process::Command::new("pgrep")
+        .arg("-x")
+        .arg("Dock")
+        .output()
+    {
+        Ok(output) if output.status.success() => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            match stdout.trim().parse::<i32>() {
+                Ok(pid) => pid,
+                Err(_) => {
+                    eprintln!("[permissions] ax_probe_external: failed to parse Dock PID from {:?}", stdout.trim());
+                    return false;
+                }
+            }
+        }
+        _ => {
+            eprintln!("[permissions] ax_probe_external: pgrep -x Dock failed");
+            return false;
+        }
+    };
+
+    eprintln!("[permissions] ax_probe_external: probing Dock (pid={})", dock_pid);
+
     unsafe {
-        let app_elem = AXUIElementCreateApplication(pid);
+        let app_elem = AXUIElementCreateApplication(dock_pid);
         if app_elem.is_null() {
             return false;
         }
@@ -59,6 +85,7 @@ fn ax_probe_self() -> bool {
         // -25204 = no value, -25212 = cannot complete) indicate the OS
         // allowed the call -- permission IS granted.
         const AX_ERROR_NOT_TRUSTED: i32 = -25211;
+        eprintln!("[permissions] ax_probe_external: AXUIElementCopyAttributeValue returned {}", err);
         err != AX_ERROR_NOT_TRUSTED
     }
 }
@@ -76,9 +103,9 @@ pub fn check_accessibility_permission() -> bool {
         eprintln!("[permissions] AXIsProcessTrusted() = true (fast path)");
         return true;
     }
-    let probe_result = ax_probe_self();
+    let probe_result = ax_probe_external();
     eprintln!(
-        "[permissions] AXIsProcessTrusted() = false, ax_probe_self() = {probe_result}"
+        "[permissions] AXIsProcessTrusted() = false, ax_probe_external() = {probe_result}"
     );
     probe_result
 }
