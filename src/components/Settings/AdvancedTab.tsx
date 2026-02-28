@@ -1,5 +1,6 @@
 import { Store } from "@tauri-apps/plugin-store";
 import { useOverlayStore } from "@/store";
+import { RotateCcw } from "lucide-react";
 
 export function AdvancedTab() {
   const destructiveDetectionEnabled = useOverlayStore(
@@ -84,6 +85,31 @@ export function AdvancedTab() {
       {!autoPasteEnabled && (
         <p className="text-amber-400/60 text-xs mt-1">Commands will not be pasted automatically</p>
       )}
+
+      <p className="text-white/40 text-xs uppercase tracking-wider mt-2">
+        Setup
+      </p>
+      <button
+        type="button"
+        onClick={async () => {
+          try {
+            const store = await Store.load("settings.json");
+            await store.set("onboardingComplete", false);
+            await store.set("onboardingStep", 0);
+            await store.save();
+          } catch (err) {
+            console.error("[advanced] Failed to reset onboarding in store:", err);
+          }
+          const s = useOverlayStore.getState();
+          s.setOnboardingComplete(false);
+          s.setOnboardingStep(0);
+          s.setMode("onboarding");
+        }}
+        className="flex items-center gap-2 text-white/60 hover:text-white/80 text-xs transition-colors cursor-default bg-transparent border-none p-0"
+      >
+        <RotateCcw size={12} />
+        Re-run onboarding wizard
+      </button>
     </div>
   );
 }
