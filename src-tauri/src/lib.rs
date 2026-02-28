@@ -7,7 +7,7 @@ use commands::{
     hotkey::register_hotkey,
     keychain::{delete_api_key, get_api_key, save_api_key},
     paste::{paste_to_terminal, confirm_terminal_command},
-    permissions::{check_accessibility_permission, open_accessibility_settings},
+    permissions::{check_accessibility_permission, open_accessibility_settings, request_accessibility_permission},
     safety::{check_destructive, get_destructive_explanation},
     terminal::{get_app_context, get_terminal_context},
     tray::setup_tray,
@@ -92,6 +92,12 @@ pub fn run() {
             // This ensures the underlying app isn't deactivated when the overlay appears
             panel.set_style_mask(StyleMask::empty().nonactivating_panel().into());
 
+            // Disable the macOS window-level shadow. The rectangular NSPanel shadow
+            // does not follow the vibrancy corner radius, producing a squared-off
+            // shadow at the bottom. The CSS shadow-2xl on the overlay div provides
+            // a properly rounded shadow instead.
+            panel.set_has_shadow(false);
+
             // Set up menu bar tray icon with K.png branding
             setup_tray(app)?;
 
@@ -124,6 +130,7 @@ pub fn run() {
             validate_and_fetch_models,
             open_accessibility_settings,
             check_accessibility_permission,
+            request_accessibility_permission,
             get_terminal_context,
             get_app_context,
             stream_ai_response,

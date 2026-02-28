@@ -153,6 +153,16 @@ function App() {
     };
   }, [openSettings]);
 
+  // Listen for open-about event from tray menu "About" item
+  useEffect(() => {
+    const unlisten = listen("open-about", () => {
+      openSettings("account");
+    });
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, [openSettings]);
+
   // Click outside dismisses overlay
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (panelRef.current && !panelRef.current.contains(e.target as Node)) {

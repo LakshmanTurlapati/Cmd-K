@@ -5,7 +5,9 @@ use tauri::{
     App, Emitter, Manager,
 };
 
-/// Set up the menu bar tray icon with K.png branding and the required menu items.
+use super::window::show_overlay;
+
+/// Set up the menu bar tray icon with K-white.png branding and the required menu items.
 ///
 /// Menu items (per CONTEXT.md spec):
 /// - Settings...
@@ -17,7 +19,7 @@ use tauri::{
 /// Uses `show_menu_on_left_click(false)` to follow macOS convention of showing the
 /// menu only on right-click or control-click.
 ///
-/// The K.png image is loaded from the repo root (one level up from src-tauri/).
+/// The K-white.png image is loaded from the repo root (one level up from src-tauri/).
 pub fn setup_tray(app: &App) -> tauri::Result<()> {
     let settings = MenuItem::with_id(app, "settings", "Settings...", true, None::<&str>)?;
     let change_hotkey =
@@ -28,20 +30,24 @@ pub fn setup_tray(app: &App) -> tauri::Result<()> {
 
     let menu = Menu::with_items(app, &[&settings, &change_hotkey, &about, &separator, &quit])?;
 
-    // Load K.png from repo root as the tray icon
+    // Load K-white.png from repo root as the tray icon
     let icon = load_tray_icon(app);
 
     let mut builder = TrayIconBuilder::new()
         .menu(&menu)
         .show_menu_on_left_click(false)
+        .icon_as_template(true)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "settings" => {
+                let _ = show_overlay(app.clone());
                 let _ = app.emit("open-settings", ());
             }
             "change_hotkey" => {
+                let _ = show_overlay(app.clone());
                 let _ = app.emit("open-hotkey-config", ());
             }
             "about" => {
+                let _ = show_overlay(app.clone());
                 let _ = app.emit("open-about", ());
             }
             "quit" => {
@@ -59,15 +65,16 @@ pub fn setup_tray(app: &App) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Attempt to load K.png from the repo root as a template icon.
+/// Attempt to load K-white.png from the repo root as a template icon.
 /// Falls back gracefully if the file is not found.
 fn load_tray_icon(app: &App) -> Option<Image<'static>> {
-    // Try loading K.png from the resource directory (bundled apps)
+    // Try loading K-white.png from the resource directory (bundled apps).
+    // Tauri maps the "../K-white.png" resource path to "_up_/K-white.png" inside Resources/.
     let resource_path = app
         .path()
         .resource_dir()
         .ok()
-        .map(|p| p.join("K.png"));
+        .map(|p| p.join("_up_").join("K-white.png"));
 
     if let Some(path) = resource_path {
         if path.exists() {
@@ -78,15 +85,15 @@ fn load_tray_icon(app: &App) -> Option<Image<'static>> {
     }
 
     // Fallback: try relative path from src-tauri/ directory for dev mode
-    let dev_path = std::path::Path::new("../K.png");
+    let dev_path = std::path::Path::new("../K-white.png");
     if dev_path.exists() {
         if let Ok(img) = Image::from_path(dev_path) {
             return Some(img);
         }
     }
 
-    // Second fallback: current directory K.png
-    let cwd_path = std::path::Path::new("K.png");
+    // Second fallback: current directory K-white.png
+    let cwd_path = std::path::Path::new("K-white.png");
     if cwd_path.exists() {
         if let Ok(img) = Image::from_path(cwd_path) {
             return Some(img);
