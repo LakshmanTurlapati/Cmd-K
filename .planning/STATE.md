@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-28)
 
 ## Current Position
 
-Phase: 8 of 10 (Window Identification & History Storage)
-Plan: 1 of 2 complete
-Status: Executing phase 8
-Last activity: 2026-03-01 -- Completed 08-01 (window key + history backend)
+Phase: 8 of 10 (Window Identification & History Storage) -- COMPLETE
+Plan: 2 of 2 complete
+Status: Phase 8 complete, ready for Phase 9
+Last activity: 2026-03-01 -- Completed 08-02 (frontend IPC integration)
 
-Progress: [======================------] 73% (22/30 est. plans across all milestones)
+Progress: [========================----] 77% (23/30 est. plans across all milestones)
 
 ## Performance Metrics
 
@@ -31,6 +31,7 @@ Progress: [======================------] 73% (22/30 est. plans across all milest
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
 | 08-01 | Window key + history backend | 5min | 2 | 7 |
+| 08-02 | Frontend IPC integration | 2min | 2 | 1 |
 
 ## Accumulated Context
 
@@ -45,6 +46,9 @@ v0.1.1 decisions:
 - Window key format: bundle_id:shell_pid for terminals/IDEs, bundle_id:app_pid for other apps
 - History IPC uses individual parameters (not struct) so frontend does not need to generate timestamps
 - History capped at 7 entries/window, 50 windows total with oldest-window eviction
+- Window key + history fetch placed before get_app_context in show() (key is fast, already computed by hotkey handler)
+- add_history_entry uses fire-and-forget pattern to avoid blocking UI flow
+- Error queries persisted with isError: true for arrow-key recall in Phase 9
 
 ### Pending Todos
 
@@ -58,6 +62,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-01 (Phase 8 Plan 01 execution)
-Stopped at: Completed 08-01-PLAN.md
+Last session: 2026-03-01 (Phase 8 Plan 02 execution)
+Stopped at: Completed 08-02-PLAN.md -- Phase 8 complete
 Resume file: None
