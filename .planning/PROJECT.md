@@ -12,22 +12,22 @@ The overlay must appear on top of the currently active application and feel inst
 
 ### Validated
 
-- OVRL-01: System-wide Cmd+K hotkey triggers the overlay from any application -- v1.0
-- OVRL-02: Overlay appears as a floating panel on top of the currently active window -- v1.0
-- OVRL-03: User can dismiss overlay with Escape key without executing -- v1.0
-- OVRL-04: User can configure the trigger hotkey to avoid conflicts -- v1.0
-- OVRL-05: App runs as background daemon with menu bar icon -- v1.0
-- SETT-01: User can store and validate their xAI API key -- v1.0
-- SETT-02: User can select which Grok model to use -- v1.0
-- SETT-03: API keys stored securely in macOS Keychain -- v1.0
-- SETT-04: First-run onboarding guides user through API key, model selection, and Accessibility permissions -- v1.0
-- TERM-01: Generated command is pasted into the active terminal (Terminal.app, iTerm2) -- v1.0
-- TERM-02: App detects the current working directory without shell plugins -- v1.0
-- TERM-03: App reads recent terminal output for context without shell plugins -- v1.0
-- TERM-04: Works with Terminal.app, iTerm2, Alacritty, kitty, WezTerm -- v1.0
-- AICG-01: User can type natural language and receive a terminal command via xAI (Grok) -- v1.0
-- AICG-02: Command generation streams in real-time -- v1.0
-- AICG-03: Destructive commands flagged with warning before paste -- v1.0
+- OVRL-01: System-wide Cmd+K hotkey triggers the overlay from any application -- v0.1.0
+- OVRL-02: Overlay appears as a floating panel on top of the currently active window -- v0.1.0
+- OVRL-03: User can dismiss overlay with Escape key without executing -- v0.1.0
+- OVRL-04: User can configure the trigger hotkey to avoid conflicts -- v0.1.0
+- OVRL-05: App runs as background daemon with menu bar icon -- v0.1.0
+- SETT-01: User can store and validate their xAI API key -- v0.1.0
+- SETT-02: User can select which Grok model to use -- v0.1.0
+- SETT-03: API keys stored securely in macOS Keychain -- v0.1.0
+- SETT-04: First-run onboarding guides user through API key, model selection, and Accessibility permissions -- v0.1.0
+- TERM-01: Generated command is pasted into the active terminal (Terminal.app, iTerm2) -- v0.1.0
+- TERM-02: App detects the current working directory without shell plugins -- v0.1.0
+- TERM-03: App reads recent terminal output for context without shell plugins -- v0.1.0
+- TERM-04: Works with Terminal.app, iTerm2, Alacritty, kitty, WezTerm -- v0.1.0
+- AICG-01: User can type natural language and receive a terminal command via xAI (Grok) -- v0.1.0
+- AICG-02: Command generation streams in real-time -- v0.1.0
+- AICG-03: Destructive commands flagged with warning before paste -- v0.1.0
 
 ### Active
 
@@ -48,10 +48,10 @@ The overlay must appear on top of the currently active application and feel inst
 
 ## Context
 
-Shipped v1.0 with 4,042 LOC Rust + 2,868 LOC TypeScript.
+Shipped v0.1.0 with 4,042 LOC Rust + 2,868 LOC TypeScript.
 Tech stack: Tauri v2 (Rust + React + TypeScript), NSPanel for overlay, xAI/Grok for AI, macOS Accessibility API + raw libproc FFI for terminal context.
 8 phases, 21 plans executed over 8 days (2026-02-21 to 2026-02-28).
-All 16 v1 requirements satisfied. 12 non-critical tech debt items remain.
+All 16 v0.1.0 requirements satisfied. 12 non-critical tech debt items remain.
 
 ## Constraints
 
@@ -78,4 +78,4 @@ All 16 v1 requirements satisfied. 12 non-critical tech debt items remain.
 | Capture-before-show PID pattern | Must capture frontmost PID before overlay steals focus | Good -- reliable context |
 
 ---
-*Last updated: 2026-02-28 after v1.0 milestone*
+*Last updated: 2026-02-28 after v0.1.0 milestone*

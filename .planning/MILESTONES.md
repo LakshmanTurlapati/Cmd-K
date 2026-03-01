@@ -1,6 +1,6 @@
 # Milestones
 
-## v1.0 MVP (Shipped: 2026-02-28)
+## v0.1.0 MVP (Shipped: 2026-02-28)
 
 **Phases completed:** 8 phases, 21 plans
 **Timeline:** 2026-02-21 to 2026-02-28 (8 days)

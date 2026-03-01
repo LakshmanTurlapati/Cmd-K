@@ -5,13 +5,13 @@
 See: .planning/PROJECT.md (updated 2026-02-28)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** v1.0 shipped -- planning next milestone
+**Current focus:** v0.1.0 shipped -- planning next milestone
 
 ## Current Position
 
-Phase: v1.0 COMPLETE
-Status: Milestone archived. All 16 v1 requirements satisfied. Ready for next milestone.
-Last activity: 2026-02-28 - Completed v1.0 milestone
+Phase: v0.1.0 COMPLETE
+Status: Milestone archived. All 16 v0.1.0 requirements satisfied. Ready for next milestone.
+Last activity: 2026-02-28 - Completed v0.1.0 milestone
 
 ## Performance Metrics
 
@@ -25,11 +25,11 @@ Last activity: 2026-02-28 - Completed v1.0 milestone
 
 ### Decisions
 
-All v1.0 decisions archived in PROJECT.md Key Decisions table.
+All v0.1.0 decisions archived in PROJECT.md Key Decisions table.
 
 ### Roadmap Evolution
 
-v1.0 milestone archived to .planning/milestones/
+v0.1.0 milestone archived to .planning/milestones/
 
 ### Pending Todos
 
@@ -37,11 +37,11 @@ None yet.
 
 ### Blockers/Concerns
 
-- 12 non-critical tech debt items from v1.0 (see milestones/v1.0-MILESTONE-AUDIT.md)
-- 22 human runtime tests pending from v1.0
+- 12 non-critical tech debt items from v0.1.0 (see milestones/v1.0-MILESTONE-AUDIT.md)
+- 22 human runtime tests pending from v0.1.0
 
 ## Session Continuity
 
-Last session: 2026-02-28 (v1.0 milestone completion)
+Last session: 2026-02-28 (v0.1.0 milestone completion)
 Stopped at: Milestone archived, ready for /gsd:new-milestone
 Resume file: None

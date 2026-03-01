@@ -2,12 +2,12 @@
 
 ## Milestones
 
-- v1.0 MVP -- Phases 1-7.1 (shipped 2026-02-28) | [Archive](milestones/v1.0-ROADMAP.md)
+- v0.1.0 MVP -- Phases 1-7.1 (shipped 2026-02-28) | [Archive](milestones/v1.0-ROADMAP.md)
 
 ## Phases
 
 <details>
-<summary>v1.0 MVP (Phases 1-7.1) -- SHIPPED 2026-02-28</summary>
+<summary>v0.1.0 MVP (Phases 1-7.1) -- SHIPPED 2026-02-28</summary>
 
 - [x] Phase 1: Foundation & Overlay (3/3 plans) -- completed 2026-02-21
 - [x] Phase 2: Settings & Configuration (3/3 plans) -- completed 2026-02-21
@@ -24,11 +24,11 @@
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. Foundation & Overlay | v1.0 | 3/3 | Complete | 2026-02-21 |
-| 2. Settings & Configuration | v1.0 | 3/3 | Complete | 2026-02-21 |
-| 3. Terminal Context Reading | v1.0 | 5/5 | Complete | 2026-02-23 |
-| 4. AI Command Generation | v1.0 | 3/3 | Complete | 2026-02-23 |
-| 5. Safety Layer | v1.0 | 2/2 | Complete | 2026-02-23 |
-| 6. Terminal Pasting | v1.0 | 2/2 | Complete | 2026-02-23 |
-| 7. Accessibility Detection Fix | v1.0 | 2/2 | Complete | 2026-02-26 |
-| 7.1. Production DMG Fix | v1.0 | 1/1 | Complete | 2026-02-28 |
+| 1. Foundation & Overlay | v0.1.0 | 3/3 | Complete | 2026-02-21 |
+| 2. Settings & Configuration | v0.1.0 | 3/3 | Complete | 2026-02-21 |
+| 3. Terminal Context Reading | v0.1.0 | 5/5 | Complete | 2026-02-23 |
+| 4. AI Command Generation | v0.1.0 | 3/3 | Complete | 2026-02-23 |
+| 5. Safety Layer | v0.1.0 | 2/2 | Complete | 2026-02-23 |
+| 6. Terminal Pasting | v0.1.0 | 2/2 | Complete | 2026-02-23 |
+| 7. Accessibility Detection Fix | v0.1.0 | 2/2 | Complete | 2026-02-26 |
+| 7.1. Production DMG Fix | v0.1.0 | 1/1 | Complete | 2026-02-28 |
