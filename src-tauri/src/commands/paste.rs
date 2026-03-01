@@ -290,24 +290,54 @@ end tell"#
             ensure_accessibility()?;
 
             let activate = build_activate_script(&bundle_id);
-            let _ = std::process::Command::new("osascript")
+            let activate_output = std::process::Command::new("osascript")
                 .arg("-e")
                 .arg(&activate)
                 .output();
+            match &activate_output {
+                Ok(o) if o.status.success() => {
+                    eprintln!("[paste] Terminal.app activate succeeded");
+                }
+                Ok(o) => {
+                    let stderr = String::from_utf8_lossy(&o.stderr);
+                    eprintln!("[paste] Terminal.app activate FAILED: {}", stderr.trim());
+                }
+                Err(e) => {
+                    eprintln!("[paste] Terminal.app osascript spawn FAILED: {}", e);
+                }
+            }
+
             std::thread::sleep(std::time::Duration::from_millis(150));
 
             #[cfg(target_os = "macos")]
             {
-                if let Err(e) = cg_keys::type_text(&command) {
-                    eprintln!(
-                        "[paste] Terminal.app type_text failed ({}), falling back to Cmd+V",
-                        e
-                    );
-                    cg_keys::post_ctrl_u()?;
-                    std::thread::sleep(std::time::Duration::from_millis(120));
-                    cg_keys::post_cmd_v()?;
-                } else {
-                    eprintln!("[paste] Terminal.app type_text succeeded");
+                // Clear current line via System Events Ctrl+U
+                let _ = std::process::Command::new("osascript")
+                    .arg("-e")
+                    .arg(r#"tell application "System Events" to keystroke "u" using control down"#)
+                    .output();
+                std::thread::sleep(std::time::Duration::from_millis(50));
+
+                // Type text via System Events keystroke
+                let escaped = command.replace('\\', "\\\\").replace('"', "\\\"");
+                let script = format!(
+                    r#"tell application "System Events" to keystroke "{escaped}""#
+                );
+                let output = std::process::Command::new("osascript")
+                    .arg("-e")
+                    .arg(&script)
+                    .output();
+                match &output {
+                    Ok(o) if o.status.success() => {
+                        eprintln!("[paste] Terminal.app keystroke succeeded | chars={}", command.len());
+                    }
+                    Ok(o) => {
+                        let stderr = String::from_utf8_lossy(&o.stderr);
+                        eprintln!("[paste] Terminal.app keystroke failed: {}", stderr.trim());
+                    }
+                    Err(e) => {
+                        eprintln!("[paste] Terminal.app osascript spawn failed: {}", e);
+                    }
                 }
             }
         }
@@ -333,19 +363,41 @@ end tell"#
 
             #[cfg(target_os = "macos")]
             {
-                if let Err(e) = cg_keys::type_text(&command) {
-                    eprintln!(
-                        "[paste] type_text failed for {} ({}), falling back to Cmd+V",
-                        bundle_id, e
-                    );
-                    cg_keys::post_ctrl_u()?;
-                    std::thread::sleep(std::time::Duration::from_millis(120));
-                    cg_keys::post_cmd_v()?;
-                } else {
-                    eprintln!(
-                        "[paste] type_text succeeded | bundle={} | pid={} | chars={}",
-                        bundle_id, pid, command.len()
-                    );
+                // Clear current line first
+                cg_keys::post_ctrl_u()?;
+                std::thread::sleep(std::time::Duration::from_millis(50));
+
+                // Type text via System Events keystroke (streaming char effect)
+                let escaped = command.replace('\\', "\\\\").replace('"', "\\\"");
+                let script = format!(
+                    r#"tell application "System Events" to keystroke "{escaped}""#
+                );
+                let output = std::process::Command::new("osascript")
+                    .arg("-e")
+                    .arg(&script)
+                    .output();
+                match &output {
+                    Ok(o) if o.status.success() => {
+                        eprintln!(
+                            "[paste] keystroke succeeded | bundle={} | pid={} | chars={}",
+                            bundle_id, pid, command.len()
+                        );
+                    }
+                    Ok(o) => {
+                        let stderr = String::from_utf8_lossy(&o.stderr);
+                        eprintln!(
+                            "[paste] keystroke failed ({}), falling back to Cmd+V",
+                            stderr.trim()
+                        );
+                        cg_keys::post_cmd_v()?;
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "[paste] osascript spawn failed ({}), falling back to Cmd+V",
+                            e
+                        );
+                        cg_keys::post_cmd_v()?;
+                    }
                 }
             }
         }

@@ -192,3 +192,11 @@ pub fn request_accessibility_permission(prompt: bool) -> bool {
 pub fn request_accessibility_permission(_prompt: bool) -> bool {
     false
 }
+
+#[tauri::command]
+pub fn open_url(url: String) {
+    std::process::Command::new("open")
+        .arg(&url)
+        .spawn()
+        .ok();
+}

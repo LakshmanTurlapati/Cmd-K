@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { useOverlayStore } from "@/store";
 import { AccountTab } from "./AccountTab";
 import { ModelTab } from "./ModelTab";
@@ -61,7 +62,24 @@ export function SettingsPanel() {
       {/* Footer */}
       <div className="flex flex-col items-center gap-1 mt-6 pt-3 border-t border-white/5">
         <img src="/K-white.png" alt="CMD+K" className="h-12 opacity-25" />
-        <span className="text-white/25 text-[10px]">v{__APP_VERSION__} | Made by Lakshman Turlapati</span>
+        <span className="text-white/25 text-[10px]">
+          v{__APP_VERSION__} | Made by Lakshman Turlapati
+        </span>
+        <div className="flex gap-3 mt-1">
+          <button
+            onClick={() => invoke("open_url", { url: "https://www.cmd-k.site" })}
+            className="text-white/30 hover:text-white/50 text-[10px] cursor-default transition-colors"
+          >
+            About
+          </button>
+          <span className="text-white/10">|</span>
+          <button
+            onClick={() => invoke("open_url", { url: "https://www.cmd-k.site/privacy" })}
+            className="text-white/30 hover:text-white/50 text-[10px] cursor-default transition-colors"
+          >
+            Privacy
+          </button>
+        </div>
       </div>
     </div>
   );
