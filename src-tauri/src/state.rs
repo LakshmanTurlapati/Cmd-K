@@ -3,7 +3,9 @@ use std::sync::Mutex;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 /// Maximum number of history entries per window key.
-pub const MAX_HISTORY_PER_WINDOW: usize = 7;
+/// Increased from 7 to 50 to match the configurable turn limit slider max (5-50).
+/// Memory impact is negligible (~100KB per window at 50 entries).
+pub const MAX_HISTORY_PER_WINDOW: usize = 50;
 
 /// Maximum number of tracked windows in the history map.
 /// When exceeded, the window with the oldest most-recent entry is evicted.

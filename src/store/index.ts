@@ -98,6 +98,9 @@ interface OverlayState {
   windowKey: string | null;
   windowHistory: HistoryEntry[];
 
+  // AI conversation context
+  turnLimit: number;
+
   // Streaming state
   streamingText: string;
   isStreaming: boolean;
@@ -148,6 +151,10 @@ interface OverlayState {
   // Window identity actions
   setWindowKey: (key: string | null) => void;
   setWindowHistory: (history: HistoryEntry[]) => void;
+
+  // AI conversation context actions
+  setTurnLimit: (limit: number) => void;
+  setTurnHistory: (history: TurnMessage[]) => void;
 
   // Streaming actions
   appendToken: (token: string) => void;
@@ -200,6 +207,9 @@ export const useOverlayStore = create<OverlayState>((set) => ({
   windowKey: null,
   windowHistory: [],
 
+  // AI conversation context initial state
+  turnLimit: 7,
+
   // Streaming initial state
   streamingText: "",
   isStreaming: false,
@@ -235,12 +245,11 @@ export const useOverlayStore = create<OverlayState>((set) => ({
       // Reset window identity on each overlay open
       windowKey: null,
       windowHistory: [],
-      // Reset streaming state on each overlay open
+      // Reset streaming state on each overlay open (turnHistory reconstructed from windowHistory below)
       streamingText: "",
       isStreaming: false,
       displayMode: "input",
       previousQuery: "",
-      turnHistory: [],
       streamError: null,
       // Reset destructive detection state on each overlay open
       isDestructive: false,
@@ -269,9 +278,24 @@ export const useOverlayStore = create<OverlayState>((set) => ({
           const history = await invoke<HistoryEntry[]>("get_window_history", { windowKey });
           console.log("[store] window history entries:", history.length);
           useOverlayStore.getState().setWindowHistory(history);
+
+          // Reconstruct turnHistory from stored entries (CTXT-01, CTXT-02)
+          const turnLimit = useOverlayStore.getState().turnLimit;
+          const turnMessages: TurnMessage[] = history
+            .filter(e => !e.is_error && e.response)
+            .flatMap(e => [
+              { role: "user" as const, content: e.query },
+              { role: "assistant" as const, content: e.response },
+            ]);
+          const maxMessages = turnLimit * 2;
+          const trimmed = turnMessages.length > maxMessages
+            ? turnMessages.slice(turnMessages.length - maxMessages)
+            : turnMessages;
+          useOverlayStore.getState().setTurnHistory(trimmed);
         } else {
           useOverlayStore.getState().setWindowKey(null);
           useOverlayStore.getState().setWindowHistory([]);
+          useOverlayStore.getState().setTurnHistory([]);
         }
 
         // Detect app context (returns AppContext for ALL frontmost apps)
@@ -374,6 +398,10 @@ export const useOverlayStore = create<OverlayState>((set) => ({
   setWindowKey: (key) => set({ windowKey: key }),
   setWindowHistory: (history) => set({ windowHistory: history }),
 
+  // AI conversation context action implementations
+  setTurnLimit: (limit) => set({ turnLimit: limit }),
+  setTurnHistory: (history) => set({ turnHistory: history }),
+
   // Streaming action implementations
   appendToken: (token) =>
     set((state) => ({
@@ -459,9 +487,11 @@ export const useOverlayStore = create<OverlayState>((set) => ({
           { role: "user" as const, content: query },
           { role: "assistant" as const, content: fullText },
         ];
+        const currentTurnLimit = useOverlayStore.getState().turnLimit;
+        const maxMessages = currentTurnLimit * 2;
         const trimmedHistory =
-          updatedHistory.length > 14
-            ? updatedHistory.slice(updatedHistory.length - 14)
+          updatedHistory.length > maxMessages
+            ? updatedHistory.slice(updatedHistory.length - maxMessages)
             : updatedHistory;
 
         // Persist to Rust-side history (survives overlay close/reopen)
