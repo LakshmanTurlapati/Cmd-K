@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A lightweight macOS overlay app that generates terminal commands using AI. Press Cmd+K from anywhere, a prompt overlay appears on top of your active window, you describe what you need in natural language, it generates the right terminal command using xAI (Grok), and pastes it directly into your active terminal. It knows your context -- current directory, recent commands -- without requiring any shell configuration.
+A lightweight macOS overlay app that generates terminal commands using AI. Press Cmd+K from anywhere, a prompt overlay appears on top of your active window with frosted glass vibrancy, describe what you need in natural language, it generates the right terminal command using xAI (Grok) with real-time streaming, flags destructive commands with warnings, and pastes the result directly into your active terminal. It knows your context -- current directory, recent commands, shell type, browser console -- without requiring any shell configuration.
 
 ## Core Value
 
@@ -12,53 +12,50 @@ The overlay must appear on top of the currently active application and feel inst
 
 ### Validated
 
-- Existing AI provider integration pattern (prompt engineering, streaming, context assembly) -- existing
-- Concept of Cmd+K global hotkey to trigger command generation -- existing
+- OVRL-01: System-wide Cmd+K hotkey triggers the overlay from any application -- v1.0
+- OVRL-02: Overlay appears as a floating panel on top of the currently active window -- v1.0
+- OVRL-03: User can dismiss overlay with Escape key without executing -- v1.0
+- OVRL-04: User can configure the trigger hotkey to avoid conflicts -- v1.0
+- OVRL-05: App runs as background daemon with menu bar icon -- v1.0
+- SETT-01: User can store and validate their xAI API key -- v1.0
+- SETT-02: User can select which Grok model to use -- v1.0
+- SETT-03: API keys stored securely in macOS Keychain -- v1.0
+- SETT-04: First-run onboarding guides user through API key, model selection, and Accessibility permissions -- v1.0
+- TERM-01: Generated command is pasted into the active terminal (Terminal.app, iTerm2) -- v1.0
+- TERM-02: App detects the current working directory without shell plugins -- v1.0
+- TERM-03: App reads recent terminal output for context without shell plugins -- v1.0
+- TERM-04: Works with Terminal.app, iTerm2, Alacritty, kitty, WezTerm -- v1.0
+- AICG-01: User can type natural language and receive a terminal command via xAI (Grok) -- v1.0
+- AICG-02: Command generation streams in real-time -- v1.0
+- AICG-03: Destructive commands flagged with warning before paste -- v1.0
 
 ### Active
 
-- [ ] System-wide overlay appears on top of the active window when Cmd+K is pressed
-- [ ] Overlay accepts natural language input and generates terminal commands via xAI (Grok)
-- [ ] Generated command is pasted directly into the active terminal (Terminal.app, iTerm2, etc.)
-- [ ] App detects current working directory of the active terminal without shell plugins
-- [ ] App captures recent terminal commands/output for context without shell plugins
-- [ ] Streaming response displayed in the overlay as the command is generated
-- [ ] User can dismiss the overlay (Escape key) without executing
-- [ ] xAI (Grok) provider with API key management
-- [ ] Settings UI for API key configuration and model selection
-- [ ] App runs as a background daemon with menu bar presence
-- [ ] Lightweight resource footprint (Tauri, not Electron)
+(Requirements for next milestone will be defined via /gsd:new-milestone)
 
 ### Out of Scope
 
 - VS Code extension -- dropped in favor of standalone overlay app
-- OpenAI provider -- deferred to later phase
-- Anthropic provider -- deferred to later phase
+- OpenAI provider -- deferred to future milestone
+- Anthropic provider -- deferred to future milestone
 - Windows/Linux support -- macOS first, cross-platform later
 - Command history/favorites -- future feature
 - Multi-step command workflows -- future feature
 - Command explanation mode -- future feature
 - Offline mode -- requires internet for AI generation
+- App Store distribution -- incompatible with Accessibility API requirement
+- Auto-execution without review -- safety risk, always paste, never execute directly
 
 ## Context
 
-**Existing codebase:** There is an Electron-based CLI app and a VS Code extension in the repo. Both are being replaced by a single Tauri-based overlay app. The existing code provides reference for AI prompt engineering, provider integration patterns, and the general UX concept, but the application shell is a complete rebuild.
-
-**Key technical challenge -- overlay positioning:** The current Electron app fails to position the overlay on top of the active window. It appears on the desktop instead. This is the #1 problem to solve. Reference apps that do this well: Superwhisper, Raycast, Alfred, Spotlight.
-
-**Key technical challenge -- terminal context without shell plugins:** Reading terminal state (current directory, recent output) on macOS without requiring users to modify their shell config. Approaches to investigate:
-- macOS Accessibility API to read terminal screen content (requires one-time permission grant)
-- AppleScript/JXA to query Terminal.app and iTerm2 for current directory
-- Process inspection (lsof) to find the terminal shell process and its working directory
-- Combination of the above for robust context gathering
-
-**Target terminal apps:** Terminal.app, iTerm2, Hyper, Alacritty, kitty, WezTerm
-
-**AI provider:** xAI (Grok) only for v1. The existing xAI integration uses axios with custom SSE parsing against `https://api.x.ai/v1/chat/completions`. This pattern carries forward.
+Shipped v1.0 with 4,042 LOC Rust + 2,868 LOC TypeScript.
+Tech stack: Tauri v2 (Rust + React + TypeScript), NSPanel for overlay, xAI/Grok for AI, macOS Accessibility API + raw libproc FFI for terminal context.
+8 phases, 21 plans executed over 8 days (2026-02-21 to 2026-02-28).
+All 16 v1 requirements satisfied. 12 non-critical tech debt items remain.
 
 ## Constraints
 
-- **Tech stack**: Tauri (Rust + web frontend) -- chosen for lightweight footprint over Electron
+- **Tech stack**: Tauri (Rust + web frontend)
 - **Platform**: macOS only for v1
 - **Zero setup**: No shell plugins, no .zshrc modifications. One-time macOS accessibility permission is acceptable.
 - **Single provider**: xAI (Grok) only for v1. Provider architecture should allow easy addition of OpenAI/Anthropic later.
@@ -67,11 +64,18 @@ The overlay must appear on top of the currently active application and feel inst
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Drop VS Code extension | Standalone overlay is the real product | -- Pending |
-| Tauri over Electron | Lighter weight, smaller binary, less RAM | -- Pending |
-| xAI only for v1 | Simplify scope, add other providers later | -- Pending |
-| macOS only for v1 | Focus on one platform, nail the overlay UX | -- Pending |
-| Zero shell setup | Lower adoption friction, use Accessibility API + AppleScript instead | -- Pending |
+| Drop VS Code extension | Standalone overlay is the real product | Good -- cleaner UX |
+| Tauri over Electron | Lighter weight, smaller binary, less RAM | Good -- ~20MB binary |
+| xAI only for v1 | Simplify scope, add other providers later | Good -- shipped faster |
+| macOS only for v1 | Focus on one platform, nail the overlay UX | Good -- NSPanel critical |
+| Zero shell setup | Lower adoption friction, use Accessibility API + AppleScript instead | Good -- no .zshrc needed |
+| NSPanel with Status window level | Float above fullscreen apps and all normal windows | Good -- works everywhere |
+| Raw libproc FFI over darwin-libproc crate | Avoids memchr version conflict with Tauri dependency chain | Good -- identical functionality |
+| AX probe fallback for permission detection | AXIsProcessTrusted returns false on unsigned builds | Good -- fixes production DMG |
+| Two-mode AI system prompt | Terminal mode (command-only) vs assistant mode (conversational) | Good -- context-appropriate |
+| AppleScript dispatch for terminal pasting | iTerm2 write text + Terminal.app keystroke, neither auto-executes | Good -- safe pasting |
+| once_cell Lazy<RegexSet> for destructive patterns | Compiled once, zero allocation on subsequent checks | Good -- fast safety checks |
+| Capture-before-show PID pattern | Must capture frontmost PID before overlay steals focus | Good -- reliable context |
 
 ---
-*Last updated: 2026-02-21 after initialization*
+*Last updated: 2026-02-28 after v1.0 milestone*
