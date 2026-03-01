@@ -1,389 +1,165 @@
 # Project Research Summary
 
-**Project:** CMD + K (macOS System-Wide AI Command Generator)
-**Domain:** macOS overlay application with terminal integration and AI command generation
-**Researched:** 2026-02-21
+**Project:** CMD+K v0.1.1
+**Domain:** macOS Tauri overlay app -- per-terminal-window command history and AI follow-up context
+**Researched:** 2026-02-28
 **Confidence:** HIGH
 
 ## Executive Summary
 
-CMD + K is a macOS overlay application that uses AI to generate terminal commands from natural language. Research shows this domain combines two distinct patterns: overlay/launcher UX (like Raycast/Alfred) and AI terminal assistance (like Warp AI/GitHub Copilot CLI). The recommended approach is a Tauri v2 application with React frontend, leveraging NSPanel for proper overlay behavior, Accessibility API for terminal context reading, and xAI Grok for command generation.
+CMD+K is a macOS system overlay (Tauri v2 + Rust + React 19) that provides AI-powered command generation accessible via a global hotkey from any terminal. The v0.1.1 milestone adds two tightly coupled capabilities on top of the shipped v0.1.0 foundation: per-terminal-window command history with arrow key navigation (up to 7 entries, session-scoped) and persistent AI conversation context that survives overlay dismiss/reopen cycles within the same terminal window session. Both features require solving a single core problem -- stably identifying which terminal window is active -- which unlocks everything downstream.
 
-The core technical stack is well-established (Tauri v2.10.2, React 18, TypeScript, Vite) with high confidence in implementation patterns. The main architectural challenge is terminal context reading without shell plugins—achievable via macOS Accessibility API combined with process inspection (libproc-rs, active-win-pos-rs). Critical risks center on macOS security permissions, AppleScript command injection, and sandboxing limitations. All risks have documented mitigation strategies.
+The recommended implementation approach is layered in three phases. First, window identification and history storage architecture must be locked in before any UI work begins, because all other features depend on the window key. The key should be a composite of bundle ID and either the shell PID (primary) or TTY device path (most robust), computed synchronously in the hotkey handler before the overlay shows and stored in Rust `AppState`. Per-window history should be stored in Rust (`HashMap<String, WindowHistory>` in `AppState`), not in Zustand, to survive the `show()` reset that clears all ephemeral React state on every overlay open. Second, arrow key navigation is a self-contained frontend change to `CommandInput.tsx` once the store actions exist. Third, AI follow-up context is a wiring change in `submitQuery()` and `show()` to persist and restore `turnHistory` per window key.
 
-The MVP should focus on the tightest loop: global hotkey → overlay display → AI command generation with current directory context → clipboard copy for manual pasting. This validates core value without building complex integrations. Auto-paste to terminal and advanced context awareness (git, history) can be deferred to post-MVP phases.
+The primary risks are: (1) using app PID alone as the window key, which silently mixes history across multiple iTerm2 windows; (2) storing history in Zustand only, where it is wiped on every overlay open by the existing `show()` reset; (3) intercepting ArrowUp unconditionally in the textarea, breaking multi-line cursor movement; and (4) including full terminal context in every AI history turn, causing token bloat by follow-up turn 3-4. All four risks have well-defined, low-cost preventions documented in the research.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The standard 2025/2026 stack for Tauri-based macOS overlay apps combines Tauri v2 with React 18 + TypeScript + Vite for the frontend, leveraging Tauri's official plugin ecosystem for system integration. Tauri v2 offers 10x smaller bundle size than Electron (2-2.5MB vs 150MB+), native macOS APIs, and better security model.
+The existing Tauri v2, Rust, React 19, TypeScript 5.8, and Zustand 5 stack requires no new npm packages and only one new Rust crate. The `core-graphics` crate (0.25.0) provides `CGWindowListCopyWindowInfo`, the public Apple API for resolving a terminal app PID to a specific CGWindowID. `core-foundation` (0.10.1) is required as a companion for safe CFDictionary extraction and is likely already a transitive dependency. The `CGWindowListCopyWindowInfo` API is marked deprecated in macOS 15 only in the context of screen capture; for window enumeration (metadata only, no screen content), it remains fully functional and is used by Raycast, Alfred, and Hammerspoon with no near-term removal risk.
 
 **Core technologies:**
-- **Tauri v2.10.2**: Desktop framework — current stable, native macOS integration, 2-2.5MB bundle size, Rust security model
-- **React 18.3+**: Frontend UI — dominant ecosystem, best TypeScript support, mature Tauri integration
-- **TypeScript 5.7+**: Type safety — essential for IPC type safety, compile-time error catching
-- **Vite 6.x**: Build tool — official Tauri recommendation, fast HMR, optimized builds
-- **xAI SDK 0.1.x**: AI integration — official Protocol Buffer definitions, type-safe, supports grok-4-fast-reasoning
-- **cocoa crate**: macOS bindings — REQUIRED for NSWindowLevel control (floating overlay above all apps)
-- **osascript crate**: AppleScript execution — terminal context reading (cwd, recent commands)
-- **sysinfo crate**: Process detection — detect active terminal (Terminal.app, iTerm2, etc.)
-
-**Frontend stack:**
-- **shadcn/ui**: React components — 65K+ stars, native-looking, copy-paste pattern (no npm bloat)
-- **Tailwind CSS 4.x**: Styling — standard with shadcn/ui, fast styling, dark mode built-in
-- **Zustand 5.x**: State management — minimal (3KB), hooks-based, perfect for overlay state
-
-**Critical implementation notes:**
-- NSWindowLevel control requires unsafe Cocoa code (Tauri's setAlwaysOnTop insufficient for fullscreen apps)
-- Terminal context reading needs AppleScript automation with Accessibility permissions
-- Global hotkey Cmd+K conflicts with system apps (recommend Cmd+Shift+K default with user configuration)
+- `Tauri v2 (2.x)`: IPC bridge between Rust and React -- already integrated; new `get_previous_window_key` command follows existing patterns
+- `Rust 1.88+ / core-graphics 0.25`: CGWindowListCopyWindowInfo for window ID derivation -- public API, stable on macOS 13-15
+- `React 19 / TypeScript 5.8`: Arrow key navigation UI in `CommandInput.tsx` -- extends existing `onKeyDown` handler
+- `Zustand 5.0.11`: Per-window state coordination -- `Record<string, WindowHistory>` pattern; spread-copy update pattern avoids immer dependency
+- `core-foundation 0.10.1`: CFDictionary/CFArray value extraction -- required companion for safe CoreGraphics FFI
 
 ### Expected Features
 
-**Must have (table stakes):**
-- **Global hotkey activation** — universal pattern (Cmd+K), users expect instant access from anywhere
-- **Keyboard-first navigation** — users invoke overlay to avoid mouse, all interactions keyboard-driven
-- **Natural language → command** — core value proposition, users describe intent, AI generates shell command
-- **Command preview before execution** — safety requirement, never auto-execute
-- **Copy to clipboard** — minimum viable output, universal fallback
-- **Basic terminal context: cwd** — dramatically improves command quality for file operations
-- **Command explanation** — users need to understand what command does
+The full v0.1.1 feature set is well-defined in PROJECT.md and validated against competitor behavior (bash/zsh, Raycast, Warp AI). All P1 features must ship together -- they share the window key dependency and deliver no value in isolation.
 
-**Should have (competitive):**
-- **Destructive command detection** — flag rm -rf, DROP TABLE, force-push, require confirmation
-- **Command modification** — allow user to edit AI-generated command before copying
-- **Git context awareness** — commands contextualized to current branch, repo state
-- **Multi-model support** — let users choose LLM (GPT-4, Claude, Gemini, Grok)
-- **Terminal emulator agnostic** — work with Terminal.app, iTerm2, Warp, Alacritty
+**Must have (table stakes -- P1 for v0.1.1):**
+- Arrow-up navigates to previous query -- universal CLI muscle memory; users press this on first encounter
+- Arrow-down navigates forward, restoring draft -- paired with arrow-up; missing this makes navigation feel broken
+- Current draft preserved during navigation -- bash/zsh both do this; losing the draft is a UX regression
+- History scoped to the active terminal window -- global history defeats the purpose of per-window context
+- Session-scoped only (no disk persistence) -- zero-footprint expectation; disk writes add privacy risk
+- AI sees prior turns across overlay open/close cycles -- the differentiating capability of this milestone
+- History capped at 7 entries per window -- aligned with the existing 14-message (7 turn) AI context cap
+
+**Should have (competitive -- P2):**
+- History navigation visual indicator (e.g., subtle position counter) -- adds discoverability without requiring new UI surfaces
 
 **Defer (v2+):**
-- **Shell history awareness** — complex, privacy-sensitive, not critical for validation
-- **Auto-paste to terminal** — fragile, terminal-specific, clipboard approach works universally
-- **Streaming responses** — nice UX improvement, not core to value prop
-- **Multi-step workflows** — complex, single commands sufficient for MVP
-- **Command templates/snippets** — feature creep, focus on AI generation first
-
-**Anti-features (explicitly avoid):**
-- **Auto-execution of commands** — catastrophically dangerous, one bad rm -rf ruins trust forever
-- **Shell plugin requirement** — friction in onboarding, breaks in SSH/containers
-- **Cloud-synced command history** — privacy nightmare, commands contain sensitive data
-- **Built-in terminal emulator** — scope explosion, users already have preferences
+- Persistent cross-session history with encryption and explicit user opt-in
+- History search (Ctrl+R style fuzzy find) -- requires a separate UI surface
+- CGWindowID-based window key (marginal accuracy improvement over shell PID, adds screen recording permission risk)
+- Export conversation thread per window
 
 ### Architecture Approach
 
-The architecture follows Tauri's multi-process model with clear boundaries between Rust backend (system integration) and web frontend (UI/streaming). The Core process handles OS integration via NSPanel, Accessibility API, and AppleScript, while WebView processes render UI using React components. Communication uses Tauri IPC with Commands (request-response) for one-time operations and Events (fire-and-forget) for streaming AI responses.
+The architecture extends the existing Capture-Before-Show pattern: all pre-overlay data (PID, window key, AX text) must be captured synchronously in the hotkey handler before `show_and_make_key()` steals focus. A new `previous_window_key: Mutex<Option<String>>` field in `AppState` stores the computed key. A new `window_id.rs` module handles CoreGraphics FFI. On the frontend, `windowHistories: Record<string, WindowHistory>` in the Zustand store accumulates per-window state across overlay invocations. The `show()` action invokes `get_previous_window_key` in parallel with existing IPC calls and restores `turnHistory` from the map via `setActiveWindowKey`. Navigation state (`historyNavIndex`, `historyNavSnapshot`) lives in the store (not component state) so it can be reset by the `hide()` action.
 
 **Major components:**
-1. **Hotkey Manager** (Rust Core) — Register/unregister global shortcuts (Cmd+K), trigger window show
-2. **Window Manager** (Rust Core) — Create/show/hide NSPanel overlay, manage window state using tauri-nspanel for proper fullscreen behavior
-3. **Terminal Reader** (Rust Core) — Read active terminal context (cwd, selected text) via Accessibility API + process inspection (active-win-pos-rs, libproc-rs)
-4. **AI Streaming Client** (Rust Core) — HTTP client for xAI API, handle SSE streaming with reqwest-eventsource
-5. **State Manager** (Rust Core) — Manage app state (settings, terminal context, AI session) with Mutex
-6. **AppleScript Bridge** (Rust Core) — Execute AppleScript for pasting into terminal (Phase 2+)
-7. **Overlay UI** (WebView) — Render transparent overlay window, handle user input with shadcn/ui components
-8. **AI Stream Renderer** (WebView) — Receive streaming tokens via Events, render markdown with marked.js
+1. `src-tauri/src/commands/window_id.rs` (new) -- `get_window_key(pid)` via CGWindowListCopyWindowInfo; `get_previous_window_key` Tauri command
+2. `src-tauri/src/state.rs` (modified) -- adds `previous_window_key: Mutex<Option<String>>`
+3. `src-tauri/src/commands/hotkey.rs` (modified) -- captures window key before `toggle_overlay`; slots between PID capture and AX text capture
+4. `src/store/index.ts` (modified) -- adds `windowHistories`, `activeWindowKey`, `historyNavIndex/Snapshot`; modifies `show()` and `submitQuery()`; adds `setActiveWindowKey`, `navigateHistoryUp`, `navigateHistoryDown`, `resetHistoryNav` actions
+5. `src/components/CommandInput.tsx` (modified) -- adds ArrowUp/ArrowDown handlers gated on cursor line position
 
-**Key architectural patterns:**
-- **Event-driven window management** — global hotkey emits app event, Window Manager listens and shows panel
-- **Context caching with fallback** — cache terminal context with 100ms TTL, use fallback strategies when Accessibility API fails
-- **Streaming with backpressure** — accumulate tokens in Rust, emit in batches (50ms intervals) to avoid IPC flooding
-- **Type-safe IPC with Serde** — define shared types between Rust and TypeScript, prevent runtime errors
+**Unchanged:** `ai.rs` (stream_ai_response receives history array unchanged), `paste.rs`, `terminal.rs`, `Overlay.tsx`, `ResultsArea.tsx`, all settings and onboarding components.
 
 ### Critical Pitfalls
 
-1. **Sandboxing incompatible with Accessibility API** — DO NOT enable app sandboxing. Apple's sandbox blocks inter-application accessibility features even with user-granted permissions. Must use Developer ID distribution (notarization only), not App Store. Add entitlements file with `com.apple.security.automation.apple-events`. *Phase 1 blocker.*
+1. **App PID alone as window key** -- silently mixes all iTerm2 windows under one history bucket. Use composite `bundle_id:window_id` (CGWindowID) or `bundle_id:shell_pid` as the key. Lock this in before any history storage or navigation UI is built -- everything depends on it.
 
-2. **AppleScript command injection via unsanitized xAI responses** — AI responses may contain backticks, semicolons, shell metacharacters. NEVER directly interpolate into AppleScript. Use proper escaping, whitelist safe characters, reject dangerous ones, or use base64 encoding. One injection vulnerability destroys trust. *Phase 2 critical security issue.*
+2. **History stored in Zustand only (wiped on every show())** -- `show()` resets all ephemeral state. Per-window history that lives only in Zustand is erased every overlay open. Store `WindowHistory` in Rust `AppState` as a `HashMap<String, WindowHistory>` and fetch on each overlay open via a dedicated Tauri command.
 
-3. **Transparent window rendering glitches on macOS Sonoma** — Sonoma (14.0+) breaks transparent windows with focus changes (Stage Manager). Tauri's setAlwaysOnTop insufficient. **Solution:** Set activation policy to Accessory (app won't appear in Dock/Cmd+Tab, acceptable for menu bar overlay). *Phase 1 architectural decision.*
+3. **ArrowUp intercepted unconditionally in textarea** -- breaks multi-line input cursor movement (Shift+Enter prompts). Gate ArrowUp on `isOnFirstLine` (no newline before cursor) and ArrowDown on `isOnLastLine` (no newline after cursor). This is 5 lines of guard code; skipping it causes a hard-to-debug regression.
 
-4. **Global hotkey Cmd+K conflicts with system apps** — Cmd+K used by Safari (search), VS Code (command palette), Slack (quick switcher). Registration may fail silently. **Solution:** Allow user-configurable hotkey, provide alternative defaults (Cmd+Shift+K, Cmd+Option+K), test all three at startup, detect registration failures and notify user. *Phase 1 UX requirement.*
+4. **Window key computed after overlay shows (TOCTOU race)** -- computing the key inside `get_app_context` (which runs async after the overlay steals focus) means a fast Cmd+K switch between windows assigns the wrong key. Compute the key synchronously in `hotkey.rs` alongside PID capture, before `show_and_make_key()`.
 
-5. **Accessibility permissions silently fail without prompting** — Accessibility API requires manual System Settings navigation (no automatic prompt like camera/mic). API calls fail silently with generic errors. **Solution:** Use tauri-plugin-macos-permissions to detect and guide, create first-run onboarding wizard, handle permission revocation gracefully (Ventura bug causes spontaneous revocation). *Phase 1 onboarding critical.*
+5. **Full terminal context in every AI history turn (token bloat)** -- terminal context (CWD, shell, 25 lines of output) included in all replayed history turns causes API payloads to grow 2-5x by follow-up turn 3-4, triggering timeouts and 429 rate limits. Include terminal context only in the first user message of a session; follow-up turns send bare query text only. Add a character-count secondary cap (6,000 chars) alongside the existing turn count cap.
 
 ## Implications for Roadmap
 
-Based on research, suggested phase structure follows dependency order and risk mitigation:
+Based on research, the feature dependency graph mandates a strict three-phase build order. Window identification and history storage must be fully working in Rust before any frontend work begins. Arrow navigation is a self-contained frontend phase. AI follow-up context wiring is the final phase.
 
-### Phase 1: Foundation (Overlay + Permissions)
-**Rationale:** Establishes core architecture and validates macOS integration challenges before building AI features. Window management and permissions are prerequisites for all subsequent phases.
+### Phase 1: Window Identification and History Storage
 
-**Delivers:**
-- Working overlay window with global hotkey (Cmd+Shift+K)
-- NSPanel integration for proper fullscreen behavior
-- Accessibility permission onboarding flow
-- Menu bar presence (no dock icon)
-- Basic transparent UI with keyboard navigation
+**Rationale:** All downstream features (arrow navigation, AI context) depend on the window key. The Pitfalls research identifies the choice of key format and storage location as the two highest-recovery-cost decisions in the milestone. Locking these in first eliminates the risk of needing to refactor the key type after the UI is built. The Rust AppState `HashMap` storage approach must be validated before the frontend store is modified.
 
-**Addresses features:**
-- Global hotkey activation (table stakes)
-- Clean, minimal UI (table stakes)
-- Menu bar presence (table stakes)
-- Accessibility permissions onboarding (macOS specific)
+**Delivers:** A stable `window_key` string available to the frontend on every overlay open; a `WindowHistory` map in Rust that survives across overlay open/close cycles; `get_previous_window_key` Tauri command; `get_window_history` and `update_window_history` commands (or equivalent) for frontend read/write of per-window history.
 
-**Avoids pitfalls:**
-- Pitfall #3: Transparent window glitches (set ActivationPolicy::Accessory immediately)
-- Pitfall #4: Hotkey conflicts (build configurable system from start)
-- Pitfall #5: Accessibility permissions (create onboarding wizard)
+**Addresses:** Shell PID exposure in `TerminalContext`; CGWindowID composite key via `window_id.rs`; `AppState` extension; LRU eviction policy (cap at 50 windows, 4-hour TTL) to prevent unbounded memory growth in long daemon sessions.
 
-**Critical decisions made in Phase 1:**
-- Sandboxing disabled (Developer ID distribution only)
-- Activation policy set to Accessory (no Dock icon)
-- Hotkey configuration architecture
+**Avoids:** PID-only key pitfall, Zustand-wipe pitfall, TOCTOU race, unbounded map growth.
 
-**Research flags:** None (well-documented Tauri patterns)
+### Phase 2: Arrow Key History Navigation
 
-### Phase 2: Terminal Context Reading
-**Rationale:** Terminal context is essential for command quality. Separating from AI integration allows focused testing of macOS Accessibility API challenges. This is the highest-risk technical component.
+**Rationale:** Arrow navigation is entirely a frontend concern (store actions + `CommandInput.tsx`) and can proceed immediately after Phase 1 since it depends only on the store actions and `windowHistories` map being available. It is the lowest-complexity phase and delivers the most immediately tangible user value.
 
-**Delivers:**
-- Active terminal detection (Terminal.app, iTerm2, Warp)
-- Current working directory via process inspection (libproc-rs)
-- Selected text reading via Accessibility API
-- Context display in overlay UI
-- Fallback strategies when API fails
+**Delivers:** ArrowUp/ArrowDown history navigation in `CommandInput.tsx`; draft preservation (`historyNavSnapshot`) on first ArrowUp; draft restoration on ArrowDown past end of history; `navigateHistoryUp`, `navigateHistoryDown`, `resetHistoryNav` store actions; history index reset on `hide()` and `submitQuery()`.
 
-**Uses stack:**
-- active-win-pos-rs (active window detection)
-- libproc-rs (process inspection for cwd)
-- sysinfo (process detection)
-- Custom Accessibility API FFI bindings
+**Addresses:** Draft loss pitfall; multi-line cursor conflict pitfall; `historyNavIndex` in store (not component state) for lifecycle-safe reset.
 
-**Implements architecture:**
-- Terminal Reader component
-- Context caching with fallback pattern
-- State Manager for terminal context storage
+**Avoids:** ArrowUp unconditional intercept, draft loss on accidental navigation.
 
-**Avoids pitfalls:**
-- Pitfall #5: Accessibility permission handling (already solved in Phase 1)
-- Pitfall #10: Terminal detection (use process-based detection, not hardcoded app names)
+### Phase 3: AI Follow-up Context Per Window
 
-**Research flags:** MEDIUM
-- Needs deep research on iTerm2 vs Warp vs Alacritty AppleScript variations
-- Accessibility API FFI implementation requires testing across terminal apps
-- Fallback strategy testing for permission denial scenarios
+**Rationale:** Restoring `turnHistory` from the per-window map requires Phase 1 (window key and history map) to be complete. The `show()` async sequence must call `setActiveWindowKey` after `get_previous_window_key` resolves, which restores `turnHistory` before any query can be submitted. The `submitQuery()` change to persist `turnHistory` back to the map is the final wiring step.
 
-### Phase 3: AI Command Generation
-**Rationale:** Core value proposition. Built on foundation (Phase 1) without dependency on terminal context (Phase 2 parallel-trackable). Can develop with mocked context then integrate real context from Phase 2.
+**Delivers:** `turnHistory` restored from `windowHistories[activeWindowKey]` on each overlay open; `submitQuery()` persists updated `turnHistory` and `promptHistory` to the per-window map after each AI response; context-only-in-first-turn optimization in `ai.rs` to prevent token bloat; graceful fallback for non-terminal apps (`windowKey = "global"`).
 
-**Delivers:**
-- xAI Grok API integration
-- Natural language → command generation
-- Command preview with syntax highlighting
-- Command explanation (what does this command do?)
-- Error handling (API failures, network issues)
-- Copy to clipboard
+**Addresses:** `show()` async timing (window key resolves before user can submit); AI context token bloat; stale CWD in follow-up context (always re-run `get_app_context` on open).
 
-**Uses stack:**
-- xai-sdk (official Protocol Buffer definitions)
-- reqwest-eventsource (SSE streaming)
-- tokio (async runtime)
-- serde/serde_json (JSON serialization)
-- marked.js frontend (markdown rendering)
-
-**Implements architecture:**
-- AI Streaming Client component
-- Event-based streaming (backpressure, batched tokens)
-- AI Stream Renderer component
-
-**Addresses features:**
-- Natural language → command (table stakes)
-- Command preview (table stakes)
-- Copy to clipboard (table stakes)
-- Command explanation (table stakes)
-- Error handling and retry (table stakes)
-
-**Avoids pitfalls:**
-- Pitfall #9: Streaming IPC bottleneck (use Tauri events with batched 50ms emissions)
-
-**Research flags:** LOW
-- xAI API well-documented
-- SSE streaming pattern established
-- Standard Tauri IPC patterns
-
-### Phase 4: Safety Layer
-**Rationale:** Must be in place before considering auto-paste or public release. Builds trust, prevents catastrophic mistakes. Can't defer—safety is launch-critical.
-
-**Delivers:**
-- Destructive command detection (rm -rf, git push --force, DROP TABLE)
-- Command approval workflow (explicit confirmation required)
-- Command modification before execution
-- Warning UI for dangerous commands
-- Safe mode detection (dry-run flags when available)
-
-**Addresses features:**
-- Destructive command flagging (should have, competitive)
-- Command modification (should have)
-- Command approval workflow (safety critical)
-
-**Implements architecture:**
-- Pattern matching (DCG-style whitelist/blocklist)
-- Command sanitization layer (preparation for Phase 5)
-
-**Research flags:** LOW
-- DCG safety patterns well-documented
-- Pattern matching straightforward
-
-### Phase 5: Terminal Pasting (Post-MVP Optional)
-**Rationale:** Clipboard workflow (Phase 1-4) is sufficient for MVP validation. Auto-paste adds convenience but is fragile and terminal-specific. Only build if user feedback demands it.
-
-**Delivers:**
-- AppleScript bridge for Terminal.app and iTerm2
-- Auto-paste to active terminal
-- Window focus restoration
-- Graceful degradation for unsupported terminals
-
-**Uses stack:**
-- osascript crate
-- AppleScript execution
-
-**Implements architecture:**
-- AppleScript Bridge component
-
-**Avoids pitfalls:**
-- Pitfall #2: AppleScript command injection (CRITICAL—implement sanitization before ANY pasting)
-- Pitfall #10: Terminal detection (already solved in Phase 2)
-
-**Research flags:** HIGH
-- Needs deep research on terminal-specific AppleScript APIs
-- iTerm2, Warp, Alacritty have different automation patterns
-- Security testing for injection vectors
+**Avoids:** Token bloat at follow-up turn 3+, stale context from history.
 
 ### Phase Ordering Rationale
 
-**Why this order:**
-1. **Foundation first** (Phase 1) because window management and permissions are prerequisites for everything. Architectural decisions (sandboxing, activation policy) can't be changed later without rewrite.
-
-2. **Terminal Context before AI** (Phase 2 before 3) logically, but can be parallel-tracked. AI can develop with mocked context. Separating validates macOS integration challenges independently.
-
-3. **Safety before Pasting** (Phase 4 before 5) because auto-paste without safety is unacceptable risk. Command injection must be solved before any AppleScript execution.
-
-4. **MVP = Phases 1-4** (not Phase 5). Clipboard workflow validates core value without fragile terminal automation. Phase 5 only if users demand convenience.
-
-**Dependency graph:**
-```
-Phase 1 (Foundation)
-  ├── Phase 2 (Terminal Context) — depends on Accessibility permissions
-  ├── Phase 3 (AI Generation) — depends on window + permissions
-  └── Phase 4 (Safety) — depends on command preview UI
-      └── Phase 5 (Pasting) — depends on safety + context + AppleScript
-```
-
-**How this avoids pitfalls:**
-- Phase 1 addresses all architectural pitfalls before code written
-- Phase 2 isolates highest-risk macOS integration
-- Phase 4 blocks security-critical pitfall #2 before enabling pasting
-- Phase 5 deferred until validation complete (avoid scope creep)
+- **Phase 1 must come first** because `window_id.rs`, `AppState` extension, and Rust `HashMap` storage are compile-time dependencies for the Tauri IPC commands that Phases 2 and 3 invoke. `cargo build` must succeed before any frontend work proceeds.
+- **Phase 2 before Phase 3** because arrow navigation only needs `promptHistory` (read-only), while AI context needs `turnHistory` (read and write with async timing). Starting with the simpler read-only use case validates the store patterns before the more complex async restore flow is added.
+- **Phases 2 and 3 could be parallelized** by two developers, but the `show()` modification in Phase 3 touches the same area as navigation wiring in Phase 2. Sequential is safer for a single developer.
 
 ### Research Flags
 
-**Phases needing deeper research during planning:**
-- **Phase 2 (Terminal Context):** MEDIUM confidence
-  - Accessibility API FFI implementation needs custom code
-  - Terminal-specific detection strategies (iTerm2 vs Warp vs Alacritty)
-  - Fallback strategy testing for permission denial
-  - Recommend: /gsd:research-phase for Accessibility API integration
+Phases likely needing deeper research during planning:
+- **Phase 1 (Window identification):** The CGWindowListCopyWindowInfo FFI requires careful CFDictionary traversal in unsafe Rust. The `get_bundle_id` function referenced in `window_id.rs` must be verified as exported from `terminal/detect.rs`. Confirm `pbi_tdev` device number resolution via `devname_r()` if TTY-based key is chosen over CGWindowID. GPU terminal fallback (Alacritty, kitty, WezTerm) must be explicitly tested.
+- **Phase 3 (AI context token management):** The `build_user_message` refactor in `ai.rs` to support first-turn-only terminal context needs an explicit token/character budget test. Validate the 6,000-character secondary cap against real multi-turn sessions before shipping.
 
-- **Phase 5 (Terminal Pasting):** HIGH research needs
-  - AppleScript API differences across terminals
-  - Security testing for command injection vectors
-  - Sanitization strategy validation
-  - Recommend: /gsd:research-phase before implementation
-
-**Phases with standard patterns (skip research-phase):**
-- **Phase 1 (Foundation):** HIGH confidence — Tauri official docs, NSPanel plugin documented, hotkey patterns established
-- **Phase 3 (AI Generation):** HIGH confidence — xAI SDK available, SSE streaming well-documented, Tauri IPC patterns established
-- **Phase 4 (Safety):** HIGH confidence — DCG patterns documented, pattern matching straightforward
+Phases with standard patterns (skip deeper research):
+- **Phase 2 (Arrow navigation):** Pure frontend. Cursor line position guard is a well-documented pattern. Draft cache is 10 lines. Implement directly from PITFALLS.md guidance without additional research.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Core stack (Tauri/React/Vite) current and verified. All crates production-tested. xAI SDK official. |
-| Features | MEDIUM-HIGH | Overlay/launcher patterns well-established (Raycast/Alfred). AI command generation rapidly evolving (2026). |
-| Architecture | HIGH | Tauri v2 architecture documented. NSPanel integration verified via tauri-nspanel plugin. IPC patterns established. |
-| Pitfalls | HIGH | All critical pitfalls verified via official docs, Apple security guidelines, Tauri GitHub issues. Mitigation strategies documented. |
+| Stack | HIGH | `core-graphics@0.25.0` API surface verified on docs.rs; Zustand update pattern verified in official docs; no new npm packages required |
+| Features | HIGH | Feature set specified in PROJECT.md; cross-referenced against bash/zsh/Warp/Raycast behavior; dependency graph verified against live codebase |
+| Architecture | HIGH | Build order derived from actual code dependency graph; component boundaries verified against live codebase files; FFI patterns match existing `detect.rs` and `permissions.rs` |
+| Pitfalls | HIGH | Pitfalls derived from live codebase code review and macOS process API documentation; all prevention strategies include concrete code snippets |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-**Accessibility API implementation details:**
-- Research shows pattern (Shellporter blog) but requires custom FFI
-- No off-the-shelf crate for macOS Accessibility text reading
-- **Handling:** Phase 2 research-phase deep dive, prototype early, have fallback (process inspection only)
+- **CGWindowListCopyWindowInfo deprecation longevity:** Apple marked this API deprecated in macOS 15 in the screen capture context. Research confirms it remains functional for window enumeration, but a future macOS release could remove it. A fallback to shell PID key is already designed and requires no architecture change. Monitor Apple developer release notes.
 
-**Terminal app compatibility:**
-- AppleScript APIs differ between Terminal.app, iTerm2, Warp, Alacritty
-- No comprehensive documentation for all terminals
-- **Handling:** Start with Terminal.app + iTerm2 (90%+ market), add others based on user demand, community feedback for unsupported terminals
+- **Shell PID vs. CGWindowID key choice:** FEATURES.md recommends shell PID (simpler, no extra permission risk); STACK.md and ARCHITECTURE.md recommend CGWindowID. Both are valid. The decision must be made at Phase 1 implementation start. Recommendation: use shell PID as primary, CGWindowID as a potential enhancement in a later milestone, since shell PID avoids any potential screen recording permission prompt and is sufficient for the majority of use cases.
 
-**xAI Grok API pricing and rate limits:**
-- API pricing not fully documented as of Feb 2026
-- Rate limits unknown for free tier
-- **Handling:** Validate during Phase 3 implementation, have multi-provider architecture ready for fallback
-
-**macOS version-specific issues:**
-- Sonoma (14.0+) transparent window glitches — SOLVED (ActivationPolicy::Accessory)
-- Ventura (13.0+) spontaneous permission revocation — MITIGATED (detect and re-prompt)
-- Future macOS versions may break Accessibility API
-- **Handling:** Test on macOS 13+ (Ventura, Sonoma, Sequoia), monitor Tauri GitHub for upstream fixes
+- **GPU terminal fallback coverage:** Alacritty, kitty, and WezTerm may not expose AX or shell PID through the existing detection path. The fallback to `bundle_id:pid` (app-scoped) is designed and documented in the research, but must be explicitly tested during Phase 1 acceptance before shipping.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-
-**Tauri Official Documentation:**
-- [Tauri v2 Documentation](https://v2.tauri.app/) — architecture, IPC, state management
-- [Tauri v2 Release Page](https://v2.tauri.app/release/) — version verification
-- [Tauri Plugins](https://v2.tauri.app/plugin/) — global-shortcut, clipboard-manager, shell
-- [Tauri Window Customization](https://v2.tauri.app/learn/window-customization/) — NSPanel, transparent windows
-- [Tauri macOS Code Signing](https://v2.tauri.app/distribute/sign/macos/) — notarization, entitlements
-- [Tauri IPC Documentation](https://v2.tauri.app/concept/inter-process-communication/) — Commands, Events
-- [Tauri State Management](https://v2.tauri.app/develop/state-management/) — Mutex patterns
-
-**Apple Official Documentation:**
-- [Apple Shell Script Security](https://developer.apple.com/library/archive/documentation/OpenSource/Conceptual/ShellScripting/ShellScriptSecurity/ShellScriptSecurity.html) — AppleScript injection
-- [Apple Support: Accessibility Permissions](https://support.apple.com/guide/mac-help/allow-accessibility-apps-to-access-your-mac-mh43185/mac) — permission flow
-
-**Verified Crates:**
-- [active-win-pos-rs](https://crates.io/crates/active-win-pos-rs) — active window detection
-- [libproc-rs](https://github.com/andrewdavidmackenzie/libproc-rs) — process inspection
-- [reqwest-eventsource](https://docs.rs/reqwest-eventsource/) — SSE streaming
-- [tauri-nspanel](https://github.com/ahkohd/tauri-nspanel) — NSPanel integration
-- [xai-sdk](https://github.com/0xC0DE666/xai-sdk) — xAI Grok API
-
-**Verified GitHub Issues (Tauri):**
-- [Issue #8255](https://github.com/tauri-apps/tauri/issues/8255) — Transparent window glitch Sonoma
-- [Issue #9503](https://github.com/tauri-apps/tauri/issues/9503) — Cannot drag window Overlay titleBarStyle
-- [Issue #14102](https://github.com/tauri-apps/tauri/issues/14102) — Focusable: false broken macOS
-- [Issue #10025](https://github.com/tauri-apps/tauri/issues/10025) — Global shortcut fires twice macOS
-- [Issue #11488](https://github.com/tauri-apps/tauri/issues/11488) — visibleOnAllWorkspaces not staying on top
+- `core-graphics@0.25.0` docs.rs -- verified `CGWindowListCopyWindowInfo`, `kCGWindowNumber`, `kCGWindowOwnerPID` API presence
+- `crates.io/crates/core-graphics` -- version 0.25.0 confirmed current
+- `crates.io/crates/core-foundation` -- version 0.10.1 confirmed current
+- Zustand official docs: Maps and Sets usage guide -- `new Map(state.foo).set(key, value)` pattern for re-render triggering
+- Live codebase: `state.rs`, `hotkey.rs`, `terminal/process.rs`, `store/index.ts`, `CommandInput.tsx`, `ai.rs` -- all integration points verified against actual file contents
 
 ### Secondary (MEDIUM confidence)
-
-**Community Resources:**
-- [Building Shellporter: From Idea to Production](https://www.marcogomiero.com/posts/2026/building-shellporter/) — Accessibility API patterns
-- [tauri-plugin-macos-permissions](https://github.com/ayangweb/tauri-plugin-macos-permissions) — permission detection
-- [iTerm2 Scripting Documentation](https://iterm2.com/documentation-scripting.html) — terminal automation
-- [Streaming at Scale: SSE, WebSockets & Real-Time AI APIs](https://learnwithparam.com/blog/streaming-at-scale-sse-websockets-real-time-ai-apis) — SSE patterns
-
-**Competitive Research:**
-- [Raycast](https://www.raycast.com/) — overlay UX patterns
-- [Warp AI](https://www.warp.dev/warp-ai) — AI terminal features
-- [GitHub Copilot CLI](https://github.com/features/copilot/cli) — command generation patterns
-- [Amazon Q CLI](https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/command-line.html) — terminal integration
+- Apple Developer Documentation: CGWindowListCopyWindowInfo -- public API, window enumeration use case not deprecated in macOS 15
+- pdubs and GetWindowID utilities -- confirmed CGWindowListCopyWindowInfo approach works for PID-to-window mapping in Rust/Swift
+- Shell history UX patterns (devlog, DEV Community) -- confirmed arrow navigation and draft preservation behavior matches bash/zsh expectations
+- macOS PID reuse documentation -- confirmed TTY-based keys are more robust than raw PIDs for long-running daemon sessions
+- LLM context management strategies (getmaxim.ai) -- confirmed first-turn-only context approach for token budget management
 
 ### Tertiary (LOW confidence, needs validation)
-
-**Security Research:**
-- [ClickFix macOS Campaign: AppleScript Phishing](https://hunt.io/blog/macos-clickfix-applescript-terminal-phishing) — injection vectors
-- [MITRE ATT&CK: AppleScript T1059.002](https://attack.mitre.org/techniques/T1059/002/) — attack patterns
-- [DCG: Destructive Command Guard Philosophy](https://reading.torqsoftware.com/notes/software/ai-ml/safety/2026-01-26-dcg-destructive-command-guard-safety-philosophy-design-principles/) — safety patterns
+- CGWindowListCopyWindowInfo Rust FFI forum discussion -- approach confirmed working but requires `unsafe` CFDictionary extraction; implementation details need validation during Phase 1
 
 ---
-*Research completed: 2026-02-21*
-*Ready for roadmap: YES*
-*MVP scope: Phases 1-4*
-*Estimated MVP timeline: 3-4 weeks (single developer)*
+*Research completed: 2026-02-28*
+*Ready for roadmap: yes*

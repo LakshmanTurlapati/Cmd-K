@@ -1,969 +1,645 @@
-# Architecture Patterns
+# Architecture Research
 
-**Domain:** Tauri-based macOS overlay application
-**Researched:** 2026-02-21
+**Domain:** Tauri v2 macOS overlay -- per-terminal-window command history and AI follow-up context
+**Researched:** 2026-02-28
 **Confidence:** HIGH
 
-## Executive Summary
+---
 
-A Tauri v2 macOS overlay app with global hotkey, terminal context reading, and AI streaming requires a multi-process architecture with clear boundaries between the Rust backend (system integration) and web frontend (UI/streaming). The architecture follows Tauri's process model with a Core process handling OS integration and WebView processes for UI rendering, using NSPanel for overlay behavior and IPC for communication.
+## Context: This is a Milestone Architecture Doc (v0.1.1)
 
-## Recommended Architecture
+This document is scoped to how the v0.1.1 features integrate with the existing v0.1.0 architecture. It does not re-document the base architecture -- it documents what changes, what stays the same, and where the seams are.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     macOS System Layer                       │
-│  (Accessibility API, NSPanel, Global Hotkey, AppleScript)   │
-└─────────────────────────────────────────────────────────────┘
-                            ▲
-                            │
-┌───────────────────────────┴─────────────────────────────────┐
-│                  Tauri Core Process (Rust)                   │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │
-│  │   Hotkey     │  │   Terminal   │  │   AI Streaming   │  │
-│  │   Manager    │  │   Reader     │  │   Client         │  │
-│  └──────────────┘  └──────────────┘  └──────────────────┘  │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │
-│  │   Window     │  │   State      │  │   AppleScript    │  │
-│  │   Manager    │  │   Manager    │  │   Bridge         │  │
-│  └──────────────┘  └──────────────┘  └──────────────────┘  │
-└───────────────────────────┬─────────────────────────────────┘
-                            │
-                    Tauri IPC (Commands/Events)
-                            │
-                            ▼
-┌───────────────────────────┴─────────────────────────────────┐
-│              WebView Process (Web Frontend)                  │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │
-│  │   Overlay    │  │   AI Stream  │  │   Command        │  │
-│  │   UI         │  │   Renderer   │  │   Palette        │  │
-│  └──────────────┘  └──────────────┘  └──────────────────┘  │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │            React/Vue/Svelte Components               │  │
-│  └──────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-```
+The three features to add:
 
-### Component Boundaries
+1. Per-terminal-window command history (up to 7 entries, session-scoped)
+2. Arrow key navigation in overlay input to recall previous prompts
+3. AI follow-up context -- AI sees the full `turnHistory` for the active terminal window
 
-| Component | Layer | Responsibility | Communicates With |
-|-----------|-------|---------------|-------------------|
-| **Hotkey Manager** | Rust Core | Register/unregister global shortcuts (Cmd+K), trigger window show | Window Manager |
-| **Window Manager** | Rust Core | Create/show/hide NSPanel overlay, manage window state | Hotkey Manager, WebView |
-| **Terminal Reader** | Rust Core | Read active terminal context (cwd, selected text) via Accessibility API + process inspection | State Manager, WebView |
-| **AI Streaming Client** | Rust Core | HTTP client for xAI API, handle SSE streaming | WebView (via Events) |
-| **State Manager** | Rust Core | Manage app state (settings, terminal context, AI session) with Mutex | All Rust components |
-| **AppleScript Bridge** | Rust Core | Execute AppleScript for pasting into terminal | WebView (triggered via Command) |
-| **Overlay UI** | WebView | Render transparent overlay window, handle user input | All Rust components |
-| **AI Stream Renderer** | WebView | Receive streaming tokens via Events, render markdown | AI Streaming Client |
-| **Command Palette** | WebView | Search/filter UI, command suggestions | State Manager |
+---
 
-## Data Flow
-
-### Primary Flow: Hotkey → Overlay → AI → Terminal
+## System Overview: What Changes in v0.1.1
 
 ```
-1. User presses Cmd+K anywhere on macOS
-   ↓
-2. Hotkey Manager (Rust) receives global shortcut event
-   ↓
-3. Window Manager (Rust) triggers NSPanel show + focus
-   ↓
-4. Terminal Reader (Rust) reads active app context:
-   - Get active window process ID (active-win-pos-rs)
-   - Read terminal text via Accessibility API
-   - Inspect process for cwd (libproc-rs)
-   ↓
-5. State Manager (Rust) stores context in shared state (Mutex)
-   ↓
-6. WebView receives "show" event with context payload
-   ↓
-7. Overlay UI (WebView) displays with context pre-filled
-   ↓
-8. User types query, presses Enter
-   ↓
-9. WebView invokes "generate_command" Command (Rust)
-   ↓
-10. AI Streaming Client (Rust) sends request to xAI Grok
-    ↓
-11. For each SSE token received:
-    - AI Client emits "ai_token" Event
-    - WebView AI Stream Renderer appends to UI
-    ↓
-12. When complete, user presses Cmd+Enter to accept
-    ↓
-13. WebView invokes "paste_to_terminal" Command (Rust)
-    ↓
-14. AppleScript Bridge (Rust) executes script to:
-    - Focus original terminal window
-    - Paste generated command
-    ↓
-15. Window Manager (Rust) hides overlay NSPanel
+┌─────────────────────────────────────────────────────────────────────┐
+│                        macOS System Layer                            │
+│  (Accessibility API, NSPanel, Global Hotkey, CGWindowListCopyInfo)  │
+└────────────────────────────────────┬────────────────────────────────┘
+                                     │
+┌────────────────────────────────────┴────────────────────────────────┐
+│                     Tauri Core Process (Rust)                        │
+│                                                                      │
+│  ┌───────────────────────────────────────────────────────────────┐  │
+│  │  AppState (state.rs)                        [MODIFIED]         │  │
+│  │  + previous_window_id: Mutex<Option<u32>>                     │  │
+│  │  (existing: hotkey, previous_app_pid, pre_captured_text, ...) │  │
+│  └───────────────────────────────────────────────────────────────┘  │
+│                                                                      │
+│  ┌─────────────────────────┐  ┌──────────────────────────────────┐  │
+│  │  commands/hotkey.rs     │  │  commands/window_id.rs  [NEW]    │  │
+│  │  [MODIFIED]             │  │  get_terminal_window_id()        │  │
+│  │  + capture window ID    │  │  Uses CGWindowListCopyWindowInfo │  │
+│  │    before show_overlay  │  │  keyed by previous_app_pid       │  │
+│  └─────────────────────────┘  └──────────────────────────────────┘  │
+│                                                                      │
+│  (all other command modules unchanged)                               │
+└────────────────────────────────────┬────────────────────────────────┘
+                                     │
+                           Tauri IPC (Commands/Events)
+                                     │
+                                     ▼
+┌────────────────────────────────────┴────────────────────────────────┐
+│                    WebView Process (Web Frontend)                    │
+│                                                                      │
+│  ┌───────────────────────────────────────────────────────────────┐  │
+│  │  src/store/index.ts (Zustand)               [MODIFIED]         │  │
+│  │                                                                │  │
+│  │  NEW state:                                                    │  │
+│  │    windowHistories: Map<string, WindowHistory>                 │  │
+│  │    activeWindowKey: string | null                              │  │
+│  │    historyNavIndex: number  (-1 = not navigating)             │  │
+│  │                                                                │  │
+│  │  CHANGED behavior:                                             │  │
+│  │    show() -- calls get_terminal_window_id, sets key,          │  │
+│  │              loads that window's turnHistory                   │  │
+│  │    submitQuery() -- saves turnHistory to windowHistories map   │  │
+│  │    turnHistory -- still current-session slice (unchanged use)  │  │
+│  └───────────────────────────────────────────────────────────────┘  │
+│                                                                      │
+│  ┌─────────────────────────────┐  ┌──────────────────────────────┐  │
+│  │  CommandInput.tsx           │  │  Overlay.tsx                 │  │
+│  │  [MODIFIED]                 │  │  [UNCHANGED]                 │  │
+│  │  + ArrowUp/ArrowDown key    │  │                              │  │
+│  │    handlers using history   │  │                              │  │
+│  │    navigation actions       │  │                              │  │
+│  └─────────────────────────────┘  └──────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-### Secondary Flow: System Tray Menu
+---
 
-```
-1. App runs as menu bar daemon (no dock icon)
-   ↓
-2. User clicks menu bar icon
-   ↓
-3. System Tray shows menu (Settings, Quit)
-   ↓
-4. "Settings" → Window Manager creates settings NSPanel
-```
+## Window Identification Strategy
 
-## macOS-Specific Architecture
+### The Problem
 
-### NSPanel Integration (tauri-nspanel)
+A user can have multiple Terminal.app windows open at once, or multiple iTerm2 sessions. The `previous_app_pid` captures the *application* PID, but a single application process can own multiple windows. We need a stable key that identifies "which specific terminal window was active."
 
-Use `tauri-nspanel` plugin for proper overlay behavior:
+### Approach: CGWindowListCopyWindowInfo for Window ID
+
+macOS CoreGraphics provides `CGWindowListCopyWindowInfo`, which returns a list of all on-screen windows with their `kCGWindowNumber` (CGWindowID, a u32) and `kCGWindowOwnerPID`. The CGWindowID is stable for the lifetime of the window within the current user session -- it does not persist across app restarts, but that matches the "session-scoped" history requirement.
+
+**The key derivation:** For the `previous_app_pid`, enumerate windows owned by that PID and pick the first on-screen window (layer 0, normal window). This gives a stable `u32` CGWindowID.
+
+**Window key format:** `"{bundle_id}:{window_id}"`, e.g. `"com.apple.Terminal:14320"` or `"com.googlecode.iterm2:8891"`. Bundle ID is included so keys are human-readable in logs and debuggable.
+
+**Fallback:** If `CGWindowListCopyWindowInfo` finds no windows for the PID (possible for GPU terminals that have unusual window structures), fall back to `"{bundle_id}:{pid}"`. This means a multi-window Terminal.app scenario degrades to per-application history, which is acceptable compared to no history at all.
+
+**Why not AX-based window identification?** The AX `_AXUIElementGetWindow` function that converts AXUIElementRef to CGWindowID is a private API (underscore prefix). Using private macOS APIs risks breakage on OS updates. `CGWindowListCopyWindowInfo` is a public, stable CoreGraphics API. Both arrive at the same CGWindowID -- the public API is the correct path.
+
+### Implementation: New Rust Function
+
+New file: `src-tauri/src/commands/window_id.rs`
 
 ```rust
-use tauri_nspanel::{ManagerExt, PanelBuilder};
+// Get a stable window key for the terminal window that was frontmost.
+// Called in the hotkey handler BEFORE toggle_overlay (same timing as PID capture).
+// Returns "bundle_id:window_id" or "bundle_id:pid" as fallback.
+#[cfg(target_os = "macos")]
+pub fn get_window_key(pid: i32) -> Option<String> {
+    use crate::terminal::detect::get_bundle_id;
+    use std::ffi::c_void;
 
-tauri::Builder::default()
-  .setup(|app| {
-    let panel = PanelBuilder::new("main")
-      .is_floating_panel(true)  // Float above other windows
-      .can_become_key_window(true)  // Accept keyboard input
-      .build(app)?;
-    Ok(())
-  })
-```
-
-**Why NSPanel over standard window:**
-- Proper fullscreen app overlay behavior (works over Terminal fullscreen)
-- System-appropriate panel styling
-- Automatic focus management
-- Integration with macOS window levels
-
-**Confidence:** HIGH (verified via [tauri-nspanel docs](https://github.com/ahkohd/tauri-nspanel))
-
-### Accessibility API Integration
-
-Terminal context reading requires three techniques:
-
-**1. Active Window Detection (active-win-pos-rs)**
-```rust
-use active_win_pos_rs::get_active_window;
-
-let active_window = get_active_window()?;
-// Returns: process_id, window_title, position
-```
-
-**2. Accessibility API for Text (via Rust bindings)**
-```rust
-// Use macOS Accessibility API through FFI or wrapper crate
-// Read AXValue, AXSelectedText, AXTextArea from active app
-// REQUIRES: Accessibility permissions granted by user
-```
-
-**Cache Strategy:** Accessibility API can return nil during transitions. Cache last known values and combine with process inspection for resilience.
-
-**Confidence:** MEDIUM (pattern documented in [Shellporter 2026 blog](https://www.marcogomiero.com/posts/2026/building-shellporter/), but requires custom implementation)
-
-**3. Process Inspection for CWD (libproc-rs)**
-```rust
-use libproc::libproc::proc_pid::pidinfo;
-
-// Get cwd of terminal process
-let cwd = get_process_cwd(active_window.process_id)?;
-```
-
-**Combined Pattern:**
-```rust
-#[derive(Default)]
-struct TerminalContext {
-    process_id: Option<u32>,
-    window_title: String,
-    selected_text: Option<String>,  // via Accessibility API
-    cwd: Option<PathBuf>,           // via process inspection
-}
-
-// Cache with 100ms TTL to handle API transitions
-struct CachedContext {
-    context: TerminalContext,
-    last_updated: Instant,
-}
-```
-
-**Confidence:** HIGH (libraries verified: [active-win-pos-rs](https://crates.io/crates/active-win-pos-rs), [libproc-rs](https://github.com/andrewdavidmackenzie/libproc-rs))
-
-### AppleScript Bridge for Pasting
-
-Terminal pasting requires AppleScript execution from Rust:
-
-```rust
-use std::process::Command;
-
-fn paste_to_terminal(text: &str, terminal_app: &str) -> Result<()> {
-    let script = format!(r#"
-        tell application "{}"
-            activate
-            tell application "System Events"
-                keystroke "{}"
-            end tell
-        end tell
-    "#, terminal_app, text.replace("\"", "\\\""));
-
-    Command::new("osascript")
-        .arg("-e")
-        .arg(&script)
-        .output()?;
-    Ok(())
-}
-```
-
-**Compatibility:**
-- Terminal.app: Standard AppleScript
-- iTerm2: Enhanced scripting API ([iTerm2 scripting docs](https://iterm2.com/documentation-scripting.html))
-- Other terminals: System Events fallback
-
-**Security:** Requires Accessibility permissions (same as context reading)
-
-**Confidence:** HIGH (AppleScript is stable macOS API, pattern widely used)
-
-### Global Hotkey Registration
-
-Use `tauri-plugin-global-shortcut` in Rust setup:
-
-```rust
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, Code, Modifiers};
-
-fn main() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_global_shortcut::init())
-        .setup(|app| {
-            let shortcut = Shortcut::new(Some(Modifiers::META), Code::KeyK);
-
-            app.global_shortcut().on_shortcut(shortcut, |app, _event| {
-                // Show overlay window
-                let window = app.get_webview_window("main").unwrap();
-                window.show().unwrap();
-                window.set_focus().unwrap();
-            })?;
-
-            Ok(())
-        })
-        .run(tauri::generate_context!())
-        .expect("error running app");
-}
-```
-
-**Why Rust setup (not frontend):**
-- Works even when no window is visible
-- Guaranteed to be registered at app start
-- Faster response (no IPC overhead)
-
-**Confidence:** HIGH (verified via [Tauri global-shortcut plugin docs](https://v2.tauri.app/plugin/global-shortcut/))
-
-## Tauri IPC Patterns
-
-### Commands (Frontend → Backend, Request-Response)
-
-Use for operations that return a result:
-
-```rust
-// Rust backend
-#[tauri::command]
-async fn generate_command(
-    query: String,
-    context: String,
-    state: State<'_, Mutex<AppState>>,
-) -> Result<String, String> {
-    let ai_client = state.lock().unwrap().ai_client.clone();
-    // Return final result (not streaming)
-    ai_client.generate(query, context).await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn paste_to_terminal(text: String) -> Result<(), String> {
-    paste_via_applescript(&text)
-        .map_err(|e| e.to_string())
-}
-```
-
-```typescript
-// Frontend
-import { invoke } from '@tauri-apps/api/core';
-
-const result = await invoke<string>('generate_command', {
-  query: userInput,
-  context: terminalContext,
-});
-```
-
-**When to use Commands:**
-- One-time operations (paste, save settings)
-- Operations needing return values
-- Error handling with Result types
-
-### Events (Bidirectional, Fire-and-Forget)
-
-Use for streaming and notifications:
-
-```rust
-// Rust backend emits events
-use tauri::Emitter;
-
-async fn stream_ai_response(app: AppHandle, query: String) {
-    let mut stream = ai_client.stream(query).await;
-
-    while let Some(token) = stream.next().await {
-        app.emit("ai_token", token).unwrap();
+    // CGWindowListCopyWindowInfo FFI
+    extern "C" {
+        fn CGWindowListCopyWindowInfo(
+            option: u32,      // CGWindowListOption
+            relativeToWindow: u32,  // CGWindowID, kCGNullWindowID = 0
+        ) -> *mut c_void;   // CFArrayRef
+        fn CFArrayGetCount(array: *const c_void) -> isize;
+        fn CFArrayGetValueAtIndex(array: *const c_void, idx: isize) -> *const c_void;
+        fn CFRelease(cf: *const c_void);
+        // ... (CFDictionary key lookups, CFNumber extraction)
     }
 
-    app.emit("ai_complete", ()).unwrap();
+    let bundle_id = get_bundle_id(pid)?;
+
+    // kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements = 1 | 16 = 17
+    // Enumerate on-screen windows, filter by owner PID
+    // Extract kCGWindowNumber for the matching window
+    // Return format: "com.apple.Terminal:14320"
+
+    // Fallback if no window found: "com.apple.Terminal:{pid}"
+    Some(format!("{}:{}", bundle_id, pid))  // placeholder, full impl in plan
 }
 ```
+
+The actual implementation uses CFDictionary key extraction with `CFDictionaryGetValue` and `CFNumberGetValue` -- the same FFI pattern already used extensively in `detect.rs` and `permissions.rs`.
+
+### Integration Point: Hotkey Handler
+
+`src-tauri/src/commands/hotkey.rs` -- the `on_shortcut` closure already captures `previous_app_pid` and `pre_captured_text` before calling `toggle_overlay`. Window ID capture slots in here:
+
+```rust
+// Existing code already does:
+//   1. get_frontmost_pid() -> store in state.previous_app_pid
+//   2. ax_reader::read_focused_text_fast(pid) -> store in state.pre_captured_text
+//   3. toggle_overlay(...)
+
+// v0.1.1 addition: after step 1, before step 3:
+let window_key = window_id::get_window_key(pid);
+if let Some(state) = app_handle.try_state::<AppState>() {
+    if let Ok(mut wk) = state.previous_window_key.lock() {
+        *wk = window_key;
+    }
+}
+```
+
+`AppState` gets one new field:
+
+```rust
+pub previous_window_key: Mutex<Option<String>>,
+```
+
+A new Tauri command `get_previous_window_key() -> Option<String>` exposes this to the frontend during context detection. No new complexity in AppState -- same Mutex pattern as `previous_app_pid`.
+
+---
+
+## Zustand Store Extension
+
+### New Types
 
 ```typescript
-// Frontend listens to events
-import { listen } from '@tauri-apps/api/event';
+// Add to src/store/index.ts
 
-await listen<string>('ai_token', (event) => {
-  appendToResponse(event.payload);
-});
-
-await listen('ai_complete', () => {
-  enableSubmitButton();
-});
-```
-
-**When to use Events:**
-- Streaming data (AI tokens)
-- State change notifications
-- Progress updates
-- Doesn't need return value
-
-**Confidence:** HIGH (verified via [Tauri IPC docs](https://v2.tauri.app/concept/inter-process-communication/))
-
-### State Management Pattern
-
-Use `Mutex` for shared state between commands:
-
-```rust
-use std::sync::Mutex;
-use tauri::{Builder, Manager, State};
-
-#[derive(Default)]
-struct AppState {
-    terminal_context: TerminalContext,
-    ai_session: Option<String>,
-    settings: AppSettings,
-}
-
-fn main() {
-    Builder::default()
-        .setup(|app| {
-            app.manage(Mutex::new(AppState::default()));
-            Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![
-            generate_command,
-            paste_to_terminal,
-            get_terminal_context,
-        ])
-        .run(tauri::generate_context!())
-        .unwrap();
-}
-
-#[tauri::command]
-fn get_terminal_context(
-    state: State<'_, Mutex<AppState>>,
-) -> TerminalContext {
-    let state = state.lock().unwrap();
-    state.terminal_context.clone()
+export interface WindowHistory {
+  // Prompts the user entered for this window (for ArrowUp navigation)
+  promptHistory: string[];   // max 7 entries, oldest first
+  // Full AI conversation turns for follow-up context
+  turnHistory: TurnMessage[];  // max 14 entries (7 pairs), oldest first
 }
 ```
 
-**Pattern for async operations:**
-- Use `tokio::sync::Mutex` if holding lock across `.await`
-- Use `std::sync::Mutex` for synchronous access
-- Keep locks short-lived to avoid blocking
-
-**Confidence:** HIGH (verified via [Tauri state management docs](https://v2.tauri.app/develop/state-management/))
-
-## AI Streaming Architecture
-
-### SSE Client in Rust
-
-Use `reqwest-eventsource` for streaming responses:
-
-```rust
-use reqwest_eventsource::{Event, EventSource};
-use futures::StreamExt;
-
-async fn stream_grok_response(
-    query: String,
-    app: AppHandle,
-) -> Result<()> {
-    let mut es = EventSource::new(
-        reqwest::Client::new()
-            .post("https://api.x.ai/v1/chat/completions")
-            .header("Authorization", format!("Bearer {}", api_key))
-            .json(&json!({
-                "model": "grok-2",
-                "messages": [{"role": "user", "content": query}],
-                "stream": true,
-            }))
-    )?;
-
-    while let Some(event) = es.next().await {
-        match event {
-            Ok(Event::Message(msg)) => {
-                let token = parse_sse_data(&msg.data)?;
-                app.emit("ai_token", token)?;
-            }
-            Ok(Event::Open) => {},
-            Err(e) => {
-                app.emit("ai_error", e.to_string())?;
-                break;
-            }
-        }
-    }
-
-    app.emit("ai_complete", ())?;
-    Ok(())
-}
-```
-
-**Why SSE over WebSocket:**
-- xAI/Grok API uses SSE (Server-Sent Events)
-- Simpler unidirectional streaming
-- Automatic reconnection with `reqwest-eventsource`
-- Better proxy compatibility
-
-**Confidence:** HIGH (libraries verified: [reqwest-eventsource](https://docs.rs/reqwest-eventsource/), SSE pattern documented in [2026 AI API design](https://learnwithparam.com/blog/streaming-at-scale-sse-websockets-real-time-ai-apis))
-
-### Frontend Streaming Renderer
+### New State Fields
 
 ```typescript
-import { listen } from '@tauri-apps/api/event';
-import { marked } from 'marked';
+// Add to OverlayState interface:
 
-let responseBuffer = '';
-
-await listen<string>('ai_token', (event) => {
-  responseBuffer += event.payload;
-  // Render incrementally with markdown
-  responseElement.innerHTML = marked.parse(responseBuffer);
-  // Auto-scroll
-  responseElement.scrollTop = responseElement.scrollHeight;
-});
-
-await listen('ai_complete', () => {
-  // Enable actions (copy, paste to terminal)
-  enableActions();
-});
+windowHistories: Record<string, WindowHistory>;   // keyed by "bundle_id:window_id"
+activeWindowKey: string | null;                    // key of current terminal window
+historyNavIndex: number;                           // -1 = not navigating; 0..n = index in promptHistory
+historyNavSnapshot: string;                        // saved input before nav started (to restore on Escape)
 ```
 
-**Pattern:** Accumulate tokens in buffer, re-render markdown on each token (fast enough for real-time feel)
+### Changed Behavior in `show()`
 
-## Background Daemon Architecture
+```typescript
+show: () => {
+  // ... existing reset logic stays identical ...
+  set((state) => ({
+    visible: true,
+    // ... existing fields reset ...
+    turnHistory: [],    // will be replaced after window key resolves
+    historyNavIndex: -1,
+    historyNavSnapshot: "",
+  }));
 
-### System Tray with No Dock Icon
+  (async () => {
+    try {
+      const hasPermission = await invoke<boolean>("check_accessibility_permission");
+      useOverlayStore.getState().setAccessibilityGranted(hasPermission);
 
-```rust
-use tauri::{
-    Builder, CustomMenuItem, SystemTray, SystemTrayMenu,
-    SystemTrayMenuItem, SystemTrayEvent,
-};
+      // NEW: resolve window key before loading history
+      const windowKey = await invoke<string | null>("get_previous_window_key");
+      const ctx = await invoke<AppContext | null>("get_app_context");
 
-fn main() {
-    let quit = CustomMenuItem::new("quit".to_string(), "Quit");
-    let settings = CustomMenuItem::new("settings".to_string(), "Settings");
-    let tray_menu = SystemTrayMenu::new()
-        .add_item(settings)
-        .add_native_item(SystemTrayMenuItem::Separator)
-        .add_item(quit);
+      useOverlayStore.getState().setAppContext(ctx);
+      useOverlayStore.getState().setActiveWindowKey(windowKey);  // NEW action
+    } catch (err) {
+      console.error("[store] context detection error:", err);
+    } finally {
+      useOverlayStore.getState().setIsDetectingContext(false);
+    }
+  })();
+},
+```
 
-    let system_tray = SystemTray::new().with_menu(tray_menu);
+### `setActiveWindowKey` action (new)
 
-    Builder::default()
-        .system_tray(system_tray)
-        .on_system_tray_event(|app, event| {
-            match event {
-                SystemTrayEvent::MenuItemClick { id, .. } => {
-                    match id.as_str() {
-                        "quit" => std::process::exit(0),
-                        "settings" => {
-                            // Show settings window
-                            let window = app.get_window("settings").unwrap();
-                            window.show().unwrap();
-                        }
-                        _ => {}
-                    }
-                }
-                _ => {}
-            }
-        })
-        .run(tauri::generate_context!())
-        .unwrap();
+When the active window key is set, the store restores `turnHistory` from the persisted `windowHistories` map:
+
+```typescript
+setActiveWindowKey: (key: string | null) => set((state) => {
+  if (!key) return { activeWindowKey: null };
+  const existing = state.windowHistories[key];
+  return {
+    activeWindowKey: key,
+    turnHistory: existing?.turnHistory ?? [],
+  };
+}),
+```
+
+### Changed Behavior in `submitQuery()`
+
+After building `trimmedHistory`, save it back to the per-window map and also update the prompt history:
+
+```typescript
+// After building trimmedHistory (existing logic unchanged)...
+
+// NEW: persist to per-window map
+const currentKey = useOverlayStore.getState().activeWindowKey;
+if (currentKey) {
+  set((state) => {
+    const existing = state.windowHistories[currentKey] ?? {
+      promptHistory: [],
+      turnHistory: [],
+    };
+    const updatedPrompts = [
+      ...existing.promptHistory.filter(p => p !== query),  // deduplicate
+      query,
+    ].slice(-7);  // keep last 7
+    return {
+      windowHistories: {
+        ...state.windowHistories,
+        [currentKey]: {
+          promptHistory: updatedPrompts,
+          turnHistory: trimmedHistory,
+        },
+      },
+    };
+  });
 }
 ```
 
-**tauri.conf.json:**
-```json
-{
-  "bundle": {
-    "macOS": {
-      "minimumSystemVersion": "10.13",
-      "frameworks": [],
-      "exceptionDomain": "",
-      "signingIdentity": null,
-      "entitlements": null,
-      "providerShortName": null,
-      "dockIcon": false  // Hide from dock
-    }
+### History Navigation State Machine
+
+Arrow key navigation is local state in the `CommandInput` component, but uses store actions to read history. The navigation state lives in the store (not local component state) so it can be cleared on overlay hide.
+
+```
+historyNavIndex = -1  (not navigating, showing live inputValue)
+    |
+ArrowUp pressed (inputValue saved to historyNavSnapshot if index was -1)
+    |
+historyNavIndex = promptHistory.length - 1  (most recent entry)
+    |
+ArrowUp again -> index--  (older entry)
+    |
+ArrowDown -> index++  (newer entry)
+    |
+index reaches -1 -> restore historyNavSnapshot to inputValue
+    |
+Escape or Enter -> historyNavIndex resets to -1
+```
+
+New store actions:
+
+```typescript
+navigateHistoryUp: () => set((state) => {
+  const key = state.activeWindowKey;
+  if (!key) return {};
+  const prompts = state.windowHistories[key]?.promptHistory ?? [];
+  if (prompts.length === 0) return {};
+  if (state.historyNavIndex === -1) {
+    // Save current input before starting navigation
+    const snapshot = state.inputValue;
+    const newIndex = prompts.length - 1;
+    return {
+      historyNavSnapshot: snapshot,
+      historyNavIndex: newIndex,
+      inputValue: prompts[newIndex],
+    };
   }
-}
-```
+  const newIndex = Math.max(0, state.historyNavIndex - 1);
+  return { historyNavIndex: newIndex, inputValue: prompts[newIndex] };
+}),
 
-**Confidence:** HIGH (pattern documented in [Tauri system tray docs](https://v2.tauri.app/learn/system-tray/), [menubar app examples](https://github.com/ahkohd/tauri-macos-menubar-app-example))
-
-## Build Order & Dependencies
-
-### Phase Structure Recommendation
-
-**Phase 1: Basic Overlay (No Dependencies)**
-- Tauri setup with NSPanel
-- Global hotkey registration
-- Show/hide window on Cmd+K
-- Basic transparent UI
-
-**Phase 2: Terminal Context (Depends on Phase 1)**
-- Implement active window detection
-- Add Accessibility API integration
-- Process inspection for cwd
-- Display context in UI
-
-**Phase 3: AI Integration (Depends on Phase 1)**
-- HTTP client setup
-- SSE streaming with reqwest-eventsource
-- Event-based token streaming to UI
-- Markdown rendering
-
-**Phase 4: Terminal Pasting (Depends on Phase 2 + 3)**
-- AppleScript bridge
-- Paste command integration
-- Window focus restoration
-
-**Phase 5: System Tray & Settings (Depends on all)**
-- Menu bar integration
-- Settings UI
-- Persistent configuration
-
-### Component Implementation Order
-
-```
-1. Window Management (Rust)
-   ├── NSPanel setup with tauri-nspanel
-   ├── Global hotkey with tauri-plugin-global-shortcut
-   └── Show/hide commands
-
-2. State Management (Rust)
-   ├── Define AppState struct
-   ├── Mutex wrapper
-   └── Access from commands
-
-3. Terminal Reader (Rust)
-   ├── Active window detection (active-win-pos-rs)
-   ├── Process inspection (libproc-rs)
-   └── Accessibility API bindings (custom FFI)
-
-4. UI Components (Frontend)
-   ├── Overlay layout (transparent, centered)
-   ├── Command palette input
-   └── Context display
-
-5. AI Streaming (Rust)
-   ├── HTTP client setup (reqwest)
-   ├── SSE stream handling (reqwest-eventsource)
-   └── Event emission to frontend
-
-6. Stream Renderer (Frontend)
-   ├── Event listener setup
-   ├── Markdown rendering (marked.js)
-   └── Auto-scroll
-
-7. AppleScript Bridge (Rust)
-   ├── Script execution
-   ├── Terminal app detection
-   └── Paste command
-
-8. System Tray (Rust)
-   ├── Tray icon + menu
-   ├── Settings window
-   └── Menu handlers
-```
-
-### Critical Path
-
-```
-NSPanel + Hotkey → State Management → Terminal Reader → AI Streaming → Pasting
-(Week 1)           (Week 1)           (Week 2)          (Week 2-3)      (Week 3)
-```
-
-Parallel tracks:
-- UI development can proceed alongside Rust backend
-- System tray is independent, can be last
-
-## Patterns to Follow
-
-### Pattern 1: Event-Driven Window Management
-**What:** Use global hotkey to emit app event, Window Manager listens and shows panel
-**When:** Any global shortcut interaction
-**Why:** Decouples input handling from window logic
-**Example:**
-```rust
-// Hotkey handler
-app.global_shortcut().on_shortcut(shortcut, |app, _| {
-    app.emit("show_overlay", ()).unwrap();
-});
-
-// Window manager listens
-app.listen("show_overlay", |_| {
-    let window = app.get_window("main").unwrap();
-    window.show().unwrap();
-});
-```
-
-### Pattern 2: Context Caching with Fallback
-**What:** Cache terminal context, use fallback strategies when API fails
-**When:** Reading active window/terminal state
-**Why:** Accessibility API unreliable during transitions
-**Example:**
-```rust
-struct TerminalReader {
-    cache: Arc<Mutex<Option<TerminalContext>>>,
-    cache_ttl: Duration,
-}
-
-impl TerminalReader {
-    fn read_context(&self) -> TerminalContext {
-        // Try Accessibility API
-        if let Ok(ctx) = self.read_via_accessibility() {
-            self.update_cache(ctx.clone());
-            return ctx;
-        }
-
-        // Fallback to cache
-        if let Some(cached) = self.get_cached() {
-            return cached;
-        }
-
-        // Fallback to process inspection only
-        self.read_via_process_inspection()
-    }
-}
-```
-
-### Pattern 3: Streaming with Backpressure
-**What:** Accumulate tokens in Rust, emit in batches to avoid event flooding
-**When:** Streaming AI responses
-**Why:** Too many events can overwhelm IPC
-**Example:**
-```rust
-let mut buffer = String::new();
-let mut last_emit = Instant::now();
-
-while let Some(token) = stream.next().await {
-    buffer.push_str(&token);
-
-    // Emit every 50ms or every 10 tokens
-    if last_emit.elapsed() > Duration::from_millis(50) || buffer.len() > 10 {
-        app.emit("ai_token", &buffer)?;
-        buffer.clear();
-        last_emit = Instant::now();
-    }
-}
-
-// Emit remaining
-if !buffer.is_empty() {
-    app.emit("ai_token", &buffer)?;
-}
-```
-
-### Pattern 4: Type-Safe IPC with Serde
-**What:** Define shared types between Rust and TypeScript
-**When:** All IPC communication
-**Why:** Prevents runtime type errors
-**Example:**
-```rust
-// Shared types
-#[derive(Serialize, Deserialize, Clone)]
-struct TerminalContext {
-    cwd: String,
-    selected_text: Option<String>,
-    window_title: String,
-}
-
-// Command with typed params and return
-#[tauri::command]
-fn get_context() -> TerminalContext {
-    // ...
-}
-```
-
-```typescript
-// Frontend mirrors Rust types
-interface TerminalContext {
-  cwd: string;
-  selected_text?: string;
-  window_title: string;
-}
-
-const context = await invoke<TerminalContext>('get_context');
-```
-
-**Enhancement:** Use `tauri-specta` for automatic TypeScript type generation from Rust types.
-
-## Anti-Patterns to Avoid
-
-### Anti-Pattern 1: Frontend Business Logic
-**What:** Implementing terminal reading or AI streaming in JavaScript
-**Why bad:**
-- No access to native macOS APIs from WebView
-- Performance penalty for heavy operations
-- Security issues (API keys in frontend)
-**Instead:** Keep all system integration in Rust backend
-
-### Anti-Pattern 2: Synchronous IPC Blocking
-**What:** Calling slow Rust commands without async/await
-**Why bad:** Freezes UI during API calls or file operations
-**Instead:**
-```rust
-// BAD: Synchronous command blocks UI
-#[tauri::command]
-fn slow_operation() -> String {
-    std::thread::sleep(Duration::from_secs(5));
-    "done".to_string()
-}
-
-// GOOD: Async command doesn't block
-#[tauri::command]
-async fn slow_operation() -> String {
-    tokio::time::sleep(Duration::from_secs(5)).await;
-    "done".to_string()
-}
-```
-
-### Anti-Pattern 3: Window Management in Frontend
-**What:** Showing/hiding overlay using JavaScript API
-**Why bad:** Race conditions with global hotkey, unreliable focus management
-**Instead:** Handle all window lifecycle in Rust, emit events to notify frontend
-
-### Anti-Pattern 4: Polling for Terminal Context
-**What:** Frontend repeatedly calling `get_context` command
-**Why bad:** Wastes CPU, floods IPC channel
-**Instead:**
-```rust
-// GOOD: Read context once when window shows
-app.listen("show_overlay", |app| {
-    let context = read_terminal_context();
-    app.emit("context_ready", context).unwrap();
-});
-```
-
-### Anti-Pattern 5: Storing Sensitive Data in Frontend
-**What:** Keeping API keys or tokens in localStorage
-**Why bad:** Accessible via devtools, persists in clear text
-**Instead:** Store in Rust state, use OS keychain for persistence
-
-## Scalability Considerations
-
-| Concern | At MVP | At 100 Active Users | At Production |
-|---------|--------|---------------------|---------------|
-| **State Size** | Single global Mutex (< 1MB) | Same, state is per-process | Consider splitting state by domain |
-| **AI Streaming** | Single concurrent stream | Same, one stream per user session | Add request queuing |
-| **Event Flooding** | Emit every token | Batch tokens (50ms intervals) | Implement backpressure |
-| **Context Caching** | 100ms TTL, no persistence | Same | Add disk cache for offline mode |
-| **Window Management** | Single overlay window | Same | Support multiple workspace contexts |
-| **AppleScript Execution** | Synchronous, blocks command | Make async with tokio::task::spawn_blocking | Add timeout + fallback |
-| **Memory Management** | No cleanup | Clear AI session after 5 min idle | Implement proper session lifecycle |
-
-## Security Considerations
-
-### Permission Requirements
-
-**macOS Permissions Required:**
-1. **Accessibility** - For reading terminal text via Accessibility API
-2. **Screen Recording** - For window title reading on macOS (via active-win-pos-rs)
-3. **Input Monitoring** - May be required for global hotkey (automatic with tauri-plugin-global-shortcut)
-
-**Request Flow:**
-```rust
-// Check permissions on startup
-fn check_permissions() -> Result<()> {
-    if !has_accessibility_permission() {
-        show_permission_dialog("Accessibility");
-    }
-    if !has_screen_recording_permission() {
-        show_permission_dialog("Screen Recording");
-    }
-    Ok(())
-}
-```
-
-### API Key Management
-
-**DO NOT:**
-- Store in frontend localStorage
-- Commit to version control
-- Embed in binary
-
-**DO:**
-- Use macOS Keychain via `keyring-rs` crate
-- Prompt user to enter in settings
-- Validate on backend before use
-
-```rust
-use keyring::Entry;
-
-fn save_api_key(key: &str) -> Result<()> {
-    let entry = Entry::new("cmd-k-app", "xai_api_key")?;
-    entry.set_password(key)?;
-    Ok(())
-}
-
-fn load_api_key() -> Result<String> {
-    let entry = Entry::new("cmd-k-app", "xai_api_key")?;
-    entry.get_password()
-}
-```
-
-### Sandboxing
-
-**Tauri v2 Security Model:**
-- WebView processes sandboxed by default
-- Rust Core has full OS access
-- Use `allowlist` in tauri.conf.json to restrict IPC
-
-**Recommended allowlist:**
-```json
-{
-  "security": {
-    "csp": "default-src 'self'; connect-src https://api.x.ai",
-    "dangerousDisableAssetCspModification": false
+navigateHistoryDown: () => set((state) => {
+  if (state.historyNavIndex === -1) return {};
+  const key = state.activeWindowKey;
+  if (!key) return {};
+  const prompts = state.windowHistories[key]?.promptHistory ?? [];
+  const newIndex = state.historyNavIndex + 1;
+  if (newIndex >= prompts.length) {
+    // Past end: restore snapshot
+    return {
+      historyNavIndex: -1,
+      inputValue: state.historyNavSnapshot,
+      historyNavSnapshot: "",
+    };
   }
-}
+  return { historyNavIndex: newIndex, inputValue: prompts[newIndex] };
+}),
+
+resetHistoryNav: () => set({
+  historyNavIndex: -1,
+  historyNavSnapshot: "",
+}),
 ```
 
-## Testing Strategy
+### Memory Bound
 
-### Unit Tests (Rust)
-- Terminal context parsing
-- AppleScript generation
-- State management mutations
+The `windowHistories` map grows unboundedly during a session (one entry per distinct terminal window). Terminals opened during a session are typically 1-5 windows. Even at 20 windows, each holding 7 prompts of ~200 chars and 14 turns of ~500 chars each, the total is under 100KB -- negligible. No eviction needed for v0.1.1.
 
-### Integration Tests (Rust)
-- IPC command handlers (with mocked state)
-- Event emission/listening
-- Window lifecycle
+The histories are in-memory only (not persisted to disk). A new app launch starts fresh. This is correct for the "session-scoped" requirement.
 
-### E2E Tests (Frontend + Backend)
-- Global hotkey → window show
-- Context reading → UI display
-- AI streaming → markdown render
-- Paste command execution
+---
 
-### Manual Testing Requirements
-- Test on multiple terminals (Terminal.app, iTerm2, Warp, Alacritty)
-- Test in fullscreen mode
-- Test with multiple displays
-- Test permission denial flows
+## Data Flow Changes
 
-## Performance Targets
+### Existing Flow (v0.1.0)
 
-| Metric | Target | Measurement |
-|--------|--------|-------------|
-| Hotkey → Overlay visible | < 100ms | Time from keypress to first paint |
-| Context read latency | < 50ms | Time to read active window + cwd |
-| AI first token | < 500ms | Time from Enter to first token |
-| Token rendering | 60 fps | Maintain smooth scroll during streaming |
-| Memory footprint | < 100MB | Rust process + WebView combined |
-| Binary size | < 10MB | Tauri app bundle (macOS) |
+```
+Cmd+K pressed
+  -> hotkey.rs: capture PID, pre-capture AX text -> store in AppState
+  -> toggle_overlay(show)
+  -> frontend emit "overlay-shown"
+  -> store.show() -> reset turnHistory=[], detect context
+  -> get_app_context IPC -> returns AppContext
+  -> AI query -> stream_ai_response -> build turnHistory locally
+  -> next query uses same turnHistory (in-memory, until overlay show resets)
+```
 
-## Technology Choices Summary
+### New Flow (v0.1.1)
 
-| Layer | Technology | Version | Rationale |
-|-------|-----------|---------|-----------|
-| **Framework** | Tauri | 2.x | Small binaries, native performance, security |
-| **Frontend** | React/Vue/Svelte | Latest | Developer preference, all work well |
-| **Overlay Windows** | tauri-nspanel | Latest | Native NSPanel for proper macOS behavior |
-| **Global Hotkeys** | tauri-plugin-global-shortcut | Latest | Official Tauri plugin, reliable |
-| **Active Window** | active-win-pos-rs | Latest | Cross-platform, returns process ID |
-| **Process Info** | libproc-rs | Latest | macOS/Linux process inspection |
-| **AI Streaming** | reqwest-eventsource | Latest | SSE support with auto-reconnect |
-| **HTTP Client** | reqwest | Latest | Industry standard, async-ready |
-| **Markdown** | marked.js | Latest | Fast, widely used, extensible |
-| **State** | std::sync::Mutex | stdlib | Sufficient for single-threaded access |
-| **Async Runtime** | Tokio | Latest | Required by Tauri, battle-tested |
+```
+Cmd+K pressed
+  -> hotkey.rs: capture PID -> capture window key (NEW) -> pre-capture AX text
+  -> toggle_overlay(show)
+  -> frontend emit "overlay-shown"
+  -> store.show() -> reset historyNavIndex=-1, turnHistory=[] (will be replaced)
+  -> PARALLEL:
+       get_previous_window_key IPC (NEW, fast: reads AppState field)
+       get_app_context IPC (unchanged)
+       check_accessibility_permission IPC (unchanged)
+  -> setActiveWindowKey(key) -> restores turnHistory from windowHistories[key]
+  -> AI query -> stream_ai_response (unchanged IPC, uses restored turnHistory)
+  -> submitQuery() -> saves updated turnHistory + promptHistory to windowHistories[key]
+  -> Arrow keys -> navigate promptHistory for activeWindowKey
+```
 
-## Open Questions & Research Flags
+The critical insight: `turnHistory` in the store is still the single "current session's conversation." The only change is that on overlay open it is *restored* from the per-window map rather than always starting empty. The `stream_ai_response` IPC call is completely unchanged -- it still receives `history` as a `TurnMessage[]` array. No Rust changes needed for the AI command.
 
-### For Later Phases
+---
 
-1. **Multi-terminal support:** Should app detect which terminal is active and adjust pasting strategy?
-   - iTerm2 has different AppleScript API than Terminal.app
-   - Some terminals (Alacritty) may need different approach
-   - **Recommendation:** Start with Terminal.app + iTerm2, add others based on usage
+## Component Boundaries: New vs. Modified vs. Unchanged
 
-2. **Context reading reliability:** What's the fallback if Accessibility API denies permission?
-   - Can still do process inspection (cwd)
-   - Can't read selected text
-   - **Recommendation:** Graceful degradation, show warning in UI
+### New Components
 
-3. **AI streaming error handling:** How to handle network interruptions mid-stream?
-   - reqwest-eventsource has auto-reconnect
-   - Need to track partial response state
-   - **Recommendation:** Buffer tokens, resume on reconnect
+| File | What it is | Purpose |
+|------|-----------|---------|
+| `src-tauri/src/commands/window_id.rs` | New Rust module | `get_window_key(pid)` using CGWindowListCopyWindowInfo, plus `get_previous_window_key` Tauri command |
 
-4. **Window positioning:** Should overlay appear at cursor or center screen?
-   - Raycast uses cursor position
-   - Spotlight uses center screen
-   - **Recommendation:** User preference, default to center
+### Modified Components
 
-5. **Multiple workspaces:** Should app track context per macOS workspace?
-   - Would require workspace change detection
-   - Separate state per workspace
-   - **Recommendation:** Phase 2+ feature, single global context for MVP
+| File | What changes | Scope of change |
+|------|-------------|-----------------|
+| `src-tauri/src/state.rs` | Add `previous_window_key: Mutex<Option<String>>` | 2-line addition |
+| `src-tauri/src/lib.rs` | Register `get_previous_window_key` command; import `window_id` module | ~5 lines |
+| `src-tauri/src/commands/hotkey.rs` | Call `window_id::get_window_key(pid)` after PID capture; store result in AppState | ~10 lines in closure |
+| `src/store/index.ts` | Add `windowHistories`, `activeWindowKey`, `historyNavIndex/Snapshot` state; modify `show()` and `submitQuery()`; add navigation actions | Largest change: ~80 new lines, ~20 modified |
+| `src/components/CommandInput.tsx` | Add ArrowUp/ArrowDown key handlers that call navigation actions; conditionally prevent default when history available | ~25 lines |
 
-## Sources & Confidence Assessment
+### Unchanged Components
 
-| Topic | Confidence | Primary Sources |
-|-------|------------|-----------------|
-| Tauri v2 Architecture | HIGH | [Official docs](https://v2.tauri.app/concept/architecture/), [Process model](https://v2.tauri.app/concept/process-model/) |
-| Tauri IPC Patterns | HIGH | [IPC docs](https://v2.tauri.app/concept/inter-process-communication/), [State management](https://v2.tauri.app/develop/state-management/) |
-| NSPanel Integration | HIGH | [tauri-nspanel](https://github.com/ahkohd/tauri-nspanel), community examples |
-| Global Hotkeys | HIGH | [tauri-plugin-global-shortcut](https://v2.tauri.app/plugin/global-shortcut/) |
-| Terminal Context Reading | MEDIUM | [active-win-pos-rs](https://crates.io/crates/active-win-pos-rs), [libproc-rs](https://github.com/andrewdavidmackenzie/libproc-rs), Accessibility API requires custom FFI |
-| AppleScript Integration | HIGH | [iTerm2 scripting](https://iterm2.com/documentation-scripting.html), macOS AppleScript stable API |
-| AI Streaming (SSE) | HIGH | [reqwest-eventsource](https://docs.rs/reqwest-eventsource/), [SSE patterns](https://learnwithparam.com/blog/streaming-at-scale-sse-websockets-real-time-ai-apis) |
-| System Tray | HIGH | [Tauri system tray](https://v2.tauri.app/learn/system-tray/), [menubar examples](https://github.com/ahkohd/tauri-macos-menubar-app-example) |
+| File | Why unchanged |
+|------|--------------|
+| `src-tauri/src/commands/ai.rs` | `stream_ai_response` receives `history: Vec<TurnMessage>` -- the caller (store) manages what it passes; no change needed |
+| `src-tauri/src/commands/paste.rs` | Paste logic uses `previous_app_pid`, not window key |
+| `src-tauri/src/commands/terminal.rs` | `get_app_context` unchanged -- window key is a separate concern |
+| `src-tauri/src/terminal/*` | All detection modules unchanged |
+| `src/components/Overlay.tsx` | No new UI elements needed for history/follow-up |
+| `src/components/ResultsArea.tsx` | Follow-up context is implicit (turnHistory is populated) |
+| All Settings/Onboarding components | Unrelated to this feature |
 
-**Overall Confidence: HIGH**
+---
 
-All major architectural components verified via official documentation or production-tested libraries. Medium confidence on Accessibility API integration due to need for custom FFI, but pattern documented in [Shellporter 2026 blog](https://www.marcogomiero.com/posts/2026/building-shellporter/).
+## Architectural Patterns
+
+### Pattern 1: Capture-Before-Show (existing, extended)
+
+**What:** All data about the external application state must be captured in the hotkey handler BEFORE `toggle_overlay` calls `show_and_make_key()`, because after that point `frontmostApplication` returns CMD+K itself.
+
+**Extension for v0.1.1:** Window key is added to this pre-show capture sequence alongside PID and AX text. The hotkey handler captures: `(pid, window_key, pre_captured_text)` in that order before calling `toggle_overlay`.
+
+**Trade-off:** Adds one more FFI call (`CGWindowListCopyWindowInfo`) in the hotkey handler critical path. This call is fast (enumerates on-screen windows from the window server, no AX tree walking) -- benchmark expectation under 5ms.
+
+### Pattern 2: Window-Keyed Map in Zustand
+
+**What:** `windowHistories: Record<string, WindowHistory>` is the central data structure. It accumulates per-window state across multiple overlay invocations without any manual lifecycle management.
+
+**When to use:** When an app visits the same context repeatedly and needs to accumulate state over multiple visits. This is equivalent to a session-scoped cache keyed by an identity token.
+
+**Trade-off:** The map grows monotonically during a session. For the expected use (1-10 terminal windows per session), this is trivially small. The simplicity of append-only writes without eviction makes the logic easier to reason about and test.
+
+### Pattern 3: Restore-on-Activate
+
+**What:** When the overlay shows, `setActiveWindowKey` both sets the active key and restores `turnHistory` from the map. The restore is synchronous within the Zustand action -- no async or effect needed.
+
+**Why:** The AI streaming code in `submitQuery` reads `state.turnHistory` directly. By restoring at key-set time (which happens during the async context detection sequence, before any query), the existing streaming code sees the correct history with no changes.
+
+**Trade-off:** There is a short window (~50-200ms) between `show()` resetting `turnHistory=[]` and `setActiveWindowKey` restoring it. During this window, `turnHistory` is empty. This is acceptable because no query can be submitted until the user finishes typing, and context detection completes in ~200-750ms (existing behavior).
+
+### Pattern 4: Navigation Cursor in Store (not Component)
+
+**What:** `historyNavIndex` lives in the Zustand store rather than local React state in `CommandInput`.
+
+**Why:** The navigation index must be reset when the overlay hides (in `hide()`) and when a query is submitted. If it lived in component state, resetting it from store actions (which don't have component references) would require complex event wiring.
+
+**Trade-off:** Navigation state is slightly over-centralized -- `historyNavIndex` is only consumed by `CommandInput`. But the reset-on-hide requirement makes store placement clearly correct.
+
+---
+
+## Data Flow Diagrams
+
+### Window Key Resolution Flow
+
+```
+Hotkey fires (hotkey.rs)
+    |
+    v
+get_frontmost_pid()   [existing, fast ObjC FFI]
+    |
+    v
+window_id::get_window_key(pid)  [NEW, CGWindowListCopyWindowInfo]
+    |-- finds windows for pid: returns "bundle_id:window_id"
+    |-- no windows found: returns "bundle_id:pid"  (fallback)
+    |
+    v
+AppState.previous_window_key <- Some(key)   [new Mutex field]
+    |
+    v
+[existing: pre_captured_text capture, then toggle_overlay]
+```
+
+### History Restore Flow (on overlay open)
+
+```
+store.show() called
+    |
+    +-- set({ turnHistory: [], historyNavIndex: -1, ... })  [sync reset]
+    |
+    +-- async IIFE starts:
+         |
+         PARALLEL:
+         |-- invoke("get_previous_window_key")  [reads AppState, ~1ms]
+         |-- invoke("get_app_context")          [AX detection, ~200-750ms]
+         |-- invoke("check_accessibility_permission")
+         |
+         both resolve:
+         |
+         v
+         setActiveWindowKey(windowKey)
+           |-- windowHistories[key] exists?
+           |     YES -> restore turnHistory from map
+           |     NO  -> turnHistory stays []
+         setAppContext(ctx)
+         setIsDetectingContext(false)
+```
+
+### History Save Flow (on query submit)
+
+```
+submitQuery(query) called
+    |
+    [... existing streaming + destructive check logic (unchanged) ...]
+    |
+    v
+build trimmedHistory   [existing, slices to 14 entries]
+    |
+    v
+save to windowHistories[activeWindowKey]:  [NEW]
+    promptHistory <- deduplicated + appended query, sliced to 7
+    turnHistory   <- trimmedHistory
+    |
+    v
+set({ turnHistory: trimmedHistory, ... })  [existing update]
+```
+
+### Arrow Key Navigation Flow
+
+```
+User presses ArrowUp in CommandInput (textarea)
+    |
+    v
+handleKeyDown in CommandInput.tsx
+    |
+    check: is cursor at start of textarea?  (or textarea is single-line empty)
+    YES ->
+        e.preventDefault()
+        store.navigateHistoryUp()
+            |-- historyNavIndex == -1?
+            |     save inputValue to historyNavSnapshot
+            |     index <- promptHistory.length - 1
+            |-- else
+            |     index <- max(0, index - 1)
+            set inputValue <- promptHistory[newIndex]
+    NO  -> default textarea behavior (cursor moves)
+```
+
+---
+
+## Integration Points
+
+### Rust Backend
+
+| Boundary | Communication | Notes |
+|----------|---------------|-------|
+| `hotkey.rs` -> `window_id.rs` | Direct function call (same crate) | Called in hotkey closure before toggle |
+| `window_id.rs` -> `AppState` | `app_handle.try_state::<AppState>()` | Same mutex pattern as `previous_app_pid` |
+| Frontend -> `get_previous_window_key` | Tauri IPC invoke | New command, reads `AppState.previous_window_key` |
+| `window_id.rs` -> `CoreGraphics` | Raw C FFI via `extern "C"` | Same pattern as existing libproc FFI |
+
+### Frontend
+
+| Boundary | Communication | Notes |
+|----------|---------------|-------|
+| `store.show()` -> Rust | `invoke("get_previous_window_key")` | Parallel with existing IPC calls |
+| `CommandInput` -> store | `navigateHistoryUp/Down` actions | Arrow key handlers |
+| `store.submitQuery()` -> store | Zustand state update | Writes to `windowHistories` map |
+
+---
+
+## Build Order (considering dependencies)
+
+The dependency chain determines implementation order:
+
+1. **`state.rs`** -- add `previous_window_key` field. Zero dependencies. All subsequent Rust work depends on this.
+
+2. **`commands/window_id.rs`** -- new file with `get_window_key()` and `get_previous_window_key` Tauri command. Depends on `state.rs` (step 1) and `terminal/detect.rs` (existing, `get_bundle_id`). The CGWindowListCopyWindowInfo FFI is self-contained.
+
+3. **`commands/hotkey.rs`** -- add window key capture call. Depends on `window_id.rs` (step 2). Small change to existing closure.
+
+4. **`lib.rs`** -- register new command, import new module. Depends on steps 1-3. Compile gate: `cargo build` must pass here before moving to frontend.
+
+5. **`store/index.ts` -- new state types and fields** -- add `WindowHistory`, `windowHistories`, `activeWindowKey`, `historyNavIndex/Snapshot`. Add `setActiveWindowKey`, `navigateHistoryUp`, `navigateHistoryDown`, `resetHistoryNav` actions. Modify `show()` to call `get_previous_window_key` and invoke `setActiveWindowKey`. Modify `submitQuery()` to persist to `windowHistories`. Depends on step 4 (new IPC command must exist).
+
+6. **`CommandInput.tsx` -- ArrowUp/Down handlers** -- add keyboard navigation. Depends on step 5 (store actions must exist). This is the final user-visible piece.
+
+---
+
+## Anti-Patterns
+
+### Anti-Pattern 1: Storing Window ID as the Primary Key in AppState
+
+**What people do:** Replace `previous_app_pid` with `previous_window_id` everywhere, including in paste and context detection logic.
+
+**Why it's wrong:** The existing context detection (`get_app_context`) and paste (`paste_to_terminal`) use `previous_app_pid` because they need to make ObjC/AX calls that are PID-scoped. `CGWindowID` is not a substitute for PID in these APIs. Conflating the two causes silent failures.
+
+**Do this instead:** Keep `previous_app_pid` unchanged for all existing functionality. Add `previous_window_key` as a separate field solely for history keying.
+
+### Anti-Pattern 2: Persisting `windowHistories` to tauri-plugin-store
+
+**What people do:** Persist window histories to disk so they survive app restarts, using the existing tauri-plugin-store (already in the app for API key/hotkey storage).
+
+**Why it's wrong:** CGWindowIDs are not stable across app restarts -- a new launch of Terminal.app gets new window IDs. Persisted histories would never match live window keys, creating orphaned data that grows forever. Additionally, terminal command history may contain sensitive data (API keys accidentally typed as commands, passwords, etc.) that should not persist to disk without explicit user consent.
+
+**Do this instead:** Keep `windowHistories` in-memory only (Zustand state). Fresh start on each app launch. If disk persistence is desired in a future milestone, design it around user-controlled export, not automatic persistence.
+
+### Anti-Pattern 3: Using ArrowUp in a Multi-Line Textarea for Navigation Unconditionally
+
+**What people do:** Intercept ArrowUp/ArrowDown on the textarea and always override with history navigation, breaking multi-line input cursor movement.
+
+**Why it's wrong:** The `CommandInput` textarea already supports multi-line input (shift+Enter). A user editing a multi-line prompt expects ArrowUp to move the cursor between lines, not jump to history.
+
+**Do this instead:** Only intercept ArrowUp when the cursor is at position 0 of a single-line input (or the textarea has only one line and cursor is at start). When there are multiple lines, let default textarea cursor movement happen. This matches the behavior of bash/zsh history navigation (which also only works when the line is single-line).
+
+### Anti-Pattern 4: Calling CGWindowListCopyWindowInfo Inside `get_app_context` (Async)
+
+**What people do:** Add window ID resolution inside the `get_app_context` Tauri command handler, since that's already called asynchronously after the overlay shows.
+
+**Why it's wrong:** `get_app_context` runs after the overlay has taken focus. At that point, the frontmost window of the terminal app may no longer be reported as "on screen" in the same way, or the window list may have changed. The window key must be captured in the hotkey handler BEFORE `show_and_make_key()`, following the established Capture-Before-Show pattern.
+
+**Do this instead:** Capture window key in `hotkey.rs` alongside PID capture, store in `AppState`, expose via a fast dedicated IPC command (`get_previous_window_key`) that just reads the stored value.
+
+---
+
+## Scaling Considerations
+
+This feature is entirely session-scoped and in-memory. There is no backend state, no database, no network calls added. Scaling dimensions that matter:
+
+| Concern | Expected (1-5 windows) | Edge case (20 windows) | Impact |
+|---------|----------------------|----------------------|--------|
+| `windowHistories` map size | < 5KB | < 100KB | None |
+| CGWindowListCopyWindowInfo call cost | < 5ms | < 5ms (window count bounded by OS) | None |
+| `get_previous_window_key` IPC latency | < 1ms | < 1ms | None |
+| Arrow key navigation render | O(1) array index | O(1) | None |
+
+No scaling concerns exist for the target usage of this application (single-user macOS app).
+
+---
 
 ## Sources
 
-- [Tauri v2 Architecture](https://v2.tauri.app/concept/architecture/)
-- [Tauri Process Model](https://v2.tauri.app/concept/process-model/)
-- [Tauri Inter-Process Communication](https://v2.tauri.app/concept/inter-process-communication/)
-- [Tauri State Management](https://v2.tauri.app/develop/state-management/)
-- [Tauri Window Customization](https://v2.tauri.app/learn/window-customization/)
-- [Tauri Global Shortcut Plugin](https://v2.tauri.app/plugin/global-shortcut/)
-- [Tauri System Tray](https://v2.tauri.app/learn/system-tray/)
-- [tauri-nspanel GitHub](https://github.com/ahkohd/tauri-nspanel)
-- [active-win-pos-rs crate](https://crates.io/crates/active-win-pos-rs)
-- [libproc-rs GitHub](https://github.com/andrewdavidmackenzie/libproc-rs)
-- [reqwest-eventsource docs](https://docs.rs/reqwest-eventsource/)
-- [iTerm2 Scripting Documentation](https://iterm2.com/documentation-scripting.html)
-- [Streaming at Scale: SSE, WebSockets & Real-Time AI APIs](https://learnwithparam.com/blog/streaming-at-scale-sse-websockets-real-time-ai-apis)
-- [Building Shellporter: From Idea to Production in a Week](https://www.marcogomiero.com/posts/2026/building-shellporter/)
-- [Tauri macOS Menubar App Example](https://github.com/ahkohd/tauri-macos-menubar-app-example)
-- [Raycast Manual - Hotkey](https://manual.raycast.com/hotkey)
+- `src-tauri/src/state.rs` -- existing AppState structure showing Mutex field pattern
+- `src-tauri/src/commands/hotkey.rs` -- existing capture-before-show pattern
+- `src-tauri/src/terminal/detect.rs` -- existing `get_bundle_id` ObjC FFI pattern
+- `src/store/index.ts` -- existing Zustand store showing `turnHistory` and `show()` behavior
+- [CGWindowListCopyWindowInfo Apple Developer Documentation](https://developer.apple.com/documentation/coregraphics/1455137-cgwindowlistcopywindowinfo)
+- [pdubs -- CGWindowListCopyWindowInfo for PID-to-window mapping](https://github.com/mikesmithgh/pdubs)
+- [GetWindowID -- CGWindowID retrieval utility](https://github.com/smokris/GetWindowID)
+- [macOS window enumeration patterns](https://www.symdon.info/posts/1729078231/)
+- [Accessibility API: AXUIElement to window discussion](https://developer.apple.com/forums/thread/121114)
+
+---
+
+*Architecture research for: CMD+K v0.1.1 per-terminal-window history and AI follow-up context*
+*Researched: 2026-02-28*

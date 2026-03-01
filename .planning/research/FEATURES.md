@@ -1,328 +1,267 @@
-# Feature Landscape
+# Feature Research
 
-**Domain:** macOS System-Wide Overlay for AI Terminal Command Generation
-**Researched:** 2026-02-21
-**Confidence:** MEDIUM-HIGH
-
-## Executive Summary
-
-This research analyzes the feature landscape for macOS overlay/launcher apps and AI terminal command generators, synthesizing patterns from Raycast, Alfred, Warp AI, GitHub Copilot CLI, Amazon Q CLI, Superwhisper, and Fig. The domain splits into two categories: launcher/overlay UX patterns and AI command generation capabilities. Table stakes are surprisingly minimal for MVP, while differentiation comes from terminal context awareness and safety mechanisms.
+**Domain:** macOS overlay input history navigation and AI conversation context per terminal window
+**Milestone:** v0.1.1 Command History and Follow-up Context
+**Researched:** 2026-02-28
+**Confidence:** HIGH (codebase verified + established UX patterns)
 
 ---
 
-## Table Stakes
+## Milestone Scope
 
-Features users expect from any overlay/launcher app or AI command generator. Missing any of these makes the product feel incomplete or broken.
-
-### Core Overlay/Launcher Features
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| **Global hotkey activation** | Universal pattern (Cmd+K, Option+Space). Users expect instant access from anywhere. | Low | Standard macOS pattern. Accessibility permissions required. Most use Cmd/Option + single key. |
-| **Keyboard-first navigation** | Users invoke overlay to avoid mouse. All interactions must be keyboard-driven. | Low | Arrow keys for navigation, Enter to confirm, Esc to dismiss. No mouse required. |
-| **Fuzzy search/filtering** | Users expect to type partial matches and see relevant results instantly. | Medium | Real-time filtering as user types. Must handle typos, partial matches, abbreviations. |
-| **Clean, minimal UI** | Overlay apps emphasize speed and focus. Heavy UI slows users down. | Low | Centered overlay window, blur/transparency effects, minimal chrome. macOS native styling. |
-| **Instant dismiss** | Users expect overlay to vanish instantly (same hotkey, Esc, or click outside). | Low | Hide (don't close) window. Restore previous app focus. Preserve input state for next invocation. |
-| **Menu bar presence** | macOS convention for background apps. Users need visual indicator app is running. | Low | Status bar icon with minimal menu (Preferences, Quit). Follows macOS Human Interface Guidelines. |
-
-### AI Command Generation Features
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| **Natural language to command** | Core value proposition. Users describe intent, AI generates shell command. | High | Requires LLM integration. Must handle ambiguous prompts, multiple interpretations. |
-| **Command preview before execution** | Safety requirement. Users must see what will run before it runs. | Low | Display generated command with syntax highlighting. Never auto-execute. |
-| **Copy to clipboard** | Minimum viable output. Users need command in clipboard to paste manually. | Low | pbcopy integration on macOS. Universal fallback if paste fails. |
-| **Command explanation** | Users need to understand what command does, especially for complex/dangerous commands. | Medium | LLM-generated explanation alongside command. Highlight destructive operations. |
-| **Error handling and retry** | LLM calls fail. Network issues happen. Users expect graceful degradation. | Medium | Show error messages. Allow retry. Cache last prompt. Don't lose user input on failure. |
-| **Basic terminal context awareness** | At minimum: current working directory. Impacts command relevance significantly. | Medium | Read active terminal's cwd. Required for file operations, relative paths. See Pitfalls section. |
-
-### Accessibility & Permissions (macOS Specific)
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| **Accessibility permission request** | Required for global hotkeys and overlay rendering. macOS enforces this. | Low | System prompt on first launch. Graceful handling if denied. Link to System Settings. |
-| **Screen Recording permission** (conditional) | Required if app needs to detect active terminal window or read screen content. | Low | Only if detecting terminal context without shell plugins. May not be needed for MVP. |
-| **Permissions onboarding** | Users unfamiliar with macOS security model need guidance. | Low | First-run wizard explaining why permissions needed. Screenshots showing System Settings path. |
+This research is scoped to the v0.1.1 milestone only. Existing v0.1.0 features (overlay, AI generation, auto-paste, destructive warnings, terminal context detection) are already built and out of scope. The question is: what does per-terminal-window history navigation and AI follow-up context require to feel complete?
 
 ---
 
-## Differentiators
+## Feature Landscape
 
-Features that set products apart in this crowded space. Not expected, but highly valued when present.
+### Table Stakes (Users Expect These)
 
-### Terminal Context Intelligence (HIGH VALUE)
+Features users assume exist once "command history" is advertised. Missing any of these makes the feature feel broken.
 
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| **Shell history awareness** | Generate commands based on user's actual command patterns. "Do what I did last time but for different file." | High | Access .bash_history or .zsh_history. Privacy concerns. Alternative: local-only processing. Tools like hishtory provide this. |
-| **Active terminal detection** | Know which terminal window is active, get its specific context (cwd, env vars, recent output). | High | No standard API. Requires Accessibility + Screen Recording permissions. AppleScript to iTerm2/Terminal.app. See PITFALLS.md for technical challenges. |
-| **Git context awareness** | Commands contextualized to current branch, repo state, uncommitted changes. | Medium | Parse .git directory. Run git status. Suggest branch-aware commands. Warp AI does this well. |
-| **Project-type detection** | Recognize Node.js project → suggest npm/npx. Python → suggest pip/venv. Improves command relevance. | Medium | Check for package.json, requirements.txt, Cargo.toml, etc. Inject into LLM context. |
-| **Environment variable awareness** | Read PATH, SHELL, other env vars to generate compatible commands. | Medium | Read from active shell process or user's shell config files. Privacy: avoid reading sensitive env vars. |
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Arrow-up navigates to previous query | Universal CLI muscle memory (bash, zsh, fish, readline all do this). Users will press arrow-up on first use and expect it to work. | LOW | Only applies in `displayMode: "input"` when cursor is at column 0 of the first line. Multi-line input needs guard: arrow-up should only trigger history if cursor is on the first line. Existing `handleKeyDown` in `CommandInput.tsx` is the right place. |
+| Arrow-down navigates forward (toward present) | Paired with arrow-up. Users who go back expect to go forward again. Must restore empty input when navigating past the most recent entry. | LOW | When user reaches index 0 (most recent) and presses arrow-down again, restore the draft they were typing before they started navigating. |
+| Current draft preserved during navigation | When user is mid-type and presses arrow-up, their current input should be saved as a "draft" and restored when they arrow-down past all history entries. Shell behavior: bash/zsh both preserve the draft. | LOW | Store draft string in local state (`historyDraft`) when user first starts navigating. Reset draft when user submits or closes overlay. |
+| History scoped to the active terminal window | If the user switches from one terminal tab or window to another and presses Cmd+K, history should reflect commands run in THAT window's context, not a global list. | MEDIUM | See Window Identification section below. This is the central challenge of the milestone. |
+| Session-scoped (not persistent across app restarts) | History disappears when CMD+K is quit. No file writes, no ~/.cmd_k_history. Users do not expect an overlay tool to persist query history long-term. Raycast history is session-scoped within a search context, not global persistent. | LOW | In-memory only. Store in Zustand store or a module-level Map. No tauri-plugin-store writes needed for history. |
+| AI sees prior turns in follow-up queries | After user gets a command result and submits a follow-up query in the same overlay session, the AI receives prior turns as conversation context. This is already implemented for `turnHistory` within a single overlay open/close cycle. The v0.1.1 requirement extends this to persist `turnHistory` across overlay open/close cycles for the same terminal window. | MEDIUM | `turnHistory` currently resets in `show()` on every overlay open. The fix is: instead of resetting, load the saved `turnHistory` for the current window key, and save it back on hide/submit. |
+| History capped at 7 entries per window | PROJECT.md specifies "up to 7 entries, session-scoped." Users do not need infinite history in an overlay tool. Caps prevent memory growth and keep the navigation fast. | LOW | Trim oldest entry when adding beyond 7. Match the existing 14-message (7 turn) cap already in `ai.rs`. |
 
-### Safety & Approval Mechanisms (CRITICAL FOR TRUST)
+### Differentiators (Competitive Advantage)
 
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| **Destructive command detection** | Flag rm -rf, DROP TABLE, force-push, etc. Require explicit confirmation. | Medium | Pattern matching (DCG-style whitelist/blocklist). AI-based danger classification. Prevents catastrophic mistakes. |
-| **Command approval workflow** | Never auto-execute. Show command, require explicit user confirmation. | Low | Preview → Approve → Execute flow. Keyboard shortcut for quick approval. Default is "show, don't run." |
-| **Command modification before execution** | Allow user to edit AI-generated command before running. | Low | Editable text field in preview. Copy edited version to clipboard or execute directly. |
-| **Execution history and rollback** | Log what commands were run, allow undo for file operations. | High | Track executed commands. For destructive ops, snapshot state before execution. Complex rollback logic. |
-| **Safe mode / dry run** | Execute commands with --dry-run or similar flags when available. | Medium | Tool-specific. Not all commands support dry run. Helpful for destructive ops like rsync, docker, kubectl. |
-
-### Multi-Model Support (EMERGING DIFFERENTIATOR)
+Features that elevate the experience beyond what users expect.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| **Model selection** | Let users choose LLM (GPT-4, Claude, Gemini, Grok). Different models excel at different tasks. | Medium | Warp Agents 3.0, GitHub Copilot CLI both offer this. UI for model picker. API key management per provider. |
-| **Automatic model routing** | Smart routing: simple commands → fast/cheap model, complex → powerful model. | High | Heuristic or AI-based classification. Cost optimization + quality. Requires multi-provider integration. |
-| **Local model support** | Privacy-conscious users want on-device processing (Llama, Mistral, etc). | High | Integration with Ollama or MLX. Slower, lower quality, but private. Niche but growing demand. |
+| Per-window AI conversation continuity | Most launchers (Raycast, Alfred) treat each activation as a fresh session. CMD+K remembers the full conversation thread for each terminal window across overlay open/close cycles. User can open iTerm2 tab 1, ask "how do I list files by size", get an answer, dismiss, do other work, re-open CMD+K in the same tab, and ask "now filter by .log extension" -- the AI understands the prior context without the user repeating it. | MEDIUM | Requires window key derivation (see below) and storing `turnHistory` per window key. The AI infrastructure already supports this (history param in `stream_ai_response`). |
+| History index resets cleanly on submit | When user navigates to a history entry, edits it, and submits, the edited query is added as a new entry (not overwriting the original). History grows forward. Users can freely edit recalled entries. | LOW | This is how bash/zsh handle it. No special logic needed: just call `addToHistory(query)` on every submit. |
+| Graceful degradation when window key unavailable | If the app cannot determine which terminal window is active (e.g., non-terminal app, GPU terminal with no AX, permission denied), fall back to a single shared history bucket for that app PID. History still works, just not window-granular. | LOW | Use `appPid` as fallback key when no window-specific key can be derived. |
 
-### Workflow & Productivity Features
+### Anti-Features (Commonly Requested, Often Problematic)
 
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| **Command templates / snippets** | Save frequently used command patterns. "Deploy to staging" → expands to full command. | Medium | Alfred/Raycast pattern. Snippet storage, variable interpolation. Complements AI generation for known tasks. |
-| **Multi-step command generation** | Break complex tasks into sequence of commands. "Set up Python project" → multiple commands. | High | LLM must plan multi-step workflows. Present as numbered list. Execute one-by-one or all at once. |
-| **Command chaining suggestions** | After user runs command, suggest logical next steps. "You just git add, want to commit?" | High | Stateful. Requires tracking what user executed. Context-aware suggestions. Warp AI-style workflow guidance. |
-| **Interactive command refinement** | Conversational: "That's close but use flags -la instead of -l" → AI adjusts command. | High | Chat-style interface. Maintain conversation context. Iterate on command until user satisfied. |
-| **Recent commands recall** | Quick access to recently generated commands. Re-run or modify previous suggestions. | Low | Local storage of last N commands. Searchable history within app. Ctrl+R-style UX. |
-
-### Cross-App Integration
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| **Paste into active terminal** | Automatically paste generated command into frontmost terminal window. | High | AppleScript for Terminal.app/iTerm2. Requires Accessibility permissions. Brittle (see PITFALLS.md). |
-| **Execute in background** | Run command in hidden terminal, show output in overlay. | Medium | Spawn subprocess, capture stdout/stderr, display in app. For read-only commands (git status, ls, etc). |
-| **Terminal emulator agnostic** | Work with Terminal.app, iTerm2, Warp, Alacritty, Kitty, etc. | High | Each terminal has different automation APIs. AppleScript, Accessibility API, or universal clipboard approach. |
-| **Editor integration** | Send commands to VSCode terminal, Cursor terminal, etc. | Medium | Similar to terminal integration. IDE-specific APIs. Extension-based approach may be easier. |
-
-### AI/LLM Optimization
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| **Streaming responses** | Show command being generated in real-time, not after full completion. Better perceived performance. | Medium | LLM streaming API support. Update UI progressively. Handle partial/invalid commands during stream. |
-| **Caching and prediction** | Cache common prompts locally. Predict user intent, pre-generate commands. | High | Local cache of prompt → command mappings. Predictive pre-fetching based on context. Privacy considerations. |
-| **Offline mode** | Basic command generation without network (local model or cached responses). | High | Local LLM or extensive command database. Degraded quality but functional offline. |
-| **Custom system prompts** | Power users customize AI behavior. "Always use verbose flags" or "Prefer GNU tools over BSD". | Medium | User-defined prompt templates. Inject into LLM system message. Profile/preset management. |
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| Persistent cross-session history (written to disk) | "Remember what I asked last week" | Commands contain sensitive paths, tokens, project names. Writing history to disk violates the zero-footprint expectation of an overlay tool. Adds file I/O, storage concerns, privacy liability. | Session-scoped in-memory only. Users who want persistent history use their shell's history (zsh_history). |
+| Cross-window shared history (global history) | Simpler to implement (no window identification needed) | Destroys the value of per-window context. If working on three different projects in three terminal tabs, global history mixes queries from different contexts. Arrow-up in project A tab shows a query from project B. | Per-window scoping is the correct model. Do the work to identify windows. |
+| Arrow-up in result or streaming mode | Feels intuitive to some users | Overlay is not a REPL. In result mode, the input area shows the previous query for follow-up editing. Arrow-up would be ambiguous: navigate history OR move cursor in a multiline follow-up? | Only activate history navigation in `displayMode: "input"` and only when cursor is on line 1, col 0. Match how IDEs handle this (e.g., VS Code's terminal input). |
+| Infinite history per window | "More is better" | Memory cost grows unboundedly in long sessions. Navigation becomes slow. Users forget what they queried 50 entries ago. | Cap at 7 entries per window as specified. This aligns with the 7-turn AI context cap already in place. |
+| Persisting follow-up context across app restarts | "Resume where I left off" | Context from a previous session is stale. Terminal state (CWD, running processes, visible output) will have changed. Resuming a stale conversation leads to irrelevant AI responses. | Session-scoped only. Fresh start on each CMD+K launch. |
+| History search (Ctrl+R style fuzzy find in history) | Power-user feature from shell | Scope explosion. v0.1.1 is navigation only. Fuzzy search requires a separate UI surface and filtering logic. | Arrow key navigation is sufficient for 7-entry history. Add search in a future milestone if demand exists. |
 
 ---
 
-## Anti-Features
+## Window Identification Strategy
 
-Features to explicitly NOT build. Common mistakes in this domain or features that seem good but cause problems.
+This is the core technical challenge for the milestone. Here is the full analysis.
 
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| **Auto-execution of commands** | Catastrophically dangerous. LLMs make mistakes. Users paste without reading. One bad rm -rf ruins trust forever. | Always preview. Require explicit approval (click, Enter key, etc). Make safety the default, not opt-in. |
-| **Shell plugin requirement** | Warp AI, GitHub Copilot CLI require shell integration. Friction in onboarding. Breaks in SSH, containers, restricted shells. | Use clipboard-based approach. Detect context via macOS APIs (Accessibility, AppleScript). Trade some features for universal compatibility. |
-| **Cloud-synced command history** | Privacy nightmare. Commands contain sensitive data (passwords, API keys, file paths, server IPs). | Keep all data local-only. If sync needed, encrypt end-to-end and make opt-in with clear warnings. |
-| **Complex multi-pane UI** | Overlay apps succeed via simplicity. Adding file browsers, terminal emulators, etc. bloats UX and scope. | Single-purpose focus: generate command, copy/paste. Don't try to be a full IDE or terminal replacement. |
-| **Custom terminal emulator** | Massive scope. Terminal emulators are complex (VT100 emulation, performance, etc). Warp tried this, but niche. | Integrate with existing terminals. Clipboard is the universal interface. |
-| **Scraping terminal output** | Fragile. OCR or screen scraping breaks with themes, fonts, terminal updates. Privacy violation. | Ask user to paste output if needed, or use shell integration (but see above why that's an anti-feature for v1). |
-| **Mandatory account creation** | Friction. Users want to try immediately. Account walls reduce adoption, especially for dev tools. | Make account optional. Local-only mode for free tier. Accounts only for cloud sync or premium features. |
-| **Free tier with usage limits** | Annoying for dev tools. Developers hit limits fast during active work. Leads to tool abandonment. | Generous free tier or paid-only. If limits exist, make them high (100+ commands/day). Daily resets, not monthly. |
-| **Built-in terminal emulator** | Scope explosion. Users already have terminal preferences (iTerm2, Warp, etc). Won't switch. | Focus on overlay + AI. Integrate with existing workflows rather than replacing them. |
-| **Command execution logging to cloud** | Privacy violation. Commands contain secrets, internal tool names, infrastructure details. | Local-only logging. If analytics needed, anonymize heavily (command patterns, not actual commands). |
+### The Problem
+
+The `AppState.previous_app_pid` captures the PID of the frontmost app (e.g., `iTerm2`, PID 1234). But iTerm2 may have 10 tabs and 3 windows open. All tabs share the same app PID. History must be keyed to the specific terminal window or tab, not just the app.
+
+### What Exists in the Codebase
+
+The current context detection (`detect_full` in `terminal/mod.rs`) returns:
+- `app_name` (cleaned display name, e.g., "iTerm2")
+- `terminal.cwd` (current working directory of the shell)
+- `terminal.shell_type` (e.g., "zsh")
+- `terminal.shell_pid` is NOT returned but is derived internally in `process.rs`
+
+The `AppContext` returned to the frontend has everything except a stable window identifier.
+
+### Candidate Window Key Strategies
+
+**Strategy 1: CWD + App Name composite key**
+Key: `"{app_name}:{cwd}"`
+
+Example: `"iTerm2:/Users/alice/projects/web-app"`
+
+- Pros: Already available from `AppContext`. No new Rust code needed. Works for the common case where each terminal tab is in a different directory.
+- Cons: Two tabs in the same directory get the same key (shares history). CWD changes as user navigates -- after `cd ~/other-project`, key changes and history appears empty.
+- Verdict: Acceptable as a pragmatic fallback. Most developer workflows have tabs scoped to projects, so same-CWD collision is infrequent.
+
+**Strategy 2: Shell PID as key**
+Key: shell PID (e.g., 5678 for the specific zsh process)
+
+- Pros: Each terminal tab spawns a unique shell process. Shell PIDs are stable for the lifetime of that tab. Already calculated in `process.rs:find_shell_pid()` but not returned from `detect_full`.
+- Cons: Requires exposing shell PID in `AppContext` (one new field in Rust + TypeScript types). Shell PID changes when user opens a new tab in the same directory.
+- Verdict: Best technical solution. Low Rust implementation cost. Shell PID is the most precise identifier for "this terminal session."
+
+**Strategy 3: CGWindowID via CoreGraphics**
+Key: CGWindowID of the frontmost window
+
+- Pros: Truly unique per OS window.
+- Cons: Requires ObjC FFI using `CGWindowListCopyWindowInfo`. Screen recording permission may be required (the same concern addressed in existing research). Adds a new permission request for a non-critical feature. Overkill for v0.1.1.
+- Verdict: Do not use. Permission cost exceeds the marginal accuracy improvement over shell PID.
+
+**Strategy 4: AX window title**
+Key: window title read via Accessibility API
+
+- Pros: Unique per terminal window/tab in apps that expose tab titles (iTerm2 tab titles often show current directory or running process).
+- Cons: AX text reading is already in the critical path and has 500ms timeout. Adding another AX call increases latency. Tab titles are user-configurable and not stable. Does not work for GPU terminals (Alacritty, kitty, WezTerm).
+- Verdict: Do not use. Fragile and adds latency.
+
+### Recommended Approach
+
+Use **shell PID** as the primary window key. Fall back to **`app_name:cwd`** when shell PID is unavailable (non-terminal apps, GPU terminals where shell detection may be partial).
+
+Implementation: Add `shell_pid: Option<i32>` to `TerminalContext` struct. Populate it in `process::get_foreground_info()` by returning the PID that was found. This is a minimal Rust change since `find_shell_pid()` already returns the PID -- it just isn't passed through to the output struct.
+
+Frontend key derivation:
+```typescript
+function deriveWindowKey(appContext: AppContext | null): string {
+  if (!appContext) return "global";
+  const terminal = appContext.terminal;
+  if (terminal?.shell_pid) return `pid:${terminal.shell_pid}`;
+  if (terminal?.cwd && appContext.app_name) {
+    return `cwd:${appContext.app_name}:${terminal.cwd}`;
+  }
+  return `app:${appContext.app_name ?? "unknown"}`;
+}
+```
 
 ---
 
 ## Feature Dependencies
 
-Understanding which features build on others, informing phase/sprint structure.
-
 ```
-Core Foundation (Phase 1):
-├─ Global hotkey activation
-├─ Minimal overlay UI
-├─ Keyboard navigation
-└─ macOS permissions handling
+Arrow-up/down history navigation
+    └──requires──> per-window history store (Map<windowKey, string[]>)
+                       └──requires──> window key derivation
+                                          └──requires──> shell_pid in TerminalContext
+                                                             └──requires──> expose shell_pid from process.rs
 
-Basic AI Generation (Phase 1):
-├─ Natural language → command (LLM integration)
-├─ Command preview
-├─ Copy to clipboard
-└─ Basic error handling
+AI follow-up context across open/close cycles
+    └──requires──> per-window turnHistory store (Map<windowKey, TurnMessage[]>)
+                       └──requires──> window key derivation (same as above)
+                       └──requires──> load turnHistory from map in show() instead of reset
+                       └──requires──> save turnHistory to map in submitQuery() after each turn
 
-Context Awareness (Phase 2):
-├─ Requires: Active terminal detection
-├─ Enables: Current directory awareness
-├─ Enables: Shell history integration
-└─ Enables: Git context
+Window key derivation
+    └──requires──> AppContext available (already set in store on show())
+    └──enhances──> History navigation (makes it per-window vs global)
+    └──enhances──> AI follow-up context (makes it per-window vs session-only)
 
-Safety Layer (Phase 2):
-├─ Requires: Command preview
-├─ Enables: Destructive command detection
-├─ Enables: Approval workflow
-└─ Enables: Command modification
-
-Advanced Features (Phase 3+):
-├─ Multi-model support
-│   └─ Requires: Model selection UI, API key management
-├─ Auto-paste to terminal
-│   └─ Requires: Active terminal detection, Accessibility permissions
-├─ Streaming responses
-│   └─ Requires: LLM streaming API integration
-└─ Command chaining
-    └─ Requires: Execution tracking, context maintenance
+Draft preservation during navigation
+    └──requires──> Arrow navigation feature (no value without it)
+    └──enhances──> Arrow navigation (prevents accidental loss of in-progress query)
 ```
 
-**Critical Path:**
-1. Overlay + hotkey + basic UI → Can't use app without this
-2. LLM integration + command preview → Core value proposition
-3. Clipboard copy → Minimum viable output
-4. Terminal context (cwd) → Dramatically improves command quality
-5. Safety features → Builds trust, prevents disasters
+### Dependency Notes
 
-**Can Defer:**
-- Multi-model support (single provider for MVP)
-- Auto-paste (clipboard is sufficient, auto-paste is fragile)
-- Streaming (nice-to-have UX, not critical)
-- Advanced context (git, env vars, history - add incrementally)
+- **Shell PID requires minimal Rust change:** `TerminalContext` needs one new optional field. `ProcessInfo` in `process.rs` already has the PID from `find_shell_pid()`. Pass it through. Update TypeScript interface to match.
+- **turnHistory per-window conflicts with current show() reset:** The `show()` action currently resets `turnHistory: []`. This must change to: load from the per-window map using the current window key. The window key must be derived after `appContext` is set (which is async). This means turn history loading happens in the async context detection callback, not in the synchronous `show()` call.
+- **Arrow navigation conflicts with textarea cursor behavior:** On a single-line input, arrow-up always navigates history. On a multi-line input (the textarea grows), arrow-up should only navigate history when cursor is on the first line (selectionStart <= first line length). Check `textarea.selectionStart === 0` or more accurately check that there's no newline before the cursor position.
 
 ---
 
-## MVP Recommendation
+## MVP Definition
 
-For MVP (v0.1), prioritize:
+### Launch With (v0.1.1)
 
-### Must Have (Core Value)
-1. **Global hotkey overlay** (Cmd+K or Option+Space)
-2. **Natural language → command generation** (single AI provider: xAI Grok)
-3. **Command preview with syntax highlighting**
-4. **Copy to clipboard** (primary output method)
-5. **Basic terminal context: current working directory**
-6. **Command explanation** (what does this command do?)
-7. **Error handling** (API failures, network issues)
+Minimum to ship the milestone with all specified behaviors working correctly.
 
-### Should Have (Safety & Polish)
-8. **Destructive command flagging** (warn on rm, git push --force, etc.)
-9. **Command modification** (edit before copying)
-10. **Accessibility permissions onboarding**
-11. **Menu bar app with Preferences/Quit**
+- [ ] `shell_pid` exposed in `TerminalContext` and `AppContext` Rust structs -- required for per-window key
+- [ ] `shell_pid` added to TypeScript `TerminalContext` interface in `store/index.ts`
+- [ ] `deriveWindowKey()` utility function in frontend (shell_pid primary, cwd:app fallback)
+- [ ] Per-window history store (`Map<string, string[]>`) in Zustand store, capped at 7 entries per key
+- [ ] `addQueryToHistory(windowKey, query)` called on every successful AI response
+- [ ] Arrow-up in `CommandInput.tsx` navigates backward through per-window history when `displayMode === "input"` and cursor is at start of first line
+- [ ] Arrow-down navigates forward, restoring in-progress draft when past the end of history
+- [ ] Per-window `turnHistory` store (`Map<string, TurnMessage[]>`) in Zustand store
+- [ ] `show()` loads `turnHistory` from per-window map (async, after `appContext` is set) instead of resetting to `[]`
+- [ ] `submitQuery()` saves updated `turnHistory` back to per-window map after each AI response
+- [ ] Graceful fallback: all features work when window key is `"global"` (no terminal detected)
 
-### Defer to Post-MVP
-- **Multi-model support**: Single provider (Grok) sufficient for v1. Add GPT/Claude later based on demand.
-- **Shell history awareness**: Complex, privacy-sensitive. Not critical for initial validation.
-- **Auto-paste to terminal**: Fragile, terminal-specific. Clipboard approach works universally.
-- **Streaming responses**: Nice UX improvement, not core to value prop.
-- **Git context awareness**: Valuable but can add after validating core concept.
-- **Command templates/snippets**: Feature creep. Focus on AI generation first.
-- **Multi-step workflows**: Complex. Single commands are sufficient for MVP.
-- **Execute in background**: Scope expansion. Clipboard + manual execution is fine.
+### Add After Validation (v1.x)
 
-**MVP Rationale:**
-The MVP focuses on the tightest possible loop: invoke overlay → describe command in natural language → AI generates command with current directory context → preview and copy to clipboard → paste into existing terminal. This validates the core hypothesis (is AI command generation valuable?) without building a terminal emulator, shell plugin, or complex integrations.
+- [ ] Tab-specific key for GPU terminals (Alacritty, kitty, WezTerm) -- currently CWD fallback is sufficient
+- [ ] History navigation visual indicator (e.g., subtle "3/7" counter) -- adds discoverability but not essential
+- [ ] Persist window key mapping across hotkey triggers within same session for apps that respawn shell PIDs
 
-Current directory context is the only terminal awareness included because it's essential for command quality (file paths, relative operations) and achievable without shell plugins (see ARCHITECTURE.md for approaches).
+### Future Consideration (v2+)
 
-Safety features (destructive command flagging, preview requirement, modification) are included in MVP because one catastrophic mistake destroys user trust permanently. Better to launch with conservative safety than move fast and break production.
+- [ ] Persistent cross-session history with encryption and explicit user opt-in
+- [ ] History search (Ctrl+R style) as a separate UI surface
+- [ ] Export conversation thread per window
 
 ---
 
-## Competitive Positioning
+## Feature Prioritization Matrix
 
-### vs. Raycast / Alfred
-**Their strength:** General-purpose launcher, 1500+ extensions, workflow automation, file search, calculator, etc.
-**Our differentiation:** Terminal-specific. Deep command generation context. Safety for destructive commands. No feature bloat.
-**Why users switch to us:** Raycast/Alfred AI features are generic. We're purpose-built for terminal workflows.
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| Arrow-up/down query history | HIGH | LOW | P1 |
+| Per-window history scoping | HIGH | MEDIUM | P1 |
+| Draft preservation during navigation | HIGH | LOW | P1 |
+| AI follow-up context across cycles | HIGH | MEDIUM | P1 |
+| Shell PID in TerminalContext | HIGH (enables all above) | LOW | P1 |
+| History capped at 7 entries | LOW (constraint, not a feature) | LOW | P1 |
+| History navigation visual counter | MEDIUM | LOW | P2 |
+| CGWindowID-based window key | LOW (marginal over shell PID) | HIGH | P3 |
+| History search | MEDIUM | HIGH | P3 |
 
-### vs. Warp AI / GitHub Copilot CLI
-**Their strength:** Integrated into terminal. Full context (history, output, env). Agent-based workflows.
-**Our differentiation:** No shell plugin required. Works with any terminal. Overlay invoked from anywhere, not just inside terminal.
-**Why users switch to us:** Copilot CLI requires GitHub subscription. Warp requires using Warp terminal. We're universal, zero lock-in.
-
-### vs. Amazon Q CLI
-**Their strength:** AWS-specific. Deep integration with AWS services and CLI.
-**Our differentiation:** General-purpose commands, not AWS-only. Simpler onboarding (no AWS account needed).
-**Why users choose us:** Not everyone uses AWS. We handle git, npm, docker, filesystem ops, etc. Broader scope.
-
-### vs. Fig (deprecated, now Amazon Q)
-**Historical note:** Fig pioneered terminal autocomplete overlays. Acquired by AWS, sunset into Amazon Q.
-**Lesson learned:** Terminal autocomplete alone wasn't defensible. Need stronger differentiation (AI generation, not just autocomplete).
-
-### vs. Superwhisper
-**Their strength:** Voice-to-text dictation, works anywhere on macOS.
-**Our differentiation:** Specialized for terminal commands. AI understands command syntax, flags, patterns. Not just transcription.
-**Different use case:** They target writing, notes, messaging. We target developers and terminal workflows.
+**Priority key:**
+- P1: Must have for v0.1.1 launch
+- P2: Should have, add if time permits in this milestone
+- P3: Future milestone
 
 ---
 
-## Feature Complexity Assessment
+## Competitor Feature Analysis
 
-| Complexity | Features | Estimated Effort |
-|------------|----------|------------------|
-| **Low** | Global hotkey, clipboard copy, menu bar app, basic UI, permissions onboarding | 1-2 days each |
-| **Medium** | Fuzzy search, command explanation, error handling, destructive command detection, syntax highlighting, model selection UI | 3-5 days each |
-| **High** | LLM integration, terminal context detection (without shell plugin), auto-paste to terminal, shell history awareness, multi-step workflows, streaming responses | 1-2 weeks each |
-| **Very High** | Agentic multi-step execution, local LLM support, terminal output parsing, execution rollback | 2-4 weeks each |
+| Feature | Shell (bash/zsh) | Raycast | Warp AI | CMD+K v0.1.1 |
+|---------|-----------------|---------|---------|--------------|
+| Arrow-up navigates history | Yes, always | N/A (search-driven) | Yes, per shell session | Yes, per terminal window session |
+| History scope | Per shell process (session or file) | Global recent commands | Per terminal session | Per terminal window (shell PID keyed) |
+| Draft preservation | Yes (bash/zsh both preserve draft) | N/A | Yes | Yes |
+| AI context across queries | N/A | No (stateless search) | Yes, within Warp session | Yes, per terminal window session (v0.1.1) |
+| Context persists across launcher close | N/A | No | Yes (terminal stays open) | Yes (per window, session-scoped) |
+| Window-level history separation | N/A | N/A | Yes (terminal tabs are separate) | Yes (shell PID key) |
 
-**MVP Complexity Budget:**
-- Core overlay + hotkey: ~3 days
-- LLM integration (Grok API): ~1 week
-- Command preview UI: ~3 days
-- Terminal context (cwd detection): ~1 week
-- Safety features: ~3 days
-- Polish and onboarding: ~3 days
+---
 
-**Total MVP estimate: 3-4 weeks** for single developer, assuming no major technical blockers in terminal context detection.
+## Implementation Complexity Notes
+
+### Low-complexity items (same-session, frontend-only)
+
+Arrow key navigation and draft preservation are purely frontend changes to `CommandInput.tsx` and the Zustand store. No new Tauri commands needed. No Rust changes. Estimated: 2-4 hours.
+
+### Medium-complexity items (cross-session context, requires Rust change)
+
+Exposing `shell_pid` in `TerminalContext` requires:
+1. Add `pub shell_pid: Option<i32>` to `TerminalContext` struct in `terminal/mod.rs`
+2. Populate it in `detect_inner()` and `detect_app_context()` by capturing the return value of `find_shell_pid()`
+3. Update TypeScript `TerminalContext` interface in `store/index.ts`
+4. Add `deriveWindowKey()` in frontend
+5. Add per-window Maps to Zustand store
+6. Change `show()` to load rather than reset `turnHistory` (requires async timing fix)
+
+Estimated: 4-6 hours for all Rust + TypeScript changes.
+
+### Timing challenge for per-window turnHistory
+
+`show()` runs synchronously but `appContext` arrives asynchronously (500ms detection). The per-window `turnHistory` can only be loaded after `appContext` is known. Current `show()` pattern already handles this for accessibility checking -- the same pattern applies: after `setAppContext(ctx)` is called in the async callback, immediately derive the window key and set `turnHistory` from the per-window map. This avoids any new architectural patterns; it extends the existing async context detection flow.
 
 ---
 
 ## Sources
 
-### macOS Overlay/Launcher Apps
-- [Raycast - Your shortcut to everything](https://www.raycast.com/)
-- [Raycast - macOS Changelog](https://www.raycast.com/changelog)
-- [Alfred - Productivity App for macOS](https://www.alfredapp.com/)
-- [Alfred Powerpack - Take Control of Your Mac and macOS](https://www.alfredapp.com/powerpack/)
-- [Superwhisper](https://superwhisper.com/)
-- [Best Mac Keyboard Shortcut Apps (2026 Edition)](https://textexpander.com/blog/mac-keyboard-shortcut-app)
-
-### AI Terminal Command Generation
-- [Warp: The Agentic Development Environment](https://www.warp.dev/)
-- [Warp: AI: Natural-Language Coding Agents](https://www.warp.dev/warp-ai)
-- [Warp: All Features](https://www.warp.dev/all-features)
-- [GitHub Copilot CLI](https://github.com/features/copilot/cli)
-- [Using GitHub Copilot CLI - GitHub Docs](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/use-copilot-cli)
-- [Amazon Q Developer for command line](https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/command-line.html)
-- [Amazon Q CLI Command Reference](https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/command-line-reference.html)
-
-### Terminal Autocomplete & Context
-- [Fig terminal autocomplete](https://github.com/withfig/autocomplete)
-- [hishtory - Your shell history: synced, queryable, and in context](https://terminaltrove.com/hishtory/)
-- [Giving coding agents situational awareness](https://dave.engineer/blog/2026/01/agent-situations/)
-- [zsh-autosuggestions - Fish-like autosuggestions for zsh](https://github.com/zsh-users/zsh-autosuggestions)
-
-### Safety & Best Practices
-- [DCG: Destructive Command Guard — Safety Philosophy and Design Principles](https://reading.torqsoftware.com/notes/software/ai-ml/safety/2026-01-26-dcg-destructive-command-guard-safety-philosophy-design-principles/)
-- [AI command approval safety confirmation patterns 2026](https://www.gravitee.io/blog/state-of-ai-agent-security-2026-report-when-adoption-outpaces-control)
-- [Cline CLI 2.0 (2026): Complete Guide, How It Works & Best Practices](https://iadirecto.com/en/cline-cli-2-0-2026-complete-guide-how-it-works-best-practices-for-ai-powered-terminal-automation/)
-
-### macOS Accessibility & Permissions
-- [Allow accessibility apps to access your Mac - Apple Support](https://support.apple.com/guide/mac-help/allow-accessibility-apps-to-access-your-mac-mh43185/mac)
-- [How to Keep Any Window Always on Top on macOS (2026 Guide)](https://www.floatytool.com/posts/how-to-keep-any-window-always-on-top-macos/)
-- [macOS Accessibility Permission](https://jano.dev/apple/macos/swift/2025/01/08/Accessibility-Permission.html)
-
-### macOS Clipboard & Terminal Integration
-- [Copy text into a Terminal window on Mac - Apple Support](https://support.apple.com/guide/terminal/copy-text-into-a-terminal-window-trml1019/mac)
-- [Terminal and the Clipboard – Scripting OS X](https://scriptingosx.com/2017/03/terminal-and-the-clipboard/)
+- Codebase: `/src-tauri/src/terminal/process.rs` -- `find_shell_pid()` already computes shell PID
+- Codebase: `/src-tauri/src/terminal/mod.rs` -- `TerminalContext` struct definition
+- Codebase: `/src/store/index.ts` -- existing `turnHistory`, `show()`, `submitQuery()` patterns
+- Codebase: `/src/components/CommandInput.tsx` -- existing `handleKeyDown` for arrow key extension
+- Codebase: `/src-tauri/src/state.rs` -- `AppState` with `previous_app_pid` for window identification context
+- [Navigate your command history with ease - Devlog](https://vonheikemen.github.io/devlog/tools/navigate-command-history/) -- shell history UX patterns
+- [ZSH-style up/down arrows in Bash/Readline - DEV Community](https://dev.to/onethingwell/zsh-style-updown-arrows-in-bashreadline-linuxunix-series-3mid) -- readline arrow behavior
+- [CGWindowListCopyWindowInfo - Apple Developer Documentation](https://developer.apple.com/documentation/coregraphics/1455137-cgwindowlistcopywindowinfo) -- window ID API research
+- [Multi-line Input Navigation: Up Arrow issue - opencode GitHub](https://github.com/anomalyco/opencode/issues/9659) -- multi-line arrow conflict pattern
+- [Add Up Arrow Navigation for Chat History - Cursor Forum](https://forum.cursor.com/t/add-up-arrow-navigation-for-chat-history/101523) -- expected behavior from user perspective
+- PROJECT.md: v0.1.1 specification ("up to 7 entries, session-scoped")
 
 ---
 
-## Research Confidence
-
-| Area | Confidence | Notes |
-|------|------------|-------|
-| **Overlay/Launcher UX Patterns** | HIGH | Well-established patterns from Raycast, Alfred, etc. Clear industry standards. |
-| **AI Command Generation Features** | MEDIUM-HIGH | Rapidly evolving space (2026). Warp, Copilot CLI set patterns, but field is young. |
-| **Terminal Context Detection** | MEDIUM | Multiple approaches exist, but all have tradeoffs. No perfect solution without shell plugins. |
-| **Safety Mechanisms** | HIGH | DCG and industry best practices well-documented. Critical patterns established. |
-| **macOS Permissions & APIs** | HIGH | Official Apple documentation, established patterns from existing apps. |
-| **Competitive Landscape** | MEDIUM | Fast-moving space. New tools emerge frequently. Positions may shift post-research. |
-
-**Gaps to investigate in later phases:**
-- Specific AppleScript APIs for iTerm2 vs Terminal.app (architecture phase)
-- Performance benchmarks for different LLM providers (implementation phase)
-- User preferences for auto-paste vs clipboard (beta testing phase)
-- macOS Sequoia permission changes and monthly re-approval requirements (deployment phase)
+*Feature research for: macOS overlay per-terminal-window command history and AI follow-up context*
+*Milestone: v0.1.1*
+*Researched: 2026-02-28*
