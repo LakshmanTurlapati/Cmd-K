@@ -28,29 +28,20 @@ The overlay must appear on top of the currently active application and feel inst
 - AICG-01: User can type natural language and receive a terminal command via xAI (Grok) -- v0.1.0
 - AICG-02: Command generation streams in real-time -- v0.1.0
 - AICG-03: Destructive commands flagged with warning before paste -- v0.1.0
-
-## Current Milestone: v0.1.1 Command History & Follow-ups
-
-**Goal:** Per-terminal-window command history with arrow key navigation and AI follow-up context
-
-**Target features:**
-- Per-terminal-window command history (up to 7 entries, session-scoped)
-- Arrow up/down navigation in overlay input to recall previous commands
-- Follow-up context -- AI sees full conversation history for the active terminal window
-- Terminal window identification to keep histories separate
+- WKEY-01: Stable per-terminal-window key (bundle_id:shell_pid) computed before overlay shows -- v0.1.1
+- WKEY-02: Window key captured synchronously in hotkey handler before overlay steals focus -- v0.1.1
+- WKEY-03: Non-terminal apps fall back to global key -- v0.1.1
+- HIST-01: Arrow-Up recalls previous query for active terminal window -- v0.1.1
+- HIST-02: Arrow-Down navigates forward, restoring current draft at end -- v0.1.1
+- HIST-03: Current draft preserved during history navigation -- v0.1.1
+- HIST-04: Up to 50 queries per terminal window, session-scoped -- v0.1.1
+- CTXT-01: AI turnHistory persists per terminal window across overlay cycles -- v0.1.1
+- CTXT-02: turnHistory restored from per-window map on overlay open -- v0.1.1
+- CTXT-03: Terminal context only in first user message to prevent token bloat -- v0.1.1
 
 ### Active
 
-- [ ] WKEY-01: Stable per-terminal-window key (bundle_id:shell_pid) computed before overlay shows
-- [ ] WKEY-02: Window key captured synchronously in hotkey handler before overlay steals focus
-- [ ] WKEY-03: Non-terminal apps fall back to global key
-- [ ] HIST-01: Arrow-Up recalls previous query for active terminal window
-- [ ] HIST-02: Arrow-Down navigates forward, restoring current draft at end
-- [ ] HIST-03: Current draft preserved during history navigation
-- [ ] HIST-04: Up to 7 queries per terminal window, session-scoped
-- [ ] CTXT-01: AI turnHistory persists per terminal window across overlay cycles
-- [ ] CTXT-02: turnHistory restored from per-window map on overlay open
-- [ ] CTXT-03: Terminal context only in first user message to prevent token bloat
+(No active milestone -- use `/gsd:new-milestone` to start next)
 
 ### Out of Scope
 
@@ -67,10 +58,10 @@ The overlay must appear on top of the currently active application and feel inst
 
 ## Context
 
-Shipped v0.1.0 with 4,042 LOC Rust + 2,868 LOC TypeScript.
+Shipped v0.1.1 with per-terminal-window command history and AI follow-up context.
 Tech stack: Tauri v2 (Rust + React + TypeScript), NSPanel for overlay, xAI/Grok for AI, macOS Accessibility API + raw libproc FFI for terminal context.
-8 phases, 21 plans executed over 8 days (2026-02-21 to 2026-02-28).
-All 16 v0.1.0 requirements satisfied. 12 non-critical tech debt items remain.
+11 phases (8 in v0.1.0 + 3 in v0.1.1), 27 plans executed over 10 days (2026-02-21 to 2026-03-01).
+All 26 requirements satisfied (16 v0.1.0 + 10 v0.1.1). Minor tech debt: stale comment in history.rs.
 
 ## Constraints
 
@@ -95,6 +86,12 @@ All 16 v0.1.0 requirements satisfied. 12 non-critical tech debt items remain.
 | AppleScript dispatch for terminal pasting | iTerm2 write text + Terminal.app keystroke, neither auto-executes | Good -- safe pasting |
 | once_cell Lazy<RegexSet> for destructive patterns | Compiled once, zero allocation on subsequent checks | Good -- fast safety checks |
 | Capture-before-show PID pattern | Must capture frontmost PID before overlay steals focus | Good -- reliable context |
+| bundle_id:shell_pid as window key | Simpler than CGWindowID, no screen recording permission risk | Good -- stable per-window identity |
+| Rust AppState HashMap for history | show() resets React state, Rust survives overlay cycles | Good -- persistent without disk I/O |
+| Session-scoped history only | Privacy, simplicity; no disk persistence in v0.1.1 | Good -- clean scope boundary |
+| AX-based multi-tab CWD matching | Extracts focused tab CWD from AXTitle for IDE shell disambiguation | Good -- resolves Cursor/VS Code multi-tab |
+| turnHistory from windowHistory | No separate storage needed; reconstruct on overlay open | Good -- single source of truth |
+| Frontend-side turn limit capping | Pre-cap in Zustand; Rust stores all, frontend slices | Good -- user-configurable without IPC |
 
 ---
-*Last updated: 2026-02-28 after v0.1.1 milestone start*
+*Last updated: 2026-03-01 after v0.1.1 milestone completion*

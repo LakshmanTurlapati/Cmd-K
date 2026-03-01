@@ -2,19 +2,18 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-28)
+See: .planning/PROJECT.md (updated 2026-03-01)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** v0.1.1 Phase 10 -- AI Follow-up Context Per Window
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 10 of 10 (AI Follow-up Context Per Window)
-Plan: 2 of 2 complete
-Status: Phase 10 complete -- all plans executed
-Last activity: 2026-03-01 -- Completed 10-02 (preferences UI for turn limit slider + clear history)
+Phase: v0.1.1 complete (all 10 phases across 2 milestones shipped)
+Status: Milestone v0.1.1 archived
+Last activity: 2026-03-01 -- Completed milestone v0.1.1 (Command History & Follow-ups)
 
-Progress: [==============================] 90% (27/30 est. plans across all milestones)
+Progress: [==============================] 100% (27 plans across 2 milestones)
 
 ## Performance Metrics
 
@@ -24,9 +23,11 @@ Progress: [==============================] 90% (27/30 est. plans across all mile
 - Timeline: 8 days (2026-02-21 to 2026-02-28)
 - Codebase: 4,042 LOC Rust + 2,868 LOC TypeScript
 
-**v0.1.1:**
+**v0.1.1 Summary:**
 - Total phases: 3 (Phases 8-10)
-- Total plans: TBD (pending phase planning)
+- Total plans: 6
+- Timeline: 2 days (2026-02-28 to 2026-03-01)
+- Git: 32 commits, 47 files changed, 4,637 insertions
 
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
@@ -41,46 +42,19 @@ Progress: [==============================] 90% (27/30 est. plans across all mile
 
 ### Decisions
 
-All v0.1.0 decisions archived in PROJECT.md Key Decisions table.
-
-v0.1.1 decisions:
-- Use bundle_id:shell_pid as window key (simpler than CGWindowID, no screen recording permission risk)
-- Store per-window history in Rust AppState HashMap (not Zustand -- show() resets React state)
-- Session-scoped only, no disk persistence (privacy, simplicity)
-- Window key format: bundle_id:shell_pid for terminals/IDEs, bundle_id:app_pid for other apps
-- History IPC uses individual parameters (not struct) so frontend does not need to generate timestamps
-- History capped at 7 entries/window, 50 windows total with oldest-window eviction
-- Window key + history fetch placed before get_app_context in show() (key is fast, already computed by hotkey handler)
-- add_history_entry uses fire-and-forget pattern to avoid blocking UI flow
-- Error queries persisted with isError: true for arrow-key recall in Phase 9
-- Multi-tab IDE shell disambiguation uses AX-derived focused tab CWD matched against candidate shell CWDs
-- CWD extraction from AXTitle first (more reliable), AXValue last line as fallback
-- 0.3s AX messaging timeout for CWD extraction in hotkey handler critical path
-- text-white/60 for dimmed recalled history text, consistent with existing opacity patterns
-- History navigation index as local component state (not Zustand) -- resets on overlay close/open
-- Arrow-Down always navigates history (asymmetric with Arrow-Up first-line check)
-- Local windowHistory sync after fire-and-forget invoke avoids IPC re-fetch overhead
-- Reconstruct turnHistory from windowHistory on overlay open (no separate storage needed)
-- Filter out is_error entries and empty responses when reconstructing turnHistory
-- Follow-up AI messages omit terminal context entirely; system prompt has shell type
-- Frontend pre-caps history via turnLimit; Rust-side cap removed
-- MAX_HISTORY_PER_WINDOW increased from 7 to 50 to match turn limit slider range
-- Turn limit slider range 5-50 with default 7 matching Zustand initial state
-- Clear history button clears ALL windows at once (per user decision in research)
-- Frontend resets both windowHistory and turnHistory on clear for immediate UI consistency
+All decisions archived in PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
-None yet.
+None.
 
 ### Blockers/Concerns
 
 - 12 non-critical tech debt items from v0.1.0 (see milestones/v1.0-MILESTONE-AUDIT.md)
-- (RESOLVED by 10-01) turnHistory no longer resets on overlay open -- reconstructed from windowHistory
-- GPU terminals (Alacritty, kitty, WezTerm) may not expose shell PID -- needs fallback testing in Phase 8
+- 1 minor tech debt from v0.1.1: stale comment in history.rs (see milestones/v0.1.1-MILESTONE-AUDIT.md)
 
 ## Session Continuity
 
-Last session: 2026-03-01 (Phase 10 Plan 02 execution)
-Stopped at: Completed 10-02-PLAN.md -- Preferences UI for turn limit slider + clear history
+Last session: 2026-03-01 (v0.1.1 milestone completion)
+Stopped at: Milestone archived, ready for next milestone
 Resume file: None

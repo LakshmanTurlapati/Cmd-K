@@ -23,3 +23,27 @@
 
 ---
 
+
+## v0.1.1 Command History & Follow-ups (Shipped: 2026-03-01)
+
+**Phases completed:** 3 phases, 6 plans
+**Timeline:** 2026-02-28 to 2026-03-01 (2 days)
+**Git range:** 32 commits (47 files changed, 4,637 insertions)
+
+**Key accomplishments:**
+1. Per-terminal-window identity via bundle_id:shell_pid keys computed in hotkey handler, with bounded HashMap history (50/window, 50 windows) and 3 IPC commands
+2. AX-based focused terminal tab CWD extraction for Cursor/VS Code multi-tab shell disambiguation
+3. Shell-like Arrow-Up/Down history recall in overlay input with draft preservation and dimmed text styling
+4. Per-window AI conversation history (turnHistory) reconstructed from windowHistory on overlay open, enabling follow-up queries
+5. Conditional terminal context -- CWD/shell/output included only in first message of a session to prevent token bloat
+6. Turn limit slider (5-50) and clear conversation history button in Preferences with Rust IPC backend
+
+**Delivered:** Per-terminal-window command history with arrow key navigation and AI follow-up context that persists across overlay open/close cycles.
+
+**Archives:**
+- milestones/v0.1.1-ROADMAP.md
+- milestones/v0.1.1-REQUIREMENTS.md
+- milestones/v0.1.1-MILESTONE-AUDIT.md
+
+---
+
