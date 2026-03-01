@@ -103,3 +103,24 @@ pub fn add_history_entry(
 
     Ok(())
 }
+
+/// Clears all per-window history entries from AppState.
+///
+/// This wipes both AI conversation context and arrow-key command recall
+/// data for every tracked window. Called from the "Clear conversation history"
+/// button in Preferences.
+#[tauri::command]
+pub fn clear_all_history(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    let state = app
+        .try_state::<crate::state::AppState>()
+        .ok_or("AppState not found")?;
+    let mut history = state
+        .history
+        .lock()
+        .map_err(|_| "History mutex poisoned".to_string())?;
+    let window_count = history.len();
+    history.clear();
+    eprintln!("[history] cleared all history ({} windows)", window_count);
+    Ok(())
+}

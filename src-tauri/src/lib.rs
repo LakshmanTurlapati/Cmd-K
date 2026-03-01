@@ -4,7 +4,7 @@ mod terminal;
 
 use commands::{
     ai::stream_ai_response,
-    history::{get_window_key, get_window_history, add_history_entry},
+    history::{get_window_key, get_window_history, add_history_entry, clear_all_history},
     hotkey::register_hotkey,
     keychain::{delete_api_key, get_api_key, save_api_key},
     paste::{paste_to_terminal, confirm_terminal_command},
@@ -143,6 +143,7 @@ pub fn run() {
             get_window_key,
             get_window_history,
             add_history_entry,
+            clear_all_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running CMD+K application");
