@@ -22,9 +22,9 @@ Requirements for per-terminal-window command history and AI follow-up context.
 
 ### AI Follow-up Context
 
-- [ ] **CTXT-01**: AI conversation history (turnHistory) persists per terminal window across overlay open/close cycles within the same session
-- [ ] **CTXT-02**: When overlay opens, turnHistory is restored from the per-window map so the AI can do follow-ups
-- [ ] **CTXT-03**: Terminal context (CWD, shell, output) is included only in the first user message of a session to prevent token bloat in follow-ups
+- [x] **CTXT-01**: AI conversation history (turnHistory) persists per terminal window across overlay open/close cycles within the same session
+- [x] **CTXT-02**: When overlay opens, turnHistory is restored from the per-window map so the AI can do follow-ups
+- [x] **CTXT-03**: Terminal context (CWD, shell, output) is included only in the first user message of a session to prevent token bloat in follow-ups
 
 ## Future Requirements
 
@@ -59,9 +59,9 @@ Requirements for per-terminal-window command history and AI follow-up context.
 | HIST-02 | Phase 9 | Complete |
 | HIST-03 | Phase 9 | Complete |
 | HIST-04 | Phase 8 | Complete |
-| CTXT-01 | Phase 10 | Pending |
-| CTXT-02 | Phase 10 | Pending |
-| CTXT-03 | Phase 10 | Pending |
+| CTXT-01 | Phase 10 | Complete |
+| CTXT-02 | Phase 10 | Complete |
+| CTXT-03 | Phase 10 | Complete |
 
 **Coverage:**
 - v0.1.1 requirements: 10 total

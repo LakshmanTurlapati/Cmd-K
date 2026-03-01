@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-28)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** v0.1.1 Phase 9 -- Arrow Key History Navigation
+**Current focus:** v0.1.1 Phase 10 -- AI Follow-up Context Per Window
 
 ## Current Position
 
-Phase: 9 of 10 (Arrow Key History Navigation) -- COMPLETE
-Plan: 1 of 1 complete
-Status: Phase 9 complete, ready for Phase 10
-Last activity: 2026-03-01 -- Completed 09-01 (arrow-key history navigation)
+Phase: 10 of 10 (AI Follow-up Context Per Window)
+Plan: 1 of 2 complete
+Status: Phase 10 Plan 01 complete, ready for Plan 02
+Last activity: 2026-03-01 -- Completed 10-01 (per-window turnHistory reconstruction + conditional AI context)
 
-Progress: [==========================--] 83% (25/30 est. plans across all milestones)
+Progress: [============================-] 87% (26/30 est. plans across all milestones)
 
 ## Performance Metrics
 
@@ -34,6 +34,7 @@ Progress: [==========================--] 83% (25/30 est. plans across all milest
 | 08-02 | Frontend IPC integration | 2min | 2 | 1 |
 | 08-03 | Multi-tab IDE shell PID resolution | 4min | 2 | 4 |
 | 09-01 | Arrow-key history navigation | 3min | 2 | 3 |
+| 10-01 | Per-window turnHistory + conditional AI context | 3min | 2 | 3 |
 
 ## Accumulated Context
 
@@ -58,6 +59,11 @@ v0.1.1 decisions:
 - History navigation index as local component state (not Zustand) -- resets on overlay close/open
 - Arrow-Down always navigates history (asymmetric with Arrow-Up first-line check)
 - Local windowHistory sync after fire-and-forget invoke avoids IPC re-fetch overhead
+- Reconstruct turnHistory from windowHistory on overlay open (no separate storage needed)
+- Filter out is_error entries and empty responses when reconstructing turnHistory
+- Follow-up AI messages omit terminal context entirely; system prompt has shell type
+- Frontend pre-caps history via turnLimit; Rust-side cap removed
+- MAX_HISTORY_PER_WINDOW increased from 7 to 50 to match turn limit slider range
 
 ### Pending Todos
 
@@ -66,11 +72,11 @@ None yet.
 ### Blockers/Concerns
 
 - 12 non-critical tech debt items from v0.1.0 (see milestones/v1.0-MILESTONE-AUDIT.md)
-- Existing turnHistory in Zustand store resets on each overlay open -- Phase 10 addresses this
+- (RESOLVED by 10-01) turnHistory no longer resets on overlay open -- reconstructed from windowHistory
 - GPU terminals (Alacritty, kitty, WezTerm) may not expose shell PID -- needs fallback testing in Phase 8
 
 ## Session Continuity
 
-Last session: 2026-03-01 (Phase 9 Plan 01 execution)
-Stopped at: Completed 09-01-PLAN.md -- Phase 9 arrow-key history navigation complete
+Last session: 2026-03-01 (Phase 10 Plan 01 execution)
+Stopped at: Completed 10-01-PLAN.md -- Per-window turnHistory reconstruction + conditional AI context
 Resume file: None
