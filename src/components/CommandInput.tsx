@@ -1,5 +1,6 @@
 import { useEffect, useRef, useMemo, useState } from "react";
 import { useOverlayStore } from "@/store";
+import { useHistoryNavigation } from "@/hooks/useHistoryNavigation";
 
 const COMMANDS = ["/settings"];
 
@@ -14,6 +15,8 @@ export function CommandInput({ onSubmit }: CommandInputProps) {
   const visible = useOverlayStore((state) => state.visible);
   const displayMode = useOverlayStore((state) => state.displayMode);
   const [shaking, setShaking] = useState(false);
+  const { isRecalled, handleHistoryKey, resetOnSubmit, markEdited } =
+    useHistoryNavigation();
 
   const suggestion = useMemo(() => {
     if (!inputValue.startsWith("/") || inputValue.length < 1) return "";
@@ -69,6 +72,33 @@ export function CommandInput({ onSubmit }: CommandInputProps) {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // History navigation (Arrow-Up/Down)
+    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      const consumed = handleHistoryKey(e, textareaRef.current!);
+      if (consumed) {
+        // Auto-resize textarea after text replacement
+        requestAnimationFrame(() => {
+          const el = textareaRef.current;
+          if (el) {
+            el.style.height = "auto";
+            el.style.height = `${el.scrollHeight}px`;
+            // Move cursor to end
+            el.selectionStart = el.selectionEnd = el.value.length;
+          }
+        });
+        return;
+      }
+      return; // not consumed by history, let default textarea cursor movement happen
+    }
+
+    // Any non-navigation, non-modifier key pressed while showing recalled text: mark as edited
+    if (
+      isRecalled &&
+      !["Shift", "Control", "Alt", "Meta", "CapsLock", "Tab", "Escape"].includes(e.key)
+    ) {
+      markEdited();
+    }
+
     if (e.key === "Tab" && suggestion) {
       e.preventDefault();
       setInputValue(suggestion);
@@ -87,6 +117,7 @@ export function CommandInput({ onSubmit }: CommandInputProps) {
         const state = useOverlayStore.getState();
         if (inputValue.trim() && inputValue !== state.previousQuery) {
           e.stopPropagation();
+          resetOnSubmit();
           onSubmit(inputValue);
         }
         return;
@@ -95,6 +126,7 @@ export function CommandInput({ onSubmit }: CommandInputProps) {
       // does not fire from the same event that submits the query
       e.stopPropagation();
       if (inputValue.trim()) {
+        resetOnSubmit();
         onSubmit(inputValue);
       } else {
         // Empty input in input mode: trigger shake animation
@@ -137,7 +169,7 @@ export function CommandInput({ onSubmit }: CommandInputProps) {
         className={[
           "w-full",
           "bg-transparent",
-          "text-white",
+          isRecalled ? "text-white/60" : "text-white",
           "text-sm",
           "leading-relaxed",
           "resize-none",
