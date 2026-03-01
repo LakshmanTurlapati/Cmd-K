@@ -57,10 +57,10 @@ Plans:
   2. User can press Arrow-Down after navigating up to move forward through history, and pressing Arrow-Down past the newest entry restores the current draft
   3. If the user types partial text and then presses Arrow-Up, the draft is preserved and restored when they Arrow-Down back past the end of history
   4. Arrow-Up and Arrow-Down do not interfere with cursor movement in multi-line input (Shift+Enter prompts)
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 09-01: TBD
+- [ ] 09-01-PLAN.md -- useHistoryNavigation hook, CommandInput integration, dimmed text styling, windowHistory sync after submit
 
 ### Phase 10: AI Follow-up Context Per Window
 **Goal**: AI can do follow-up responses because it sees the full conversation history for the active terminal window
@@ -88,5 +88,5 @@ Plans:
 | 7. Accessibility Detection Fix | v0.1.0 | 2/2 | Complete | 2026-02-26 |
 | 7.1. Production DMG Fix | v0.1.0 | 1/1 | Complete | 2026-02-28 |
 | 8. Window Identification & History Storage | v0.1.1 | 2/3 | Gap closure | - |
-| 9. Arrow Key History Navigation | v0.1.1 | 0/? | Not started | - |
+| 9. Arrow Key History Navigation | v0.1.1 | 0/1 | Planning | - |
 | 10. AI Follow-up Context Per Window | v0.1.1 | 0/? | Not started | - |
