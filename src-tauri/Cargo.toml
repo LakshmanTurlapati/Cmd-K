@@ -1,6 +1,6 @@
 [package]
 name = "cmd-k"
-version = "0.1.0"
+version = "0.1.1"
 description = "CMD+K - AI-powered terminal command overlay for macOS"
 authors = ["CMD+K"]
 edition = "2021"

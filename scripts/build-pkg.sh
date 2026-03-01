@@ -9,7 +9,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 APP_NAME="CMD+K"
 IDENTIFIER="com.lakshmanturlapati.cmd-k"
-VERSION="0.1.0"
+VERSION="0.1.1"
 TARGET="universal-apple-darwin"
 
 APP_BUNDLE="$PROJECT_ROOT/src-tauri/target/$TARGET/release/bundle/macos/$APP_NAME.app"
