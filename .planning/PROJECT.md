@@ -41,6 +41,17 @@ The overlay must appear on top of the currently active application and feel inst
 
 ### Active
 
+- [ ] WKEY-01: Stable per-terminal-window key (bundle_id:shell_pid) computed before overlay shows
+- [ ] WKEY-02: Window key captured synchronously in hotkey handler before overlay steals focus
+- [ ] WKEY-03: Non-terminal apps fall back to global key
+- [ ] HIST-01: Arrow-Up recalls previous query for active terminal window
+- [ ] HIST-02: Arrow-Down navigates forward, restoring current draft at end
+- [ ] HIST-03: Current draft preserved during history navigation
+- [ ] HIST-04: Up to 7 queries per terminal window, session-scoped
+- [ ] CTXT-01: AI turnHistory persists per terminal window across overlay cycles
+- [ ] CTXT-02: turnHistory restored from per-window map on overlay open
+- [ ] CTXT-03: Terminal context only in first user message to prevent token bloat
+
 ### Out of Scope
 
 - VS Code extension -- dropped in favor of standalone overlay app
