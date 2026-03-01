@@ -482,6 +482,17 @@ export const useOverlayStore = create<OverlayState>((set) => ({
           }).catch((err: unknown) => {
             console.error("[store] add_history_entry failed:", err);
           });
+
+          // Sync local windowHistory for immediate Arrow-Up recall
+          const historySync: HistoryEntry = {
+            query,
+            response: fullText,
+            timestamp: Date.now(),
+            terminal_context: historyCtx,
+            is_error: false,
+          };
+          const currentHistory = useOverlayStore.getState().windowHistory;
+          useOverlayStore.getState().setWindowHistory([...currentHistory, historySync]);
         }
 
         // Destructive check BEFORE paste
@@ -554,6 +565,17 @@ export const useOverlayStore = create<OverlayState>((set) => ({
           }).catch((histErr: unknown) => {
             console.error("[store] add_history_entry (error case) failed:", histErr);
           });
+
+          // Sync local windowHistory for error query recall
+          const errorHistorySync: HistoryEntry = {
+            query,
+            response: "",
+            timestamp: Date.now(),
+            terminal_context: null,
+            is_error: true,
+          };
+          const currentErrHistory = useOverlayStore.getState().windowHistory;
+          useOverlayStore.getState().setWindowHistory([...currentErrHistory, errorHistorySync]);
         }
 
         set({
