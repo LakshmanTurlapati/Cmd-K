@@ -90,7 +90,7 @@ pub fn get_foreground_info(terminal_pid: i32) -> ProcessInfo {
         eprintln!("[process]   child {} -> name: {:?}", child, name);
     }
 
-    let shell_pid = match find_shell_pid(terminal_pid) {
+    let shell_pid = match find_shell_pid(terminal_pid, None) {
         Some(pid) => {
             eprintln!("[process] found shell pid: {} (name: {:?})", pid, get_process_name(pid));
             pid
@@ -314,20 +314,27 @@ fn get_child_pids(_pid: i32) -> Vec<i32> {
 /// Find the foreground shell PID for a given app.
 ///
 /// Strategy:
-/// 1. Fast path: walk direct children (handles Terminal.app → login → zsh).
+/// 1. Fast path: walk direct children (handles Terminal.app -> login -> zsh).
 /// 2. Broad path: use `pgrep` to find all shell processes system-wide,
 ///    then check which ones are descendants of this app PID by walking
 ///    up the parent chain. This handles deep Electron trees in VS Code/Cursor
-///    (e.g., VSCode → Helper → node → pty-helper → zsh).
-pub(crate) fn find_shell_pid(terminal_pid: i32) -> Option<i32> {
-    // Try the fast recursive walk first (works for simple terminal apps)
+///    (e.g., VSCode -> Helper -> node -> pty-helper -> zsh).
+///
+/// `focused_cwd`: AX-derived CWD from the focused terminal tab. Used to
+/// disambiguate between multiple candidate shells in Electron IDEs with
+/// multiple terminal tabs. Pass `None` for non-IDE callers.
+pub(crate) fn find_shell_pid(terminal_pid: i32, focused_cwd: Option<&str>) -> Option<i32> {
+    // Try the fast recursive walk first (works for simple terminal apps).
+    // The fast path does NOT need focused_cwd because it only returns a result
+    // when there is exactly one shell in a shallow tree (Terminal.app, iTerm2
+    // single tab), where ambiguity does not arise.
     if let Some(pid) = find_shell_recursive(terminal_pid, 3) {
         return Some(pid);
     }
 
     // Broad search: find shells that are descendants of this app
     eprintln!("[process] recursive walk failed for {}, trying ancestry search", terminal_pid);
-    find_shell_by_ancestry(terminal_pid)
+    find_shell_by_ancestry(terminal_pid, focused_cwd)
 }
 
 /// Find shell processes that are descendants of the given app PID.
@@ -337,7 +344,7 @@ pub(crate) fn find_shell_pid(terminal_pid: i32) -> Option<i32> {
 /// Collects ALL matching shells and picks the most recently spawned one
 /// (highest PID), which is most likely the active/focused terminal tab.
 #[cfg(target_os = "macos")]
-fn find_shell_by_ancestry(app_pid: i32) -> Option<i32> {
+fn find_shell_by_ancestry(app_pid: i32, focused_cwd: Option<&str>) -> Option<i32> {
     // Build a pgrep pattern matching all known shells
     let shell_pattern = KNOWN_SHELLS.join("|");
     let output = std::process::Command::new("pgrep")
@@ -431,6 +438,34 @@ fn find_shell_by_ancestry(app_pid: i32) -> Option<i32> {
         remaining
     };
 
+    // Step 2.5: CWD-based focused tab matching.
+    // If we have a focused CWD from AX (IDE terminal tab), compare it against
+    // the CWD of each candidate shell to find the one matching the focused tab.
+    if let Some(target_cwd) = focused_cwd {
+        if candidates.len() > 1 {
+            let mut cwd_matches: Vec<&(i32, Option<String>)> = Vec::new();
+            for candidate in &candidates {
+                if let Some(shell_cwd) = get_process_cwd(candidate.0) {
+                    eprintln!("[process] shell pid {} CWD: {}", candidate.0, &shell_cwd);
+                    if shell_cwd == target_cwd {
+                        cwd_matches.push(candidate);
+                    }
+                }
+            }
+            if cwd_matches.len() == 1 {
+                let matched = cwd_matches[0];
+                eprintln!("[process] CWD match: shell pid {} matches focused tab CWD {}", matched.0, target_cwd);
+                return Some(matched.0);
+            } else if cwd_matches.len() > 1 {
+                eprintln!("[process] {} shells match focused CWD {} -- falling through to highest PID among matches", cwd_matches.len(), target_cwd);
+                // Multiple shells in the same CWD -- pick highest PID among matches (best we can do)
+                return cwd_matches.iter().max_by_key(|(pid, _)| *pid).map(|(pid, _)| *pid);
+            }
+            // No CWD match found -- fall through to Step 3 (highest PID)
+            eprintln!("[process] no CWD match for focused tab CWD {} among {} candidates", target_cwd, candidates.len());
+        }
+    }
+
     // Step 3: Among candidates, pick the most recently spawned (highest PID).
     let best = candidates.iter().max_by_key(|(pid, _)| *pid);
     best.map(|(pid, _)| *pid)
@@ -514,7 +549,7 @@ fn is_sub_shell_of_any(pid: i32, ancestor_pids: &[i32], parent_map: &std::collec
 }
 
 #[cfg(not(target_os = "macos"))]
-fn find_shell_by_ancestry(_app_pid: i32) -> Option<i32> {
+fn find_shell_by_ancestry(_app_pid: i32, _focused_cwd: Option<&str>) -> Option<i32> {
     None
 }
 
