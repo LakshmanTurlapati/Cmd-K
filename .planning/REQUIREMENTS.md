@@ -9,16 +9,16 @@ Requirements for per-terminal-window command history and AI follow-up context.
 
 ### Window Identification
 
-- [ ] **WKEY-01**: App computes a stable per-terminal-window key (bundle_id:shell_pid) before the overlay shows
-- [ ] **WKEY-02**: Window key is captured synchronously in the hotkey handler alongside PID capture, before overlay steals focus
-- [ ] **WKEY-03**: Non-terminal apps fall back to a global key so history still works outside terminals
+- [x] **WKEY-01**: App computes a stable per-terminal-window key (bundle_id:shell_pid) before the overlay shows
+- [x] **WKEY-02**: Window key is captured synchronously in the hotkey handler alongside PID capture, before overlay steals focus
+- [x] **WKEY-03**: Non-terminal apps fall back to a global key so history still works outside terminals
 
 ### Command History
 
 - [ ] **HIST-01**: User can press Arrow-Up in the overlay input to recall the previous query for the active terminal window
 - [ ] **HIST-02**: User can press Arrow-Down to navigate forward through history, restoring the current draft at the end
 - [ ] **HIST-03**: Current draft text is preserved when user starts navigating history and restored when they return
-- [ ] **HIST-04**: History stores up to 7 queries per terminal window, session-scoped (in-memory only)
+- [x] **HIST-04**: History stores up to 7 queries per terminal window, session-scoped (in-memory only)
 
 ### AI Follow-up Context
 
@@ -52,13 +52,13 @@ Requirements for per-terminal-window command history and AI follow-up context.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| WKEY-01 | Phase 8 | Pending |
-| WKEY-02 | Phase 8 | Pending |
-| WKEY-03 | Phase 8 | Pending |
+| WKEY-01 | Phase 8 | Complete |
+| WKEY-02 | Phase 8 | Complete |
+| WKEY-03 | Phase 8 | Complete |
 | HIST-01 | Phase 9 | Pending |
 | HIST-02 | Phase 9 | Pending |
 | HIST-03 | Phase 9 | Pending |
-| HIST-04 | Phase 8 | Pending |
+| HIST-04 | Phase 8 | Complete |
 | CTXT-01 | Phase 10 | Pending |
 | CTXT-02 | Phase 10 | Pending |
 | CTXT-03 | Phase 10 | Pending |

@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-28)
 ## Current Position
 
 Phase: 8 of 10 (Window Identification & History Storage)
-Plan: -- (not yet planned)
-Status: Ready to plan
-Last activity: 2026-02-28 -- Roadmap created for v0.1.1 milestone
+Plan: 1 of 2 complete
+Status: Executing phase 8
+Last activity: 2026-03-01 -- Completed 08-01 (window key + history backend)
 
-Progress: [=====================-------] 70% (21/30 est. plans across all milestones)
+Progress: [======================------] 73% (22/30 est. plans across all milestones)
 
 ## Performance Metrics
 
@@ -28,6 +28,10 @@ Progress: [=====================-------] 70% (21/30 est. plans across all milest
 - Total phases: 3 (Phases 8-10)
 - Total plans: TBD (pending phase planning)
 
+| Phase | Plan | Duration | Tasks | Files |
+|-------|------|----------|-------|-------|
+| 08-01 | Window key + history backend | 5min | 2 | 7 |
+
 ## Accumulated Context
 
 ### Decisions
@@ -38,6 +42,9 @@ v0.1.1 decisions:
 - Use bundle_id:shell_pid as window key (simpler than CGWindowID, no screen recording permission risk)
 - Store per-window history in Rust AppState HashMap (not Zustand -- show() resets React state)
 - Session-scoped only, no disk persistence (privacy, simplicity)
+- Window key format: bundle_id:shell_pid for terminals/IDEs, bundle_id:app_pid for other apps
+- History IPC uses individual parameters (not struct) so frontend does not need to generate timestamps
+- History capped at 7 entries/window, 50 windows total with oldest-window eviction
 
 ### Pending Todos
 
@@ -51,6 +58,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-28 (v0.1.1 roadmap creation)
-Stopped at: Roadmap created, Phase 8 ready to plan
+Last session: 2026-03-01 (Phase 8 Plan 01 execution)
+Stopped at: Completed 08-01-PLAN.md
 Resume file: None
