@@ -53,12 +53,22 @@ struct TerminalContextView {
 /// Console last line (if browser DevTools open), then the task.
 ///
 /// Assistant mode: includes App name (if available), Console last line (if browser), then the question.
-fn build_user_message(query: &str, ctx: &AppContextView) -> String {
+fn build_user_message(query: &str, ctx: &AppContextView, is_follow_up: bool) -> String {
     let is_terminal_mode = ctx
         .terminal
         .as_ref()
         .and_then(|t| t.shell_type.as_ref())
         .is_some();
+
+    if is_follow_up {
+        // Follow-up: just the query, no terminal context (CTXT-03)
+        // System prompt already has shell type from the first message
+        if is_terminal_mode {
+            return format!("Task: {}", query);
+        } else {
+            return query.to_string();
+        }
+    }
 
     let mut parts: Vec<String> = Vec::new();
 
@@ -124,7 +134,7 @@ fn build_user_message(query: &str, ctx: &AppContextView) -> String {
 /// - Reads the xAI API key from macOS Keychain (never accepted from frontend).
 /// - Determines terminal vs assistant mode from context_json.
 /// - Builds the system prompt (two modes) and user message with context.
-/// - Includes up to 7 turns of session history in the messages array.
+/// - Includes session history (pre-capped by frontend via configurable turnLimit) in the messages array.
 /// - POSTs to xAI /v1/chat/completions with stream:true.
 /// - Parses SSE chunks via eventsource-stream and forwards each token via on_token.
 /// - Hard 10-second timeout wraps the SSE streaming loop.
@@ -178,10 +188,11 @@ pub async fn stream_ai_response(
 
     eprintln!("[ai] mode={}", if is_terminal_mode { "terminal" } else { "assistant" });
 
-    // 4. Build the user message with context
-    let user_message = build_user_message(&query, &ctx);
+    // 4. Build the user message with context (follow-ups omit terminal context)
+    let is_follow_up = !history.is_empty();
+    let user_message = build_user_message(&query, &ctx, is_follow_up);
 
-    // 5. Build messages array: system prompt + history (capped at last 7 pairs = 14 msgs) + current user msg
+    // 5. Build messages array: system prompt + history (pre-capped by frontend via turnLimit) + current user msg
     let mut messages: Vec<serde_json::Value> = Vec::new();
 
     messages.push(serde_json::json!({
@@ -189,9 +200,8 @@ pub async fn stream_ai_response(
         "content": system_prompt
     }));
 
-    // Cap history to last 7 turns (14 messages: 7 user + 7 assistant)
-    let history_start = history.len().saturating_sub(14);
-    for msg in &history[history_start..] {
+    // Frontend sends pre-capped history via turnLimit -- no Rust-side capping needed
+    for msg in &history {
         messages.push(serde_json::json!({
             "role": msg.role,
             "content": msg.content
