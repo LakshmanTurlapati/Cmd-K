@@ -1,9 +1,9 @@
 ---
-status: complete
+status: diagnosed
 phase: 08-window-identification-history-storage
 source: 08-01-SUMMARY.md, 08-02-SUMMARY.md
 started: 2026-03-01T07:10:00Z
-updated: 2026-03-01T07:22:00Z
+updated: 2026-03-01T07:25:00Z
 ---
 
 ## Current Test
@@ -50,7 +50,12 @@ skipped: 1
   reason: "Cursor IDE with 3 terminal tabs always picks shell PID 83090 via ancestry search. find_shell_pid returns all descendant shells but doesn't identify which tab is currently active/focused."
   severity: major
   test: 1
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "find_shell_by_ancestry in process.rs uses highest-PID heuristic (max_by_key) to select among multiple descendant shells. PIDs reflect creation order, not tab focus. Electron IDEs bury shells 4-5 levels deep, so the fast recursive walk fails and falls through to the ancestry search which finds all shells but picks arbitrarily."
+  artifacts:
+    - path: "src-tauri/src/terminal/process.rs"
+      issue: "find_shell_by_ancestry line 435 uses max_by_key(pid) -- highest PID is not the focused tab"
+    - path: "src-tauri/src/commands/hotkey.rs"
+      issue: "compute_window_key passes result from find_shell_pid directly as window key discriminator"
+  missing:
+    - "Need focused-tab detection for Electron IDEs -- AX-based CWD matching (compare each shell PID CWD against AXFocusedUIElement text) is recommended approach"
+  debug_session: ".planning/debug/cursor-multi-tab-same-pid.md"
