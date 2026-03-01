@@ -90,4 +90,4 @@ Plans:
 | 7.1. Production DMG Fix | v0.1.0 | 1/1 | Complete | 2026-02-28 |
 | 8. Window Identification & History Storage | v0.1.1 | 3/3 | Complete | 2026-03-01 |
 | 9. Arrow Key History Navigation | v0.1.1 | 1/1 | Complete | 2026-03-01 |
-| 10. AI Follow-up Context Per Window | 2/2 | Complete   | 2026-03-01 | - |
+| 10. AI Follow-up Context Per Window | 2/2 | Complete    | 2026-03-01 | - |
