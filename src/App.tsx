@@ -62,6 +62,10 @@ function App() {
           const autoPaste = await store.get<boolean>("autoPasteEnabled");
           useOverlayStore.getState().setAutoPasteEnabled(autoPaste ?? true);
 
+          // Load persisted turn limit preference
+          const turnLimitValue = await store.get<number>("turnLimit");
+          useOverlayStore.getState().setTurnLimit(turnLimitValue ?? 7);
+
           // Check if API key already exists (edge case: user saved key then closed)
           try {
             const existingKey = await invoke<string | null>("get_api_key");
@@ -123,6 +127,10 @@ function App() {
           // Load persisted auto-paste preference
           const autoPaste = await store.get<boolean>("autoPasteEnabled");
           useOverlayStore.getState().setAutoPasteEnabled(autoPaste ?? true);
+
+          // Load persisted turn limit preference
+          const turnLimitValue = await store.get<number>("turnLimit");
+          useOverlayStore.getState().setTurnLimit(turnLimitValue ?? 7);
         }
       } catch (err) {
         // Non-fatal: fall back to default command mode
