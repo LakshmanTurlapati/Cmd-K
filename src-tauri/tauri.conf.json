@@ -44,7 +44,7 @@
     "resources": ["../K.png", "../K-white.png"],
     "macOS": {
       "entitlements": "entitlements.plist",
-      "signingIdentity": "-"
+      "signingIdentity": "Developer ID Application: VENKAT LUKSSHMAN TURLAPATI (36L722DZ7X)"
     }
   }
 }

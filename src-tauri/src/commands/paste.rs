@@ -38,6 +38,11 @@ mod cg_keys {
         fn CGEventSetFlags(event: CGEventRef, flags: u64);
         fn CGEventPost(tap: u32, event: CGEventRef);
         fn CFRelease(cf: *const c_void);
+        fn CGEventKeyboardSetUnicodeString(
+            event: CGEventRef,
+            string_length: u64,
+            unicode_string: *const u16,
+        );
     }
 
     /// Post a single key-down + key-up pair with optional modifier flags.
@@ -61,6 +66,59 @@ mod cg_keys {
         CGEventPost(K_CG_HID_EVENT_TAP, up);
         CFRelease(down);
         CFRelease(up);
+        Ok(())
+    }
+
+    // macOS silently truncates unicode strings longer than 20 UTF-16 code units
+    const MAX_UTF16_PER_EVENT: usize = 20;
+    const INTER_CHUNK_DELAY_MS: u64 = 5;
+
+    /// Post a single chunk of UTF-16 code units as a key-down + key-up pair.
+    unsafe fn post_unicode_chunk(utf16: &[u16]) -> Result<(), String> {
+        let down = CGEventCreateKeyboardEvent(std::ptr::null(), 0, true);
+        let up = CGEventCreateKeyboardEvent(std::ptr::null(), 0, false);
+        if down.is_null() || up.is_null() {
+            if !down.is_null() { CFRelease(down); }
+            if !up.is_null() { CFRelease(up); }
+            return Err(
+                "CGEventCreateKeyboardEvent returned null -- Accessibility permission likely not granted".to_string()
+            );
+        }
+        CGEventKeyboardSetUnicodeString(down, utf16.len() as u64, utf16.as_ptr());
+        CGEventKeyboardSetUnicodeString(up, utf16.len() as u64, utf16.as_ptr());
+        CGEventPost(K_CG_HID_EVENT_TAP, down);
+        CGEventPost(K_CG_HID_EVENT_TAP, up);
+        CFRelease(down);
+        CFRelease(up);
+        Ok(())
+    }
+
+    /// Encode text as UTF-16 and post it in chunks of <= MAX_UTF16_PER_EVENT.
+    unsafe fn post_unicode_string(text: &str) -> Result<(), String> {
+        let utf16: Vec<u16> = text.encode_utf16().collect();
+        for chunk in utf16.chunks(MAX_UTF16_PER_EVENT) {
+            post_unicode_chunk(chunk)?;
+            if chunk.len() == MAX_UTF16_PER_EVENT {
+                std::thread::sleep(std::time::Duration::from_millis(INTER_CHUNK_DELAY_MS));
+            }
+        }
+        Ok(())
+    }
+
+    /// Type text into the frontmost terminal via CGEvent unicode keystrokes.
+    /// Sends Ctrl+U first to clear any existing input, then types the text
+    /// character-by-character so the terminal sees typed input (not a paste),
+    /// avoiding bracketed paste highlighting.
+    pub fn type_text(text: &str) -> Result<(), String> {
+        unsafe {
+            post_key(KVK_U, K_CG_EVENT_FLAG_MASK_CONTROL)?;
+        }
+        eprintln!("[cg_keys] posted Ctrl+U (pre-type clear)");
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        unsafe {
+            post_unicode_string(text)?;
+        }
+        eprintln!("[cg_keys] typed {} chars via CGEvent unicode", text.len());
         Ok(())
     }
 
@@ -225,8 +283,36 @@ end tell"#
                 }
             }
         }
+        "com.apple.Terminal" => {
+            // Terminal.app: type text via CGEvent unicode keystrokes to avoid
+            // bracketed paste highlighting that Cmd+V triggers in zsh.
+            #[cfg(target_os = "macos")]
+            ensure_accessibility()?;
+
+            let activate = build_activate_script(&bundle_id);
+            let _ = std::process::Command::new("osascript")
+                .arg("-e")
+                .arg(&activate)
+                .output();
+            std::thread::sleep(std::time::Duration::from_millis(150));
+
+            #[cfg(target_os = "macos")]
+            {
+                if let Err(e) = cg_keys::type_text(&command) {
+                    eprintln!(
+                        "[paste] Terminal.app type_text failed ({}), falling back to Cmd+V",
+                        e
+                    );
+                    cg_keys::post_ctrl_u()?;
+                    std::thread::sleep(std::time::Duration::from_millis(120));
+                    cg_keys::post_cmd_v()?;
+                } else {
+                    eprintln!("[paste] Terminal.app type_text succeeded");
+                }
+            }
+        }
         _ => {
-            // All other terminals: activate + CGEventPost Ctrl+U + Cmd+V
+            // All other terminals: type text via CGEvent unicode keystrokes
             #[cfg(target_os = "macos")]
             ensure_accessibility()?;
 
@@ -247,15 +333,21 @@ end tell"#
 
             #[cfg(target_os = "macos")]
             {
-                cg_keys::post_ctrl_u()?;
-                std::thread::sleep(std::time::Duration::from_millis(120));
-                cg_keys::post_cmd_v()?;
+                if let Err(e) = cg_keys::type_text(&command) {
+                    eprintln!(
+                        "[paste] type_text failed for {} ({}), falling back to Cmd+V",
+                        bundle_id, e
+                    );
+                    cg_keys::post_ctrl_u()?;
+                    std::thread::sleep(std::time::Duration::from_millis(120));
+                    cg_keys::post_cmd_v()?;
+                } else {
+                    eprintln!(
+                        "[paste] type_text succeeded | bundle={} | pid={} | chars={}",
+                        bundle_id, pid, command.len()
+                    );
+                }
             }
-
-            eprintln!(
-                "[paste] CGEventPost Ctrl+U + Cmd+V sent | bundle={} | pid={} | chars={}",
-                bundle_id, pid, command.len()
-            );
         }
     }
 
