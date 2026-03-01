@@ -29,9 +29,17 @@ The overlay must appear on top of the currently active application and feel inst
 - AICG-02: Command generation streams in real-time -- v0.1.0
 - AICG-03: Destructive commands flagged with warning before paste -- v0.1.0
 
-### Active
+## Current Milestone: v0.1.1 Command History & Follow-ups
 
-(Requirements for next milestone will be defined via /gsd:new-milestone)
+**Goal:** Per-terminal-window command history with arrow key navigation and AI follow-up context
+
+**Target features:**
+- Per-terminal-window command history (up to 7 entries, session-scoped)
+- Arrow up/down navigation in overlay input to recall previous commands
+- Follow-up context -- AI sees full conversation history for the active terminal window
+- Terminal window identification to keep histories separate
+
+### Active
 
 ### Out of Scope
 
@@ -39,7 +47,7 @@ The overlay must appear on top of the currently active application and feel inst
 - OpenAI provider -- deferred to future milestone
 - Anthropic provider -- deferred to future milestone
 - Windows/Linux support -- macOS first, cross-platform later
-- Command history/favorites -- future feature
+- Command favorites/bookmarks -- future feature (history is v0.1.1 scope)
 - Multi-step command workflows -- future feature
 - Command explanation mode -- future feature
 - Offline mode -- requires internet for AI generation
@@ -78,4 +86,4 @@ All 16 v0.1.0 requirements satisfied. 12 non-critical tech debt items remain.
 | Capture-before-show PID pattern | Must capture frontmost PID before overlay steals focus | Good -- reliable context |
 
 ---
-*Last updated: 2026-02-28 after v0.1.0 milestone*
+*Last updated: 2026-02-28 after v0.1.1 milestone start*

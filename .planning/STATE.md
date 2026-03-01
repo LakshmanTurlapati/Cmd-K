@@ -5,17 +5,18 @@
 See: .planning/PROJECT.md (updated 2026-02-28)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** v0.1.0 shipped -- planning next milestone
+**Current focus:** v0.1.1 -- Command History & Follow-ups
 
 ## Current Position
 
-Phase: v0.1.0 COMPLETE
-Status: Milestone archived. All 16 v0.1.0 requirements satisfied. Ready for next milestone.
-Last activity: 2026-02-28 - Completed v0.1.0 milestone
+Phase: Not started (defining requirements)
+Plan: --
+Status: Defining requirements
+Last activity: 2026-02-28 -- Milestone v0.1.1 started
 
 ## Performance Metrics
 
-**v1.0 Summary:**
+**v0.1.0 Summary:**
 - Total phases: 8
 - Total plans: 21
 - Timeline: 8 days (2026-02-21 to 2026-02-28)
@@ -39,9 +40,10 @@ None yet.
 
 - 12 non-critical tech debt items from v0.1.0 (see milestones/v1.0-MILESTONE-AUDIT.md)
 - 22 human runtime tests pending from v0.1.0
+- Existing turnHistory in Zustand store resets on each overlay open -- needs to persist per terminal window
 
 ## Session Continuity
 
-Last session: 2026-02-28 (v0.1.0 milestone completion)
-Stopped at: Milestone archived, ready for /gsd:new-milestone
+Last session: 2026-02-28 (v0.1.1 milestone start)
+Stopped at: Defining requirements
 Resume file: None
