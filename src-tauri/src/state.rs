@@ -78,6 +78,10 @@ pub struct AppState {
     /// Format: "bundle_id:shell_pid" for terminals/IDEs, "bundle_id:app_pid" for other apps.
     /// Set synchronously in the hotkey handler before toggle_overlay().
     pub current_window_key: Mutex<Option<String>>,
+    /// Pre-captured CWD from the focused terminal tab (AX-derived).
+    /// Set in the hotkey handler for IDEs with integrated terminals before the overlay
+    /// steals focus. Consumed by compute_window_key to disambiguate multi-tab shell PIDs.
+    pub pre_captured_focused_cwd: Mutex<Option<String>>,
     /// Per-window query history. Key is the window key, value is a bounded deque of entries.
     /// Capped at MAX_HISTORY_PER_WINDOW entries per window, MAX_TRACKED_WINDOWS total windows.
     pub history: Mutex<HashMap<String, VecDeque<HistoryEntry>>>,
@@ -92,6 +96,7 @@ impl Default for AppState {
             previous_app_pid: Mutex::new(None),
             pre_captured_text: Mutex::new(None),
             current_window_key: Mutex::new(None),
+            pre_captured_focused_cwd: Mutex::new(None),
             history: Mutex::new(HashMap::new()),
         }
     }

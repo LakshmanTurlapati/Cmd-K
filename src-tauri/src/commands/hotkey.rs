@@ -64,14 +64,18 @@ fn get_frontmost_pid() -> Option<i32> {
 ///   (gives each app its own per-process history bucket)
 ///
 /// Falls back to "bundle_id:app_pid" if shell PID cannot be resolved.
-fn compute_window_key(pid: i32) -> String {
+///
+/// `focused_cwd`: AX-derived CWD from the focused terminal tab. Used by
+/// `find_shell_pid` to disambiguate between multiple candidate shells in
+/// Electron IDEs with multiple terminal tabs.
+fn compute_window_key(pid: i32, focused_cwd: Option<String>) -> String {
     let bundle_id = terminal::detect::get_bundle_id(pid);
     let bundle_str = bundle_id.as_deref().unwrap_or("unknown");
     let is_terminal = terminal::detect::is_known_terminal(bundle_str);
     let is_ide = terminal::detect::is_ide_with_terminal(bundle_str);
 
     let key = if is_terminal || is_ide {
-        match terminal::process::find_shell_pid(pid) {
+        match terminal::process::find_shell_pid(pid, focused_cwd.as_deref()) {
             Some(shell_pid) => format!("{}:{}", bundle_str, shell_pid),
             None => format!("{}:{}", bundle_str, pid),
         }
@@ -168,9 +172,32 @@ pub fn register_hotkey(app: AppHandle, shortcut_str: String) -> Result<(), Strin
                             }
                         }
 
+                        // Pre-capture focused terminal tab CWD for IDEs with
+                        // multiple terminal tabs. This MUST happen BEFORE
+                        // toggle_overlay() because after the overlay steals focus,
+                        // AXFocusedUIElement will point to the overlay, not the
+                        // IDE's terminal tab.
+                        let bundle_id = terminal::detect::get_bundle_id(pid);
+                        let bundle_str = bundle_id.as_deref().unwrap_or("unknown");
+                        let focused_cwd = if terminal::detect::is_ide_with_terminal(bundle_str) {
+                            let cwd = ax_reader::get_focused_terminal_cwd(pid);
+                            eprintln!("[hotkey] IDE focused tab CWD: {:?}", &cwd);
+                            cwd
+                        } else {
+                            None
+                        };
+
+                        if let Some(state) = app_handle.try_state::<AppState>() {
+                            if let Ok(mut fc) = state.pre_captured_focused_cwd.lock() {
+                                *fc = focused_cwd.clone();
+                            }
+                        }
+
                         // Compute window key synchronously BEFORE toggle_overlay.
                         // This captures the shell PID while the terminal is still frontmost.
-                        let window_key = compute_window_key(pid);
+                        // Pass the focused CWD so find_shell_pid can match the
+                        // correct tab's shell in multi-tab IDE scenarios.
+                        let window_key = compute_window_key(pid, focused_cwd);
                         if let Some(state) = app_handle.try_state::<AppState>() {
                             if let Ok(mut wk) = state.current_window_key.lock() {
                                 *wk = Some(window_key);
@@ -180,6 +207,12 @@ pub fn register_hotkey(app: AppHandle, shortcut_str: String) -> Result<(), Strin
                     }
                 } else {
                     eprintln!("[hotkey] overlay visible, hiding (no PID capture)");
+                    // Clear pre-captured focused CWD when hiding the overlay.
+                    if let Some(state) = app_handle.try_state::<AppState>() {
+                        if let Ok(mut fc) = state.pre_captured_focused_cwd.lock() {
+                            *fc = None;
+                        }
+                    }
                 }
 
                 toggle_overlay(&app_handle);

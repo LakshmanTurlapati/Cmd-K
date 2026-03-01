@@ -505,6 +505,136 @@ mod macos {
         read_focused_text_with_timeout(app_pid, 0.2)
     }
 
+    /// Extract the CWD from the focused terminal tab's AX title or value text.
+    ///
+    /// Intended for Electron IDEs (Cursor, VS Code) with multiple terminal tabs.
+    /// The focused tab's AXTitle often contains the CWD (e.g., "zsh - /Users/foo/project").
+    /// Falls back to extracting a path from the last line of AXValue (shell prompt).
+    ///
+    /// Returns `Some(path)` if a valid directory path was found, `None` otherwise.
+    /// Uses a short 0.3s messaging timeout since this runs in the hotkey handler path.
+    pub(super) fn get_focused_terminal_cwd(app_pid: i32) -> Option<String> {
+        unsafe {
+            let app_elem = AXUIElementCreateApplication(app_pid);
+            if app_elem.is_null() {
+                return None;
+            }
+
+            // Short timeout -- this runs in the hotkey handler path and must be fast.
+            AXUIElementSetMessagingTimeout(app_elem, 0.3);
+
+            // Wake up Electron AX trees if needed (cached after first call per PID).
+            ensure_ax_tree_active(app_pid);
+
+            // Get the focused UI element (the active terminal tab's text area).
+            let focused = match get_ax_attribute(app_elem, AX_FOCUSED_UI_ELEMENT) {
+                Some(f) => f,
+                None => {
+                    eprintln!("[ax_reader] get_focused_terminal_cwd: no AXFocusedUIElement for pid {}", app_pid);
+                    CFRelease(app_elem);
+                    return None;
+                }
+            };
+
+            // Strategy 1: Try AXTitle (more reliable -- tab titles often contain the CWD).
+            // Common formats:
+            //   "zsh - /Users/foo/project"
+            //   "1: zsh - /Users/foo/project"
+            //   "/Users/foo/project"
+            //   "node server.js" (no path)
+            let mut result: Option<String> = None;
+
+            if let Some(title_ref) = get_ax_attribute(focused, AX_TITLE) {
+                if let Some(title) = cf_type_to_string(title_ref) {
+                    eprintln!("[ax_reader] focused element AXTitle: {:?}", &title);
+                    result = extract_dir_path_from_text(&title);
+                }
+                CFRelease(title_ref);
+            }
+
+            // Strategy 2: If no path from title, try extracting from the last line of
+            // AXValue text (the shell prompt often contains the CWD).
+            if result.is_none() {
+                if let Some(value) = get_ax_string_value(focused) {
+                    if let Some(last_line) = value.lines().rev().find(|l| !l.trim().is_empty()) {
+                        eprintln!("[ax_reader] focused element AXValue last line: {:?}", last_line);
+                        result = extract_dir_path_from_text(last_line);
+                    }
+                }
+            }
+
+            if let Some(ref path) = result {
+                eprintln!("[ax_reader] get_focused_terminal_cwd for pid {}: {}", app_pid, path);
+            } else {
+                eprintln!("[ax_reader] get_focused_terminal_cwd for pid {}: no path found", app_pid);
+            }
+
+            CFRelease(focused);
+            CFRelease(app_elem);
+            result
+        }
+    }
+
+    /// Try to extract a valid directory path from a text string.
+    ///
+    /// Handles common terminal tab title formats:
+    /// - "zsh - /Users/foo/project" (split on " - ")
+    /// - "1: zsh - /Users/foo/project" (tab number prefix)
+    /// - "/Users/foo/project" (just the path)
+    /// - "~ " or "~/project" (tilde expansion)
+    ///
+    /// Returns None for strings without a valid directory path (e.g., "node server.js").
+    fn extract_dir_path_from_text(text: &str) -> Option<String> {
+        // Try splitting on " - " and checking each part for a path.
+        // This handles "zsh - /Users/foo/project" and "1: zsh - /Users/foo/project".
+        for part in text.split(" - ") {
+            let trimmed = part.trim();
+            if let Some(path) = try_as_dir_path(trimmed) {
+                return Some(path);
+            }
+        }
+
+        // Try the whole string as a path (handles "/Users/foo/project" directly).
+        if let Some(path) = try_as_dir_path(text.trim()) {
+            return Some(path);
+        }
+
+        None
+    }
+
+    /// Check if a string is a valid directory path, expanding ~ if needed.
+    /// Returns the canonical path string if it is a directory, None otherwise.
+    fn try_as_dir_path(s: &str) -> Option<String> {
+        if s.is_empty() {
+            return None;
+        }
+
+        // Expand tilde to home directory.
+        let expanded = if s.starts_with('~') {
+            if let Ok(home) = std::env::var("HOME") {
+                if s == "~" {
+                    home
+                } else if let Some(rest) = s.strip_prefix("~/") {
+                    format!("{}/{}", home, rest)
+                } else {
+                    return None; // ~otheruser -- not supported
+                }
+            } else {
+                return None;
+            }
+        } else if s.starts_with('/') {
+            s.to_string()
+        } else {
+            return None; // Not an absolute path or tilde path
+        };
+
+        if std::path::Path::new(&expanded).is_dir() {
+            Some(expanded)
+        } else {
+            None
+        }
+    }
+
     /// Append text from an element's AXValue, AXTitle, or AXDescription to the output.
     unsafe fn append_element_text(element: CFTypeRef, out: &mut String) {
         // Try AXValue first (primary text content)
@@ -657,4 +787,22 @@ pub fn read_focused_text_fast(_app_pid: i32) -> Option<String> {
 #[cfg(target_os = "macos")]
 pub fn read_focused_text_fast(app_pid: i32) -> Option<String> {
     macos::read_focused_text_fast(app_pid)
+}
+
+/// Extract CWD from the focused terminal tab via AX title/value text.
+///
+/// On non-macOS targets this always returns None.
+#[cfg(not(target_os = "macos"))]
+pub fn get_focused_terminal_cwd(_app_pid: i32) -> Option<String> {
+    None
+}
+
+/// Extract CWD from the focused terminal tab via AX title/value text.
+///
+/// Uses AXFocusedUIElement to read the title of the active terminal tab in
+/// Electron IDEs (Cursor, VS Code). The title typically contains the CWD.
+/// Falls back to parsing the last line of the terminal text content.
+#[cfg(target_os = "macos")]
+pub fn get_focused_terminal_cwd(app_pid: i32) -> Option<String> {
+    macos::get_focused_terminal_cwd(app_pid)
 }
