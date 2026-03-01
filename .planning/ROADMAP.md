@@ -70,10 +70,11 @@ Plans:
   1. User submits a query, dismisses overlay, reopens overlay on the same terminal window, and submits a follow-up -- the AI response demonstrates awareness of the prior exchange
   2. User submits a query on terminal window A, switches to terminal window B and submits a different query, then returns to window A -- the AI context is window A's history, not window B's
   3. Terminal context (CWD, shell, recent output) appears only in the first message of a window's session -- follow-up messages do not repeat terminal context
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 10-01: TBD
+- [ ] 10-01-PLAN.md -- Core conversation persistence: turnHistory reconstruction from windowHistory, conditional terminal context in AI prompts, configurable turn limit
+- [ ] 10-02-PLAN.md -- Settings UI: turn limit slider in Preferences, clear conversation history button, Rust clear_all_history IPC
 
 ## Progress
 
@@ -89,4 +90,4 @@ Plans:
 | 7.1. Production DMG Fix | v0.1.0 | 1/1 | Complete | 2026-02-28 |
 | 8. Window Identification & History Storage | v0.1.1 | 3/3 | Complete | 2026-03-01 |
 | 9. Arrow Key History Navigation | v0.1.1 | 1/1 | Complete | 2026-03-01 |
-| 10. AI Follow-up Context Per Window | v0.1.1 | 0/? | Not started | - |
+| 10. AI Follow-up Context Per Window | v0.1.1 | 0/2 | Not started | - |
