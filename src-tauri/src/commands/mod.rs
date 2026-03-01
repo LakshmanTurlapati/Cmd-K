@@ -1,4 +1,5 @@
 pub mod ai;
+pub mod history;
 pub mod hotkey;
 pub mod keychain;
 pub mod paste;
