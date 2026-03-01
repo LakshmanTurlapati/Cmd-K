@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-28)
 ## Current Position
 
 Phase: 10 of 10 (AI Follow-up Context Per Window)
-Plan: 1 of 2 complete
-Status: Phase 10 Plan 01 complete, ready for Plan 02
-Last activity: 2026-03-01 -- Completed 10-01 (per-window turnHistory reconstruction + conditional AI context)
+Plan: 2 of 2 complete
+Status: Phase 10 complete -- all plans executed
+Last activity: 2026-03-01 -- Completed 10-02 (preferences UI for turn limit slider + clear history)
 
-Progress: [============================-] 87% (26/30 est. plans across all milestones)
+Progress: [==============================] 90% (27/30 est. plans across all milestones)
 
 ## Performance Metrics
 
@@ -35,6 +35,7 @@ Progress: [============================-] 87% (26/30 est. plans across all miles
 | 08-03 | Multi-tab IDE shell PID resolution | 4min | 2 | 4 |
 | 09-01 | Arrow-key history navigation | 3min | 2 | 3 |
 | 10-01 | Per-window turnHistory + conditional AI context | 3min | 2 | 3 |
+| 10-02 | Preferences UI: turn limit slider + clear history | 2min | 2 | 4 |
 
 ## Accumulated Context
 
@@ -64,6 +65,9 @@ v0.1.1 decisions:
 - Follow-up AI messages omit terminal context entirely; system prompt has shell type
 - Frontend pre-caps history via turnLimit; Rust-side cap removed
 - MAX_HISTORY_PER_WINDOW increased from 7 to 50 to match turn limit slider range
+- Turn limit slider range 5-50 with default 7 matching Zustand initial state
+- Clear history button clears ALL windows at once (per user decision in research)
+- Frontend resets both windowHistory and turnHistory on clear for immediate UI consistency
 
 ### Pending Todos
 
@@ -77,6 +81,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-01 (Phase 10 Plan 01 execution)
-Stopped at: Completed 10-01-PLAN.md -- Per-window turnHistory reconstruction + conditional AI context
+Last session: 2026-03-01 (Phase 10 Plan 02 execution)
+Stopped at: Completed 10-02-PLAN.md -- Preferences UI for turn limit slider + clear history
 Resume file: None

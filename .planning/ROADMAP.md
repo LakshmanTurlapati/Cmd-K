@@ -27,7 +27,7 @@
 
 - [x] **Phase 8: Window Identification & History Storage** - Stable per-terminal-window key and Rust-side per-window history map (complete with gap closure)
 - [x] **Phase 9: Arrow Key History Navigation** - Arrow up/down recall of previous queries with draft preservation
-- [ ] **Phase 10: AI Follow-up Context Per Window** - Per-window AI conversation history that survives overlay cycles
+- [x] **Phase 10: AI Follow-up Context Per Window** - Per-window AI conversation history that survives overlay cycles (completed 2026-03-01)
 
 ## Phase Details
 
@@ -90,4 +90,4 @@ Plans:
 | 7.1. Production DMG Fix | v0.1.0 | 1/1 | Complete | 2026-02-28 |
 | 8. Window Identification & History Storage | v0.1.1 | 3/3 | Complete | 2026-03-01 |
 | 9. Arrow Key History Navigation | v0.1.1 | 1/1 | Complete | 2026-03-01 |
-| 10. AI Follow-up Context Per Window | 1/2 | In Progress|  | - |
+| 10. AI Follow-up Context Per Window | 2/2 | Complete   | 2026-03-01 | - |
