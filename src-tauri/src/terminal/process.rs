@@ -319,7 +319,7 @@ fn get_child_pids(_pid: i32) -> Vec<i32> {
 ///    then check which ones are descendants of this app PID by walking
 ///    up the parent chain. This handles deep Electron trees in VS Code/Cursor
 ///    (e.g., VSCode → Helper → node → pty-helper → zsh).
-fn find_shell_pid(terminal_pid: i32) -> Option<i32> {
+pub(crate) fn find_shell_pid(terminal_pid: i32) -> Option<i32> {
     // Try the fast recursive walk first (works for simple terminal apps)
     if let Some(pid) = find_shell_recursive(terminal_pid, 3) {
         return Some(pid);

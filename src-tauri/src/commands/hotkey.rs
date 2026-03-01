@@ -4,6 +4,7 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 use crate::commands::window::toggle_overlay;
 use crate::state::AppState;
+use crate::terminal;
 use crate::terminal::ax_reader;
 
 /// Capture the PID of the frontmost application using NSWorkspace via ObjC FFI.
@@ -52,6 +53,34 @@ fn get_frontmost_pid() -> Option<i32> {
 #[cfg(not(target_os = "macos"))]
 fn get_frontmost_pid() -> Option<i32> {
     None
+}
+
+/// Compute a stable window key for the frontmost application identified by PID.
+///
+/// Key format:
+/// - Terminals and IDEs with integrated terminals: "bundle_id:shell_pid"
+///   (gives each terminal tab its own history bucket)
+/// - Other apps (Finder, Safari, etc.): "bundle_id:app_pid"
+///   (gives each app its own per-process history bucket)
+///
+/// Falls back to "bundle_id:app_pid" if shell PID cannot be resolved.
+fn compute_window_key(pid: i32) -> String {
+    let bundle_id = terminal::detect::get_bundle_id(pid);
+    let bundle_str = bundle_id.as_deref().unwrap_or("unknown");
+    let is_terminal = terminal::detect::is_known_terminal(bundle_str);
+    let is_ide = terminal::detect::is_ide_with_terminal(bundle_str);
+
+    let key = if is_terminal || is_ide {
+        match terminal::process::find_shell_pid(pid) {
+            Some(shell_pid) => format!("{}:{}", bundle_str, shell_pid),
+            None => format!("{}:{}", bundle_str, pid),
+        }
+    } else {
+        format!("{}:{}", bundle_str, pid)
+    };
+
+    eprintln!("[hotkey] computed window_key: {}", &key);
+    key
 }
 
 /// Register (or re-register) a global hotkey that toggles the CMD+K overlay.
@@ -136,6 +165,15 @@ pub fn register_hotkey(app: AppHandle, shortcut_str: String) -> Result<(), Strin
                         if let Some(state) = app_handle.try_state::<AppState>() {
                             if let Ok(mut pt) = state.pre_captured_text.lock() {
                                 *pt = pre_text;
+                            }
+                        }
+
+                        // Compute window key synchronously BEFORE toggle_overlay.
+                        // This captures the shell PID while the terminal is still frontmost.
+                        let window_key = compute_window_key(pid);
+                        if let Some(state) = app_handle.try_state::<AppState>() {
+                            if let Ok(mut wk) = state.current_window_key.lock() {
+                                *wk = Some(window_key);
                             }
                         }
 

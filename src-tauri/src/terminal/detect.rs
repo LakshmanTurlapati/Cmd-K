@@ -8,6 +8,20 @@ pub const TERMINAL_BUNDLE_IDS: &[&str] = &[
     "com.github.wez.wezterm",
 ];
 
+/// Known IDE bundle identifiers for apps with integrated terminals.
+/// These are not standalone terminals but have terminal tabs that should get
+/// per-tab window keys (bundle_id:shell_pid format).
+pub const IDE_BUNDLE_IDS: &[&str] = &[
+    "com.microsoft.VSCode",
+    "com.microsoft.VSCodeInsiders",
+    "com.todesktop.230313mzl4w4u92", // Cursor
+];
+
+/// Returns true if the given bundle ID corresponds to an IDE with an integrated terminal.
+pub fn is_ide_with_terminal(bundle_id: &str) -> bool {
+    IDE_BUNDLE_IDS.contains(&bundle_id)
+}
+
 /// Known browser bundle identifiers mapped to their canonical display names.
 /// Chromium-based browsers (Arc, Edge, Brave) show their own name, not "Chrome".
 pub const BROWSER_BUNDLE_IDS: &[(&str, &str)] = &[
