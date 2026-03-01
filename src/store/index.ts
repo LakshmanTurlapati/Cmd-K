@@ -45,6 +45,20 @@ export function resolveBadge(ctx: AppContext | null): string | null {
   return null;
 }
 
+export interface TerminalContextSnapshot {
+  cwd: string | null;
+  shell_type: string | null;
+  visible_output: string | null;
+}
+
+export interface HistoryEntry {
+  query: string;
+  response: string;
+  timestamp: number;
+  terminal_context: TerminalContextSnapshot | null;
+  is_error: boolean;
+}
+
 export interface TurnMessage {
   role: "user" | "assistant";
   content: string;
@@ -79,6 +93,10 @@ interface OverlayState {
   appContext: AppContext | null;
   isDetectingContext: boolean;
   accessibilityGranted: boolean;
+
+  // Window identity and per-window history
+  windowKey: string | null;
+  windowHistory: HistoryEntry[];
 
   // Streaming state
   streamingText: string;
@@ -127,6 +145,10 @@ interface OverlayState {
   setIsDetectingContext: (detecting: boolean) => void;
   setAccessibilityGranted: (granted: boolean) => void;
 
+  // Window identity actions
+  setWindowKey: (key: string | null) => void;
+  setWindowHistory: (history: HistoryEntry[]) => void;
+
   // Streaming actions
   appendToken: (token: string) => void;
   submitQuery: (query: string) => void;
@@ -174,6 +196,10 @@ export const useOverlayStore = create<OverlayState>((set) => ({
   isDetectingContext: false,
   accessibilityGranted: false,
 
+  // Window identity initial state
+  windowKey: null,
+  windowHistory: [],
+
   // Streaming initial state
   streamingText: "",
   isStreaming: false,
@@ -206,6 +232,9 @@ export const useOverlayStore = create<OverlayState>((set) => ({
       showApiWarning: false,
       appContext: null,
       isDetectingContext: true,
+      // Reset window identity on each overlay open
+      windowKey: null,
+      windowHistory: [],
       // Reset streaming state on each overlay open
       streamingText: "",
       isStreaming: false,
@@ -230,6 +259,20 @@ export const useOverlayStore = create<OverlayState>((set) => ({
         );
         console.log("[store] accessibility permission:", hasPermission);
         useOverlayStore.getState().setAccessibilityGranted(hasPermission);
+
+        // Fetch window key (computed synchronously by hotkey handler before overlay showed)
+        const windowKey = await invoke<string | null>("get_window_key");
+        console.log("[store] window key:", windowKey);
+        if (windowKey) {
+          useOverlayStore.getState().setWindowKey(windowKey);
+          // Fetch existing history for this window
+          const history = await invoke<HistoryEntry[]>("get_window_history", { windowKey });
+          console.log("[store] window history entries:", history.length);
+          useOverlayStore.getState().setWindowHistory(history);
+        } else {
+          useOverlayStore.getState().setWindowKey(null);
+          useOverlayStore.getState().setWindowHistory([]);
+        }
 
         // Detect app context (returns AppContext for ALL frontmost apps)
         const ctx = await invoke<AppContext | null>("get_app_context");
@@ -327,6 +370,10 @@ export const useOverlayStore = create<OverlayState>((set) => ({
 
   setAccessibilityGranted: (granted) => set({ accessibilityGranted: granted }),
 
+  // Window identity action implementations
+  setWindowKey: (key) => set({ windowKey: key }),
+  setWindowHistory: (history) => set({ windowHistory: history }),
+
   // Streaming action implementations
   appendToken: (token) =>
     set((state) => ({
@@ -417,6 +464,26 @@ export const useOverlayStore = create<OverlayState>((set) => ({
             ? updatedHistory.slice(updatedHistory.length - 14)
             : updatedHistory;
 
+        // Persist to Rust-side history (survives overlay close/reopen)
+        const currentWindowKey = useOverlayStore.getState().windowKey;
+        if (currentWindowKey) {
+          const historyCtx = appContext?.terminal ? {
+            cwd: appContext.terminal.cwd,
+            shell_type: appContext.terminal.shell_type,
+            visible_output: appContext.terminal.visible_output,
+          } : null;
+
+          invoke("add_history_entry", {
+            windowKey: currentWindowKey,
+            query,
+            response: fullText,
+            terminalContext: historyCtx,
+            isError: false,
+          }).catch((err: unknown) => {
+            console.error("[store] add_history_entry failed:", err);
+          });
+        }
+
         // Destructive check BEFORE paste
         let destructive = false;
         const pasteState = useOverlayStore.getState();
@@ -474,6 +541,21 @@ export const useOverlayStore = create<OverlayState>((set) => ({
         clearRevealTimer();
         const errorMessage =
           typeof err === "string" ? err : "An error occurred. Try again.";
+
+        // Persist failed query to history too (user may want to retry via arrow-key recall)
+        const errWindowKey = useOverlayStore.getState().windowKey;
+        if (errWindowKey) {
+          invoke("add_history_entry", {
+            windowKey: errWindowKey,
+            query,
+            response: "",
+            terminalContext: null,
+            isError: true,
+          }).catch((histErr: unknown) => {
+            console.error("[store] add_history_entry (error case) failed:", histErr);
+          });
+        }
+
         set({
           isStreaming: false,
           displayMode: "result",
