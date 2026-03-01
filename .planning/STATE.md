@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-28)
 ## Current Position
 
 Phase: 8 of 10 (Window Identification & History Storage) -- COMPLETE
-Plan: 2 of 2 complete
-Status: Phase 8 complete, ready for Phase 9
-Last activity: 2026-03-01 -- Completed 08-02 (frontend IPC integration)
+Plan: 3 of 3 complete
+Status: Phase 8 complete (including gap closure), ready for Phase 9
+Last activity: 2026-03-01 -- Completed 08-03 (multi-tab IDE shell PID resolution gap closure)
 
-Progress: [========================----] 77% (23/30 est. plans across all milestones)
+Progress: [=========================---] 80% (24/30 est. plans across all milestones)
 
 ## Performance Metrics
 
@@ -32,6 +32,7 @@ Progress: [========================----] 77% (23/30 est. plans across all milest
 |-------|------|----------|-------|-------|
 | 08-01 | Window key + history backend | 5min | 2 | 7 |
 | 08-02 | Frontend IPC integration | 2min | 2 | 1 |
+| 08-03 | Multi-tab IDE shell PID resolution | 4min | 2 | 4 |
 
 ## Accumulated Context
 
@@ -49,6 +50,9 @@ v0.1.1 decisions:
 - Window key + history fetch placed before get_app_context in show() (key is fast, already computed by hotkey handler)
 - add_history_entry uses fire-and-forget pattern to avoid blocking UI flow
 - Error queries persisted with isError: true for arrow-key recall in Phase 9
+- Multi-tab IDE shell disambiguation uses AX-derived focused tab CWD matched against candidate shell CWDs
+- CWD extraction from AXTitle first (more reliable), AXValue last line as fallback
+- 0.3s AX messaging timeout for CWD extraction in hotkey handler critical path
 
 ### Pending Todos
 
@@ -62,6 +66,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-01 (Phase 8 Plan 02 execution)
-Stopped at: Completed 08-02-PLAN.md -- Phase 8 complete
+Last session: 2026-03-01 (Phase 8 Plan 03 execution)
+Stopped at: Completed 08-03-PLAN.md -- Phase 8 gap closure complete
 Resume file: None

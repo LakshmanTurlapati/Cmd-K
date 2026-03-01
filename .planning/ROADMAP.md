@@ -25,7 +25,7 @@
 
 **Milestone Goal:** Per-terminal-window command history with arrow key navigation and AI follow-up context that persists across overlay open/close cycles
 
-- [ ] **Phase 8: Window Identification & History Storage** - Stable per-terminal-window key and Rust-side per-window history map (gap closure in progress)
+- [x] **Phase 8: Window Identification & History Storage** - Stable per-terminal-window key and Rust-side per-window history map (complete with gap closure)
 - [ ] **Phase 9: Arrow Key History Navigation** - Arrow up/down recall of previous queries with draft preservation
 - [ ] **Phase 10: AI Follow-up Context Per Window** - Per-window AI conversation history that survives overlay cycles
 
@@ -46,7 +46,7 @@
 Plans:
 - [x] 08-01-PLAN.md -- Rust backend: AppState extension, window key computation, VS Code detection, history IPC commands
 - [x] 08-02-PLAN.md -- Frontend: Zustand store integration with window key and history IPC
-- [ ] 08-03-PLAN.md -- Gap closure: AX-based focused tab CWD matching for Electron IDE multi-tab shell PID resolution
+- [x] 08-03-PLAN.md -- Gap closure: AX-based focused tab CWD matching for Electron IDE multi-tab shell PID resolution
 
 ### Phase 9: Arrow Key History Navigation
 **Goal**: Users can navigate their per-window query history using arrow keys, just like shell history
