@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-28)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** v0.1.1 Phase 8 -- Window Identification & History Storage
+**Current focus:** v0.1.1 Phase 9 -- Arrow Key History Navigation
 
 ## Current Position
 
-Phase: 8 of 10 (Window Identification & History Storage) -- COMPLETE
-Plan: 3 of 3 complete
-Status: Phase 8 complete (including gap closure), ready for Phase 9
-Last activity: 2026-03-01 -- Completed 08-03 (multi-tab IDE shell PID resolution gap closure)
+Phase: 9 of 10 (Arrow Key History Navigation) -- COMPLETE
+Plan: 1 of 1 complete
+Status: Phase 9 complete, ready for Phase 10
+Last activity: 2026-03-01 -- Completed 09-01 (arrow-key history navigation)
 
-Progress: [=========================---] 80% (24/30 est. plans across all milestones)
+Progress: [==========================--] 83% (25/30 est. plans across all milestones)
 
 ## Performance Metrics
 
@@ -33,6 +33,7 @@ Progress: [=========================---] 80% (24/30 est. plans across all milest
 | 08-01 | Window key + history backend | 5min | 2 | 7 |
 | 08-02 | Frontend IPC integration | 2min | 2 | 1 |
 | 08-03 | Multi-tab IDE shell PID resolution | 4min | 2 | 4 |
+| 09-01 | Arrow-key history navigation | 3min | 2 | 3 |
 
 ## Accumulated Context
 
@@ -53,6 +54,10 @@ v0.1.1 decisions:
 - Multi-tab IDE shell disambiguation uses AX-derived focused tab CWD matched against candidate shell CWDs
 - CWD extraction from AXTitle first (more reliable), AXValue last line as fallback
 - 0.3s AX messaging timeout for CWD extraction in hotkey handler critical path
+- text-white/60 for dimmed recalled history text, consistent with existing opacity patterns
+- History navigation index as local component state (not Zustand) -- resets on overlay close/open
+- Arrow-Down always navigates history (asymmetric with Arrow-Up first-line check)
+- Local windowHistory sync after fire-and-forget invoke avoids IPC re-fetch overhead
 
 ### Pending Todos
 
@@ -66,6 +71,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-01 (Phase 8 Plan 03 execution)
-Stopped at: Completed 08-03-PLAN.md -- Phase 8 gap closure complete
+Last session: 2026-03-01 (Phase 9 Plan 01 execution)
+Stopped at: Completed 09-01-PLAN.md -- Phase 9 arrow-key history navigation complete
 Resume file: None

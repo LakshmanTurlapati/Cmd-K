@@ -26,7 +26,7 @@
 **Milestone Goal:** Per-terminal-window command history with arrow key navigation and AI follow-up context that persists across overlay open/close cycles
 
 - [x] **Phase 8: Window Identification & History Storage** - Stable per-terminal-window key and Rust-side per-window history map (complete with gap closure)
-- [ ] **Phase 9: Arrow Key History Navigation** - Arrow up/down recall of previous queries with draft preservation
+- [x] **Phase 9: Arrow Key History Navigation** - Arrow up/down recall of previous queries with draft preservation
 - [ ] **Phase 10: AI Follow-up Context Per Window** - Per-window AI conversation history that survives overlay cycles
 
 ## Phase Details
@@ -60,7 +60,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 09-01-PLAN.md -- useHistoryNavigation hook, CommandInput integration, dimmed text styling, windowHistory sync after submit
+- [x] 09-01-PLAN.md -- useHistoryNavigation hook, CommandInput integration, dimmed text styling, windowHistory sync after submit
 
 ### Phase 10: AI Follow-up Context Per Window
 **Goal**: AI can do follow-up responses because it sees the full conversation history for the active terminal window
@@ -87,6 +87,6 @@ Plans:
 | 6. Terminal Pasting | v0.1.0 | 2/2 | Complete | 2026-02-23 |
 | 7. Accessibility Detection Fix | v0.1.0 | 2/2 | Complete | 2026-02-26 |
 | 7.1. Production DMG Fix | v0.1.0 | 1/1 | Complete | 2026-02-28 |
-| 8. Window Identification & History Storage | v0.1.1 | 2/3 | Gap closure | - |
-| 9. Arrow Key History Navigation | v0.1.1 | 0/1 | Planning | - |
+| 8. Window Identification & History Storage | v0.1.1 | 3/3 | Complete | 2026-03-01 |
+| 9. Arrow Key History Navigation | v0.1.1 | 1/1 | Complete | 2026-03-01 |
 | 10. AI Follow-up Context Per Window | v0.1.1 | 0/? | Not started | - |

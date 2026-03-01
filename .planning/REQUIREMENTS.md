@@ -15,9 +15,9 @@ Requirements for per-terminal-window command history and AI follow-up context.
 
 ### Command History
 
-- [ ] **HIST-01**: User can press Arrow-Up in the overlay input to recall the previous query for the active terminal window
-- [ ] **HIST-02**: User can press Arrow-Down to navigate forward through history, restoring the current draft at the end
-- [ ] **HIST-03**: Current draft text is preserved when user starts navigating history and restored when they return
+- [x] **HIST-01**: User can press Arrow-Up in the overlay input to recall the previous query for the active terminal window
+- [x] **HIST-02**: User can press Arrow-Down to navigate forward through history, restoring the current draft at the end
+- [x] **HIST-03**: Current draft text is preserved when user starts navigating history and restored when they return
 - [x] **HIST-04**: History stores up to 7 queries per terminal window, session-scoped (in-memory only)
 
 ### AI Follow-up Context
@@ -55,9 +55,9 @@ Requirements for per-terminal-window command history and AI follow-up context.
 | WKEY-01 | Phase 8 | Complete |
 | WKEY-02 | Phase 8 | Complete |
 | WKEY-03 | Phase 8 | Complete |
-| HIST-01 | Phase 9 | Pending |
-| HIST-02 | Phase 9 | Pending |
-| HIST-03 | Phase 9 | Pending |
+| HIST-01 | Phase 9 | Complete |
+| HIST-02 | Phase 9 | Complete |
+| HIST-03 | Phase 9 | Complete |
 | HIST-04 | Phase 8 | Complete |
 | CTXT-01 | Phase 10 | Pending |
 | CTXT-02 | Phase 10 | Pending |
