@@ -52,22 +52,22 @@ Requirements for per-terminal-window command history and AI follow-up context.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| WKEY-01 | Pending | Pending |
-| WKEY-02 | Pending | Pending |
-| WKEY-03 | Pending | Pending |
-| HIST-01 | Pending | Pending |
-| HIST-02 | Pending | Pending |
-| HIST-03 | Pending | Pending |
-| HIST-04 | Pending | Pending |
-| CTXT-01 | Pending | Pending |
-| CTXT-02 | Pending | Pending |
-| CTXT-03 | Pending | Pending |
+| WKEY-01 | Phase 8 | Pending |
+| WKEY-02 | Phase 8 | Pending |
+| WKEY-03 | Phase 8 | Pending |
+| HIST-01 | Phase 9 | Pending |
+| HIST-02 | Phase 9 | Pending |
+| HIST-03 | Phase 9 | Pending |
+| HIST-04 | Phase 8 | Pending |
+| CTXT-01 | Phase 10 | Pending |
+| CTXT-02 | Phase 10 | Pending |
+| CTXT-03 | Phase 10 | Pending |
 
 **Coverage:**
 - v0.1.1 requirements: 10 total
-- Mapped to phases: 0
-- Unmapped: 10
+- Mapped to phases: 10
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-28*
-*Last updated: 2026-02-28 after initial definition*
+*Last updated: 2026-02-28 after roadmap creation*
