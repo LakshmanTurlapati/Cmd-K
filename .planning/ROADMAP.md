@@ -41,11 +41,11 @@
   3. The window key is available to the frontend before the user can type anything in the overlay
   4. Queries submitted from a terminal window are retrievable from the per-window history map after the overlay is dismissed and reopened
   5. History is capped at 7 entries per window -- the 8th query evicts the oldest
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 08-01: TBD
-- [ ] 08-02: TBD
+- [ ] 08-01-PLAN.md -- Rust backend: AppState extension, window key computation, VS Code detection, history IPC commands
+- [ ] 08-02-PLAN.md -- Frontend: Zustand store integration with window key and history IPC
 
 ### Phase 9: Arrow Key History Navigation
 **Goal**: Users can navigate their per-window query history using arrow keys, just like shell history
@@ -86,6 +86,6 @@ Plans:
 | 6. Terminal Pasting | v0.1.0 | 2/2 | Complete | 2026-02-23 |
 | 7. Accessibility Detection Fix | v0.1.0 | 2/2 | Complete | 2026-02-26 |
 | 7.1. Production DMG Fix | v0.1.0 | 1/1 | Complete | 2026-02-28 |
-| 8. Window Identification & History Storage | v0.1.1 | 0/? | Not started | - |
+| 8. Window Identification & History Storage | v0.1.1 | 0/2 | Planning complete | - |
 | 9. Arrow Key History Navigation | v0.1.1 | 0/? | Not started | - |
 | 10. AI Follow-up Context Per Window | v0.1.1 | 0/? | Not started | - |
