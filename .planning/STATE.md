@@ -5,15 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-01)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Planning next milestone
+**Current focus:** v0.2.1 Windows Support -- defining requirements
 
 ## Current Position
 
-Phase: v0.1.1 complete (all 10 phases across 2 milestones shipped)
-Status: Milestone v0.1.1 archived
-Last activity: 2026-03-01 -- Completed milestone v0.1.1 (Command History & Follow-ups)
+Phase: Not started (defining requirements)
+Plan: --
+Status: Defining requirements
+Last activity: 2026-03-01 -- Milestone v0.2.1 started
 
-Progress: [==============================] 100% (27 plans across 2 milestones)
+Progress: [                              ] 0%
 
 ## Performance Metrics
 

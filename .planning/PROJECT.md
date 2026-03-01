@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A lightweight macOS overlay app that generates terminal commands using AI. Press Cmd+K from anywhere, a prompt overlay appears on top of your active window with frosted glass vibrancy, describe what you need in natural language, it generates the right terminal command using xAI (Grok) with real-time streaming, flags destructive commands with warnings, and pastes the result directly into your active terminal. It knows your context -- current directory, recent commands, shell type, browser console -- without requiring any shell configuration.
+A lightweight overlay app that generates terminal commands using AI, currently on macOS with Windows support in progress. Press Cmd+K from anywhere, a prompt overlay appears on top of your active window with frosted glass vibrancy, describe what you need in natural language, it generates the right terminal command using xAI (Grok) with real-time streaming, flags destructive commands with warnings, and pastes the result directly into your active terminal. It knows your context -- current directory, recent commands, shell type, browser console -- without requiring any shell configuration.
 
 ## Core Value
 
@@ -39,16 +39,27 @@ The overlay must appear on top of the currently active application and feel inst
 - CTXT-02: turnHistory restored from per-window map on overlay open -- v0.1.1
 - CTXT-03: Terminal context only in first user message to prevent token bloat -- v0.1.1
 
-### Active
+## Current Milestone: v0.2.1 Windows Support
 
-(No active milestone -- use `/gsd:new-milestone` to start next)
+**Goal:** Port the entire CMD+K experience to Windows -- same overlay UX, same AI engine, same zero-setup philosophy, platform-native layer underneath
+
+**Target features:**
+- Windows overlay with Mica/Acrylic frosted glass vibrancy (Ctrl+K hotkey)
+- Terminal context reading (CWD, recent output) for Windows Terminal, PowerShell, CMD, Git Bash, WSL, Hyper -- zero shell plugins
+- Auto-paste into active terminal using Windows APIs
+- API key storage via Windows Credential Manager
+- System tray icon and background daemon on Windows
+- Per-terminal-window history and AI follow-up context (ported from macOS)
+- Onboarding flow adapted for Windows permissions
+
+### Active
 
 ### Out of Scope
 
 - VS Code extension -- dropped in favor of standalone overlay app
 - OpenAI provider -- deferred to future milestone
 - Anthropic provider -- deferred to future milestone
-- Windows/Linux support -- macOS first, cross-platform later
+- Linux support -- Windows is v0.2.1 scope, Linux deferred to future
 - Command favorites/bookmarks -- future feature (history is v0.1.1 scope)
 - Multi-step command workflows -- future feature
 - Command explanation mode -- future feature
@@ -66,7 +77,7 @@ All 26 requirements satisfied (16 v0.1.0 + 10 v0.1.1). Minor tech debt: stale co
 ## Constraints
 
 - **Tech stack**: Tauri (Rust + web frontend)
-- **Platform**: macOS only for v1
+- **Platform**: macOS + Windows (v0.2.1 adds Windows)
 - **Zero setup**: No shell plugins, no .zshrc modifications. One-time macOS accessibility permission is acceptable.
 - **Single provider**: xAI (Grok) only for v1. Provider architecture should allow easy addition of OpenAI/Anthropic later.
 
@@ -94,4 +105,4 @@ All 26 requirements satisfied (16 v0.1.0 + 10 v0.1.1). Minor tech debt: stale co
 | Frontend-side turn limit capping | Pre-cap in Zustand; Rust stores all, frontend slices | Good -- user-configurable without IPC |
 
 ---
-*Last updated: 2026-03-01 after v0.1.1 milestone completion*
+*Last updated: 2026-03-01 after v0.2.1 milestone start*
