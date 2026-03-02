@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-01)
 ## Current Position
 
 Phase: 11 of 16 (Build Infrastructure and Overlay Foundation)
-Plan: 1 of 3
-Status: Plan 01 complete
-Last activity: 2026-03-02 -- Completed 11-01-PLAN.md (Platform-gate deps and imports)
+Plan: 2 of 3
+Status: Plan 02 complete
+Last activity: 2026-03-02 -- Completed 11-02-PLAN.md (Windows overlay window setup)
 
-Progress: [=====                         ] 17%
+Progress: [==========                    ] 33%
 
 ## Performance Metrics
 
@@ -35,6 +35,7 @@ Progress: [=====                         ] 17%
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
 | 11    | 01   | 6min     | 2     | 9     |
+| 11    | 02   | 2min     | 2     | 3     |
 
 ## Accumulated Context
 
@@ -51,6 +52,9 @@ v0.2.1 decisions:
 - Standard Tauri window.show()/hide() as cross-platform overlay stubs (11-01)
 - open_url cross-platform: open on macOS, cmd /c start on Windows, xdg-open on Linux (11-01)
 - Tray platform conventions: macOS right-click+template icon, Windows left-click+normal icon (11-01)
+- Acrylic-only vibrancy on Windows, no Mica fallback, per locked CONTEXT.md decision (11-02)
+- WS_EX_TOOLWINDOW via direct Win32 API instead of Tauri skipTaskbar (buggy per #10422) (11-02)
+- raw-window-handle 0.6 as Windows-only dep for HWND access in window style manipulation (11-02)
 
 ### Pending Todos
 
@@ -66,6 +70,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-02 (Phase 11 Plan 01 execution)
-Stopped at: Completed 11-01-PLAN.md
+Last session: 2026-03-02 (Phase 11 Plan 02 execution)
+Stopped at: Completed 11-02-PLAN.md
 Resume file: None
