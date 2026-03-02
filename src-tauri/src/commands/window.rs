@@ -65,14 +65,58 @@ pub fn hide_overlay(app: AppHandle) -> Result<(), String> {
         panel.hide();
     }
 
-    // Non-macOS: use standard Tauri window hide
+    // Non-macOS: use standard Tauri window hide + Windows focus restoration
     #[cfg(not(target_os = "macos"))]
     {
         let window = app
             .get_webview_window("main")
             .ok_or_else(|| "Window 'main' not found".to_string())?;
 
+        // Windows: check if we are still the foreground window BEFORE hiding.
+        // If the user clicked outside, another window is already foreground
+        // and we should NOT forcefully restore focus to the original previous_hwnd.
+        #[cfg(target_os = "windows")]
+        let should_restore_focus = {
+            use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+
+            let our_hwnd: isize = if let Ok(handle) = window.window_handle() {
+                if let RawWindowHandle::Win32(win32) = handle.as_raw() {
+                    win32.hwnd.get() as isize
+                } else {
+                    0
+                }
+            } else {
+                0
+            };
+
+            use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+            let current_fg = unsafe { GetForegroundWindow() };
+            // If our overlay is still the foreground window, this is an Escape/hotkey dismiss
+            // and we should restore focus. If another window is foreground, the user clicked
+            // outside and that window should keep focus.
+            our_hwnd != 0 && current_fg == our_hwnd
+        };
+
         window.hide().map_err(|e| e.to_string())?;
+
+        // Windows: restore focus to previously captured window if appropriate
+        #[cfg(target_os = "windows")]
+        {
+            if should_restore_focus {
+                if let Some(state) = app.try_state::<AppState>() {
+                    let prev_hwnd = state.previous_hwnd.lock().ok().and_then(|g| *g);
+                    if let Some(hwnd) = prev_hwnd {
+                        let restored = crate::commands::hotkey::restore_focus(hwnd);
+                        eprintln!(
+                            "[hide_overlay] focus restored to HWND {}: {}",
+                            hwnd, restored
+                        );
+                    }
+                }
+            } else {
+                eprintln!("[hide_overlay] not restoring focus -- user clicked outside");
+            }
+        }
     }
 
     // Update visibility state
