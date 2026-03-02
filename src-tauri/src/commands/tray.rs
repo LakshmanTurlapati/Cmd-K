@@ -16,8 +16,8 @@ use super::window::show_overlay;
 /// - [separator]
 /// - Quit CMD+K
 ///
-/// Uses `show_menu_on_left_click(false)` to follow macOS convention of showing the
-/// menu only on right-click or control-click.
+/// On macOS: `show_menu_on_left_click(false)` follows macOS convention (right-click for menu).
+/// On Windows: left-click shows menu (Windows convention).
 ///
 /// The K-white.png image is loaded from the repo root (one level up from src-tauri/).
 pub fn setup_tray(app: &App) -> tauri::Result<()> {
@@ -35,8 +35,6 @@ pub fn setup_tray(app: &App) -> tauri::Result<()> {
 
     let mut builder = TrayIconBuilder::new()
         .menu(&menu)
-        .show_menu_on_left_click(false)
-        .icon_as_template(true)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "settings" => {
                 let _ = show_overlay(app.clone());
@@ -55,6 +53,30 @@ pub fn setup_tray(app: &App) -> tauri::Result<()> {
             }
             _ => {}
         });
+
+    // macOS: right-click for menu (macOS convention), template icon (auto dark/light)
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder
+            .show_menu_on_left_click(false)
+            .icon_as_template(true);
+    }
+
+    // Windows: left-click shows menu (Windows convention), non-template icon
+    #[cfg(target_os = "windows")]
+    {
+        builder = builder
+            .show_menu_on_left_click(true)
+            .icon_as_template(false);
+    }
+
+    // Fallback for other platforms: use defaults
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        builder = builder
+            .show_menu_on_left_click(true)
+            .icon_as_template(false);
+    }
 
     if let Some(icon) = icon {
         builder = builder.icon(icon);

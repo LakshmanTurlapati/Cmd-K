@@ -5,6 +5,8 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use crate::commands::window::toggle_overlay;
 use crate::state::AppState;
 use crate::terminal;
+
+#[cfg(target_os = "macos")]
 use crate::terminal::ax_reader;
 
 /// Capture the PID of the frontmost application using NSWorkspace via ObjC FFI.
@@ -158,17 +160,29 @@ pub fn register_hotkey(app: AppHandle, shortcut_str: String) -> Result<(), Strin
                         }
 
                         // Pre-capture AX text BEFORE toggle_overlay steals focus.
-                        let pre_text = ax_reader::read_focused_text_fast(pid);
-                        if let Some(ref text) = pre_text {
-                            eprintln!(
-                                "[hotkey] pre-captured {} bytes of AX text from pid {}",
-                                text.len(),
-                                pid
-                            );
+                        #[cfg(target_os = "macos")]
+                        {
+                            let pre_text = ax_reader::read_focused_text_fast(pid);
+                            if let Some(ref text) = pre_text {
+                                eprintln!(
+                                    "[hotkey] pre-captured {} bytes of AX text from pid {}",
+                                    text.len(),
+                                    pid
+                                );
+                            }
+                            if let Some(state) = app_handle.try_state::<AppState>() {
+                                if let Ok(mut pt) = state.pre_captured_text.lock() {
+                                    *pt = pre_text;
+                                }
+                            }
                         }
-                        if let Some(state) = app_handle.try_state::<AppState>() {
-                            if let Ok(mut pt) = state.pre_captured_text.lock() {
-                                *pt = pre_text;
+                        // Non-macOS: skip AX pre-capture (not available)
+                        #[cfg(not(target_os = "macos"))]
+                        {
+                            if let Some(state) = app_handle.try_state::<AppState>() {
+                                if let Ok(mut pt) = state.pre_captured_text.lock() {
+                                    *pt = None;
+                                }
                             }
                         }
 
@@ -179,6 +193,8 @@ pub fn register_hotkey(app: AppHandle, shortcut_str: String) -> Result<(), Strin
                         // IDE's terminal tab.
                         let bundle_id = terminal::detect::get_bundle_id(pid);
                         let bundle_str = bundle_id.as_deref().unwrap_or("unknown");
+
+                        #[cfg(target_os = "macos")]
                         let focused_cwd = if terminal::detect::is_ide_with_terminal(bundle_str) {
                             let cwd = ax_reader::get_focused_terminal_cwd(pid);
                             eprintln!("[hotkey] IDE focused tab CWD: {:?}", &cwd);
@@ -186,6 +202,9 @@ pub fn register_hotkey(app: AppHandle, shortcut_str: String) -> Result<(), Strin
                         } else {
                             None
                         };
+                        // Non-macOS: no AX-based CWD capture
+                        #[cfg(not(target_os = "macos"))]
+                        let focused_cwd: Option<String> = None;
 
                         if let Some(state) = app_handle.try_state::<AppState>() {
                             if let Ok(mut fc) = state.pre_captured_focused_cwd.lock() {

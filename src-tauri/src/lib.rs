@@ -17,14 +17,18 @@ use commands::{
 };
 use state::AppState;
 use tauri::Manager;
+
+#[cfg(target_os = "macos")]
 use tauri_nspanel::{
     CollectionBehavior, PanelLevel, StyleMask, WebviewWindowExt,
 };
+#[cfg(target_os = "macos")]
 use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
 
 // Define the custom NSPanel subclass with can_become_key_window = true
 // This allows the panel to accept keyboard input (for the command input field)
 // while still being an NSPanel (auxiliary window that doesn't steal focus permanently)
+#[cfg(target_os = "macos")]
 tauri_nspanel::tauri_panel! {
     OverlayPanel {
         config: {
@@ -35,9 +39,15 @@ tauri_nspanel::tauri_panel! {
 }
 
 pub fn run() {
-    tauri::Builder::default()
-        // NSPanel plugin for floating overlay above fullscreen apps
-        .plugin(tauri_nspanel::init())
+    let mut builder = tauri::Builder::default();
+
+    // NSPanel plugin for floating overlay above fullscreen apps (macOS only)
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.plugin(tauri_nspanel::init());
+    }
+
+    builder
         // Global hotkey plugin for system-wide Cmd+K trigger
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         // Positioner plugin for predefined window placement helpers
@@ -68,36 +78,48 @@ pub fn run() {
             apply_vibrancy(&window, NSVisualEffectMaterial::HudWindow, None, Some(12.0))
                 .expect("Failed to apply NSVisualEffectView vibrancy");
 
-            // Convert standard Tauri window to NSPanel for correct overlay behavior:
-            // - OverlayPanel has can_become_key_window = true for keyboard input
-            // - is_floating_panel = true for proper panel behavior
-            // - show_and_make_key() accepts input without permanently stealing focus
-            // - Dismissed panel returns focus to the previously active application
-            let panel = window
-                .to_panel::<OverlayPanel>()
-                .expect("Failed to convert window to NSPanel");
+            // macOS: Convert standard Tauri window to NSPanel for correct overlay behavior
+            #[cfg(target_os = "macos")]
+            {
+                // Convert standard Tauri window to NSPanel for correct overlay behavior:
+                // - OverlayPanel has can_become_key_window = true for keyboard input
+                // - is_floating_panel = true for proper panel behavior
+                // - show_and_make_key() accepts input without permanently stealing focus
+                // - Dismissed panel returns focus to the previously active application
+                let panel = window
+                    .to_panel::<OverlayPanel>()
+                    .expect("Failed to convert window to NSPanel");
 
-            // Set panel level above the menu bar so it floats over fullscreen apps
-            // Status level (25) = NSMainMenuWindowLevel + 1
-            panel.set_level(PanelLevel::Status.value());
+                // Set panel level above the menu bar so it floats over fullscreen apps
+                // Status level (25) = NSMainMenuWindowLevel + 1
+                panel.set_level(PanelLevel::Status.value());
 
-            // Allow the panel to appear alongside fullscreen apps (Raycast-style)
-            panel.set_collection_behavior(
-                CollectionBehavior::new()
-                    .full_screen_auxiliary()
-                    .can_join_all_spaces()
-                    .into(),
-            );
+                // Allow the panel to appear alongside fullscreen apps (Raycast-style)
+                panel.set_collection_behavior(
+                    CollectionBehavior::new()
+                        .full_screen_auxiliary()
+                        .can_join_all_spaces()
+                        .into(),
+                );
 
-            // Nonactivating panel style: accepts keyboard input but doesn't activate the app
-            // This ensures the underlying app isn't deactivated when the overlay appears
-            panel.set_style_mask(StyleMask::empty().nonactivating_panel().into());
+                // Nonactivating panel style: accepts keyboard input but doesn't activate the app
+                // This ensures the underlying app isn't deactivated when the overlay appears
+                panel.set_style_mask(StyleMask::empty().nonactivating_panel().into());
 
-            // Disable the macOS window-level shadow. The rectangular NSPanel shadow
-            // does not follow the vibrancy corner radius, producing a squared-off
-            // shadow at the bottom. The CSS shadow-2xl on the overlay div provides
-            // a properly rounded shadow instead.
-            panel.set_has_shadow(false);
+                // Disable the macOS window-level shadow. The rectangular NSPanel shadow
+                // does not follow the vibrancy corner radius, producing a squared-off
+                // shadow at the bottom. The CSS shadow-2xl on the overlay div provides
+                // a properly rounded shadow instead.
+                panel.set_has_shadow(false);
+            }
+
+            // Windows: placeholder setup (actual Windows overlay setup in Plan 02)
+            #[cfg(target_os = "windows")]
+            {
+                // TODO(Phase 11 Plan 02): Configure WS_EX_TOOLWINDOW, WS_EX_NOACTIVATE,
+                // Acrylic/Mica vibrancy, and always-on-top for Windows overlay.
+                window.hide().ok();
+            }
 
             // Set up menu bar tray icon with K.png branding
             setup_tray(app)?;

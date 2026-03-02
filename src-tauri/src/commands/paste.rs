@@ -1,4 +1,6 @@
 use tauri::{AppHandle, Manager};
+
+#[cfg(target_os = "macos")]
 use tauri_nspanel::ManagerExt;
 
 use crate::state::AppState;
@@ -102,12 +104,40 @@ fn ensure_accessibility() -> Result<(), String> {
 
 /// Build a minimal AppleScript that ONLY activates the terminal app.
 /// No System Events, no keystroke -- just a basic app activation Apple Event.
+#[cfg(target_os = "macos")]
 fn build_activate_script(bundle_id: &str) -> String {
     format!(
         r#"tell application id "{bundle_id}"
     activate
 end tell"#
     )
+}
+
+/// Write command to system clipboard.
+/// On macOS uses pbcopy, on other platforms this is a no-op stub.
+#[cfg(target_os = "macos")]
+fn write_to_clipboard(command: &str) {
+    use std::io::Write;
+    match std::process::Command::new("pbcopy")
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+    {
+        Ok(mut child) => {
+            if let Some(mut stdin) = child.stdin.take() {
+                let _ = stdin.write_all(command.as_bytes());
+            }
+            let _ = child.wait();
+            eprintln!("[paste] clipboard written via pbcopy");
+        }
+        Err(e) => {
+            eprintln!("[paste] pbcopy failed (non-fatal): {}", e);
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn write_to_clipboard(_command: &str) {
+    // TODO(Phase 13): Implement Windows clipboard write via win32 API or arboard crate
 }
 
 /// Paste `command` into the terminal that was frontmost before the overlay opened.
@@ -140,33 +170,62 @@ pub fn paste_to_terminal(app: AppHandle, command: String) -> Result<(), String> 
         pid, bundle_id, command
     );
 
-    // Write command to system clipboard via pbcopy.
-    {
-        use std::io::Write;
-        match std::process::Command::new("pbcopy")
-            .stdin(std::process::Stdio::piped())
-            .spawn()
-        {
-            Ok(mut child) => {
-                if let Some(mut stdin) = child.stdin.take() {
-                    let _ = stdin.write_all(command.as_bytes());
-                }
-                let _ = child.wait();
-                eprintln!("[paste] clipboard written via pbcopy");
-            }
-            Err(e) => {
-                eprintln!("[paste] pbcopy failed (non-fatal): {}", e);
-            }
-        }
-    }
+    // Write command to system clipboard
+    write_to_clipboard(&command);
 
-    // Resign key window on the overlay panel before pasting.
+    // Resign key window on the overlay panel before pasting (macOS only).
+    #[cfg(target_os = "macos")]
     if let Ok(panel) = app.get_webview_panel("main") {
         panel.resign_key_window();
         eprintln!("[paste] overlay panel resigned key window");
     }
 
-    match bundle_id.as_str() {
+    // macOS: paste via osascript + CGEventPost
+    #[cfg(target_os = "macos")]
+    {
+        paste_to_terminal_macos(&app, &bundle_id, &command, pid)?;
+    }
+
+    // Non-macOS: paste not yet implemented
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (pid, &bundle_id, &command);
+        return Err("paste not yet implemented for this platform".to_string());
+    }
+
+    // Wait for keystrokes to be fully processed by the terminal before
+    // re-acquiring key window. Without this delay, make_key_window() can
+    // intercept pending keystrokes from the event queue.
+    #[cfg(target_os = "macos")]
+    {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+
+        // Re-acquire key window so the overlay can detect blur for
+        // click-outside dismissal. For a nonactivating NSPanel this does NOT
+        // steal focus from the terminal -- it only marks our panel as key
+        // within our Accessory app.
+        if let Ok(panel) = app.get_webview_panel("main") {
+            panel.make_key_window();
+            eprintln!("[paste] overlay panel re-acquired key window");
+        }
+    }
+
+    eprintln!(
+        "[paste] paste succeeded | bundle={} | pid={} | chars={}",
+        bundle_id, pid, command.len()
+    );
+    Ok(())
+}
+
+/// macOS-specific paste implementation using osascript and CGEventPost.
+#[cfg(target_os = "macos")]
+fn paste_to_terminal_macos(
+    _app: &AppHandle,
+    bundle_id: &str,
+    command: &str,
+    pid: i32,
+) -> Result<(), String> {
+    match bundle_id {
         "com.googlecode.iterm2" => {
             // iTerm2: try native `write text` via direct AppleEvent (no System Events)
             let escaped = command.replace('\\', "\\\\").replace('"', "\\\"");
@@ -208,30 +267,25 @@ end tell"#
                     stderr.trim()
                 );
                 // Fallback: activate iTerm2 + Cmd+V via CGEventPost
-                #[cfg(target_os = "macos")]
                 ensure_accessibility()?;
 
-                let activate = build_activate_script(&bundle_id);
+                let activate = build_activate_script(bundle_id);
                 let _ = std::process::Command::new("osascript")
                     .arg("-e")
                     .arg(&activate)
                     .output();
                 std::thread::sleep(std::time::Duration::from_millis(100));
-                #[cfg(target_os = "macos")]
-                {
-                    cg_keys::post_ctrl_u()?;
-                    std::thread::sleep(std::time::Duration::from_millis(120));
-                    cg_keys::post_cmd_v()?;
-                }
+                cg_keys::post_ctrl_u()?;
+                std::thread::sleep(std::time::Duration::from_millis(120));
+                cg_keys::post_cmd_v()?;
             }
         }
         "com.apple.Terminal" => {
             // Terminal.app: type text via CGEvent unicode keystrokes to avoid
             // bracketed paste highlighting that Cmd+V triggers in zsh.
-            #[cfg(target_os = "macos")]
             ensure_accessibility()?;
 
-            let activate = build_activate_script(&bundle_id);
+            let activate = build_activate_script(bundle_id);
             let activate_output = std::process::Command::new("osascript")
                 .arg("-e")
                 .arg(&activate)
@@ -251,44 +305,40 @@ end tell"#
 
             std::thread::sleep(std::time::Duration::from_millis(150));
 
-            #[cfg(target_os = "macos")]
-            {
-                // Clear current line via System Events Ctrl+U
-                let _ = std::process::Command::new("osascript")
-                    .arg("-e")
-                    .arg(r#"tell application "System Events" to keystroke "u" using control down"#)
-                    .output();
-                std::thread::sleep(std::time::Duration::from_millis(50));
+            // Clear current line via System Events Ctrl+U
+            let _ = std::process::Command::new("osascript")
+                .arg("-e")
+                .arg(r#"tell application "System Events" to keystroke "u" using control down"#)
+                .output();
+            std::thread::sleep(std::time::Duration::from_millis(50));
 
-                // Type text via System Events keystroke
-                let escaped = command.replace('\\', "\\\\").replace('"', "\\\"");
-                let script = format!(
-                    r#"tell application "System Events" to keystroke "{escaped}""#
-                );
-                let output = std::process::Command::new("osascript")
-                    .arg("-e")
-                    .arg(&script)
-                    .output();
-                match &output {
-                    Ok(o) if o.status.success() => {
-                        eprintln!("[paste] Terminal.app keystroke succeeded | chars={}", command.len());
-                    }
-                    Ok(o) => {
-                        let stderr = String::from_utf8_lossy(&o.stderr);
-                        eprintln!("[paste] Terminal.app keystroke failed: {}", stderr.trim());
-                    }
-                    Err(e) => {
-                        eprintln!("[paste] Terminal.app osascript spawn failed: {}", e);
-                    }
+            // Type text via System Events keystroke
+            let escaped = command.replace('\\', "\\\\").replace('"', "\\\"");
+            let script = format!(
+                r#"tell application "System Events" to keystroke "{escaped}""#
+            );
+            let output = std::process::Command::new("osascript")
+                .arg("-e")
+                .arg(&script)
+                .output();
+            match &output {
+                Ok(o) if o.status.success() => {
+                    eprintln!("[paste] Terminal.app keystroke succeeded | chars={}", command.len());
+                }
+                Ok(o) => {
+                    let stderr = String::from_utf8_lossy(&o.stderr);
+                    eprintln!("[paste] Terminal.app keystroke failed: {}", stderr.trim());
+                }
+                Err(e) => {
+                    eprintln!("[paste] Terminal.app osascript spawn failed: {}", e);
                 }
             }
         }
         _ => {
             // All other terminals: type text via CGEvent unicode keystrokes
-            #[cfg(target_os = "macos")]
             ensure_accessibility()?;
 
-            let activate = build_activate_script(&bundle_id);
+            let activate = build_activate_script(bundle_id);
             let output = std::process::Command::new("osascript")
                 .arg("-e")
                 .arg(&activate)
@@ -303,66 +353,45 @@ end tell"#
             // Small delay for the terminal to become frontmost
             std::thread::sleep(std::time::Duration::from_millis(150));
 
-            #[cfg(target_os = "macos")]
-            {
-                // Clear current line first
-                cg_keys::post_ctrl_u()?;
-                std::thread::sleep(std::time::Duration::from_millis(50));
+            // Clear current line first
+            cg_keys::post_ctrl_u()?;
+            std::thread::sleep(std::time::Duration::from_millis(50));
 
-                // Type text via System Events keystroke (streaming char effect)
-                let escaped = command.replace('\\', "\\\\").replace('"', "\\\"");
-                let script = format!(
-                    r#"tell application "System Events" to keystroke "{escaped}""#
-                );
-                let output = std::process::Command::new("osascript")
-                    .arg("-e")
-                    .arg(&script)
-                    .output();
-                match &output {
-                    Ok(o) if o.status.success() => {
-                        eprintln!(
-                            "[paste] keystroke succeeded | bundle={} | pid={} | chars={}",
-                            bundle_id, pid, command.len()
-                        );
-                    }
-                    Ok(o) => {
-                        let stderr = String::from_utf8_lossy(&o.stderr);
-                        eprintln!(
-                            "[paste] keystroke failed ({}), falling back to Cmd+V",
-                            stderr.trim()
-                        );
-                        cg_keys::post_cmd_v()?;
-                    }
-                    Err(e) => {
-                        eprintln!(
-                            "[paste] osascript spawn failed ({}), falling back to Cmd+V",
-                            e
-                        );
-                        cg_keys::post_cmd_v()?;
-                    }
+            // Type text via System Events keystroke (streaming char effect)
+            let escaped = command.replace('\\', "\\\\").replace('"', "\\\"");
+            let script = format!(
+                r#"tell application "System Events" to keystroke "{escaped}""#
+            );
+            let output = std::process::Command::new("osascript")
+                .arg("-e")
+                .arg(&script)
+                .output();
+            match &output {
+                Ok(o) if o.status.success() => {
+                    eprintln!(
+                        "[paste] keystroke succeeded | bundle={} | pid={} | chars={}",
+                        bundle_id, pid, command.len()
+                    );
+                }
+                Ok(o) => {
+                    let stderr = String::from_utf8_lossy(&o.stderr);
+                    eprintln!(
+                        "[paste] keystroke failed ({}), falling back to Cmd+V",
+                        stderr.trim()
+                    );
+                    cg_keys::post_cmd_v()?;
+                }
+                Err(e) => {
+                    eprintln!(
+                        "[paste] osascript spawn failed ({}), falling back to Cmd+V",
+                        e
+                    );
+                    cg_keys::post_cmd_v()?;
                 }
             }
         }
     }
 
-    // Wait for keystrokes to be fully processed by the terminal before
-    // re-acquiring key window. Without this delay, make_key_window() can
-    // intercept pending keystrokes from the event queue.
-    std::thread::sleep(std::time::Duration::from_millis(150));
-
-    // Re-acquire key window so the overlay can detect blur for
-    // click-outside dismissal. For a nonactivating NSPanel this does NOT
-    // steal focus from the terminal -- it only marks our panel as key
-    // within our Accessory app.
-    if let Ok(panel) = app.get_webview_panel("main") {
-        panel.make_key_window();
-        eprintln!("[paste] overlay panel re-acquired key window");
-    }
-
-    eprintln!(
-        "[paste] paste succeeded | bundle={} | pid={} | chars={}",
-        bundle_id, pid, command.len()
-    );
     Ok(())
 }
 
@@ -390,12 +419,33 @@ pub fn confirm_terminal_command(app: AppHandle) -> Result<(), String> {
 
     eprintln!("[paste] confirm_terminal_command: pid={}, bundle_id={}", pid, bundle_id);
 
-    // Resign key window so the terminal receives the keystroke
+    // Resign key window so the terminal receives the keystroke (macOS only)
+    #[cfg(target_os = "macos")]
     if let Ok(panel) = app.get_webview_panel("main") {
         panel.resign_key_window();
     }
 
-    match bundle_id.as_str() {
+    // macOS: confirm via osascript + CGEventPost
+    #[cfg(target_os = "macos")]
+    {
+        confirm_terminal_command_macos(&bundle_id, pid)?;
+    }
+
+    // Non-macOS: confirm not yet implemented
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (pid, &bundle_id);
+        return Err("confirm not yet implemented for this platform".to_string());
+    }
+
+    #[allow(unreachable_code)]
+    Ok(())
+}
+
+/// macOS-specific confirm implementation.
+#[cfg(target_os = "macos")]
+fn confirm_terminal_command_macos(bundle_id: &str, _pid: i32) -> Result<(), String> {
+    match bundle_id {
         "com.googlecode.iterm2" => {
             let script = r#"tell application "iTerm2"
     activate
@@ -420,25 +470,22 @@ end tell"#;
                     "[paste] iTerm2 write text confirm failed ({}), falling back to CGEventPost Return",
                     stderr.trim()
                 );
-                #[cfg(target_os = "macos")]
                 ensure_accessibility()?;
 
-                let activate = build_activate_script(&bundle_id);
+                let activate = build_activate_script(bundle_id);
                 let _ = std::process::Command::new("osascript")
                     .arg("-e")
                     .arg(&activate)
                     .output();
                 std::thread::sleep(std::time::Duration::from_millis(100));
-                #[cfg(target_os = "macos")]
                 cg_keys::post_return()?;
             }
         }
         _ => {
             // All other terminals: activate + CGEventPost Return
-            #[cfg(target_os = "macos")]
             ensure_accessibility()?;
 
-            let activate = build_activate_script(&bundle_id);
+            let activate = build_activate_script(bundle_id);
             let output = std::process::Command::new("osascript")
                 .arg("-e")
                 .arg(&activate)
@@ -452,7 +499,6 @@ end tell"#;
 
             std::thread::sleep(std::time::Duration::from_millis(100));
 
-            #[cfg(target_os = "macos")]
             cg_keys::post_return()?;
 
             eprintln!("[paste] confirm succeeded for {} (CGEventPost Return)", bundle_id);

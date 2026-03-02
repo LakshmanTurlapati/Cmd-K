@@ -1,4 +1,6 @@
 use tauri::{AppHandle, Emitter, LogicalPosition, Manager};
+
+#[cfg(target_os = "macos")]
 use tauri_nspanel::ManagerExt;
 
 use crate::state::AppState;
@@ -16,11 +18,26 @@ pub fn show_overlay(app: AppHandle) -> Result<(), String> {
     // Position overlay on the monitor where the user is working
     position_overlay(&app)?;
 
-    let panel = app
-        .get_webview_panel("main")
-        .map_err(|e| format!("Panel 'main' not found: {:?}", e))?;
+    // macOS: use NSPanel show_and_make_key for non-activating overlay
+    #[cfg(target_os = "macos")]
+    {
+        let panel = app
+            .get_webview_panel("main")
+            .map_err(|e| format!("Panel 'main' not found: {:?}", e))?;
 
-    panel.show_and_make_key();
+        panel.show_and_make_key();
+    }
+
+    // Non-macOS: use standard Tauri window show + focus
+    #[cfg(not(target_os = "macos"))]
+    {
+        let window = app
+            .get_webview_window("main")
+            .ok_or_else(|| "Window 'main' not found".to_string())?;
+
+        window.show().map_err(|e| e.to_string())?;
+        window.set_focus().map_err(|e| e.to_string())?;
+    }
 
     // Update visibility state
     if let Some(state) = app.try_state::<AppState>() {
@@ -38,11 +55,25 @@ pub fn show_overlay(app: AppHandle) -> Result<(), String> {
 /// Hide the overlay panel by calling hide() to remove it from screen.
 #[tauri::command]
 pub fn hide_overlay(app: AppHandle) -> Result<(), String> {
-    let panel = app
-        .get_webview_panel("main")
-        .map_err(|e| format!("Panel 'main' not found: {:?}", e))?;
+    // macOS: use NSPanel hide
+    #[cfg(target_os = "macos")]
+    {
+        let panel = app
+            .get_webview_panel("main")
+            .map_err(|e| format!("Panel 'main' not found: {:?}", e))?;
 
-    panel.hide();
+        panel.hide();
+    }
+
+    // Non-macOS: use standard Tauri window hide
+    #[cfg(not(target_os = "macos"))]
+    {
+        let window = app
+            .get_webview_window("main")
+            .ok_or_else(|| "Window 'main' not found".to_string())?;
+
+        window.hide().map_err(|e| e.to_string())?;
+    }
 
     // Update visibility state
     if let Some(state) = app.try_state::<AppState>() {

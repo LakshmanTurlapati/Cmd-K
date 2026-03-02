@@ -1,11 +1,19 @@
 /// Opens macOS System Settings to the Accessibility pane.
 /// Fire-and-forget -- no return value needed.
+/// On non-macOS platforms this is a no-op (Windows has no equivalent permission pane).
 #[tauri::command]
+#[cfg(target_os = "macos")]
 pub fn open_accessibility_settings() {
     std::process::Command::new("open")
         .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
         .spawn()
         .ok();
+}
+
+#[tauri::command]
+#[cfg(not(target_os = "macos"))]
+pub fn open_accessibility_settings() {
+    // No equivalent on Windows -- Accessibility permission is not required.
 }
 
 /// Probes actual AX API access on an EXTERNAL process (Dock).
@@ -193,10 +201,32 @@ pub fn request_accessibility_permission(_prompt: bool) -> bool {
     false
 }
 
+/// Open a URL in the default browser.
+/// Cross-platform: uses `open` on macOS, `cmd /c start` on Windows.
 #[tauri::command]
 pub fn open_url(url: String) {
-    std::process::Command::new("open")
-        .arg(&url)
-        .spawn()
-        .ok();
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&url)
+            .spawn()
+            .ok();
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/c", "start", &url])
+            .spawn()
+            .ok();
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        // Best-effort: try xdg-open on Linux
+        std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .ok();
+    }
 }
