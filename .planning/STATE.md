@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-01)
 ## Current Position
 
 Phase: 11 of 16 (Build Infrastructure and Overlay Foundation)
-Plan: --
-Status: Ready to plan
-Last activity: 2026-03-01 -- Roadmap created for v0.2.1 Windows Support (Phases 11-16)
+Plan: 1 of 3
+Status: Plan 01 complete
+Last activity: 2026-03-02 -- Completed 11-01-PLAN.md (Platform-gate deps and imports)
 
-Progress: [                              ] 0%
+Progress: [=====                         ] 17%
 
 ## Performance Metrics
 
@@ -30,7 +30,11 @@ Progress: [                              ] 0%
 - Timeline: 2 days (2026-02-28 to 2026-03-01)
 - Git: 32 commits, 47 files changed, 4,637 insertions
 
-**v0.2.1:** No plans executed yet.
+**v0.2.1:**
+
+| Phase | Plan | Duration | Tasks | Files |
+|-------|------|----------|-------|-------|
+| 11    | 01   | 6min     | 2     | 9     |
 
 ## Accumulated Context
 
@@ -38,11 +42,15 @@ Progress: [                              ] 0%
 
 All prior decisions archived in PROJECT.md Key Decisions table.
 
-v0.2.1 decisions pending:
+v0.2.1 decisions:
 - Default hotkey: Ctrl+Shift+K on Windows (not Ctrl+K -- too many conflicts)
 - Acrylic for Win10, Mica for Win11 vibrancy
 - WS_EX_TOOLWINDOW to hide from Alt+Tab
 - Phases 12 and 13 can be developed in parallel (architecturally independent)
+- Extract macOS paste/confirm into dedicated gated helper functions for readability (11-01)
+- Standard Tauri window.show()/hide() as cross-platform overlay stubs (11-01)
+- open_url cross-platform: open on macOS, cmd /c start on Windows, xdg-open on Linux (11-01)
+- Tray platform conventions: macOS right-click+template icon, Windows left-click+normal icon (11-01)
 
 ### Pending Todos
 
@@ -58,6 +66,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-01 (v0.2.1 roadmap creation)
-Stopped at: Roadmap created, ready to plan Phase 11
+Last session: 2026-03-02 (Phase 11 Plan 01 execution)
+Stopped at: Completed 11-01-PLAN.md
 Resume file: None

@@ -51,8 +51,8 @@ Requirements for Windows platform port. Each maps to roadmap phases.
 
 ### Windows Build & Distribution (WBLD)
 
-- [ ] **WBLD-01**: Cargo.toml platform-gates macOS-only deps and adds Windows-only deps
-- [ ] **WBLD-02**: Project compiles on both macOS and Windows without regressions
+- [x] **WBLD-01**: Cargo.toml platform-gates macOS-only deps and adds Windows-only deps
+- [x] **WBLD-02**: Project compiles on both macOS and Windows without regressions
 - [ ] **WBLD-03**: NSIS installer produces signed .exe setup with per-user install (no admin)
 - [ ] **WBLD-04**: WebView2 runtime bootstrapper embedded in installer
 - [ ] **WBLD-05**: ICO format tray icon included for Windows
@@ -116,8 +116,8 @@ Requirements for Windows platform port. Each maps to roadmap phases.
 | WPLH-04 | Phase 15 | Pending |
 | WPLH-05 | Phase 15 | Pending |
 | WPLH-06 | Phase 15 | Pending |
-| WBLD-01 | Phase 11 | Pending |
-| WBLD-02 | Phase 11 | Pending |
+| WBLD-01 | Phase 11 | Complete |
+| WBLD-02 | Phase 11 | Complete |
 | WBLD-03 | Phase 16 | Pending |
 | WBLD-04 | Phase 16 | Pending |
 | WBLD-05 | Phase 16 | Pending |

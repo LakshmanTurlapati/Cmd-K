@@ -153,7 +153,7 @@ Plans:
 | 8. Window Identification & History Storage | v0.1.1 | 3/3 | Complete | 2026-03-01 |
 | 9. Arrow Key History Navigation | v0.1.1 | 1/1 | Complete | 2026-03-01 |
 | 10. AI Follow-up Context Per Window | v0.1.1 | 2/2 | Complete | 2026-03-01 |
-| 11. Build Infrastructure and Overlay Foundation | v0.2.1 | 0/? | Not started | - |
+| 11. Build Infrastructure and Overlay Foundation | 1/3 | In Progress|  | - |
 | 12. Terminal Context -- Process Tree, CWD, Detection | v0.2.1 | 0/? | Not started | - |
 | 13. Paste and Input Simulation | v0.2.1 | 0/? | Not started | - |
 | 14. Terminal Output Reading via UIA | v0.2.1 | 0/? | Not started | - |
