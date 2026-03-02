@@ -12,9 +12,9 @@ Requirements for Windows platform port. Each maps to roadmap phases.
 - [x] **WOVL-01**: Overlay window appears with Acrylic (Win10) or Mica (Win11) frosted glass vibrancy
 - [x] **WOVL-02**: Overlay floats above all windows with always-on-top and skip-taskbar behavior
 - [x] **WOVL-03**: Overlay does not appear in Alt+Tab or taskbar (WS_EX_TOOLWINDOW)
-- [ ] **WOVL-04**: Previous window HWND captured before overlay shows for focus restoration
-- [ ] **WOVL-05**: Focus returns to previous terminal window on overlay dismiss (SetForegroundWindow)
-- [ ] **WOVL-06**: Ctrl+Shift+K default hotkey triggers overlay system-wide (configurable)
+- [x] **WOVL-04**: Previous window HWND captured before overlay shows for focus restoration
+- [x] **WOVL-05**: Focus returns to previous terminal window on overlay dismiss (SetForegroundWindow)
+- [x] **WOVL-06**: Ctrl+Shift+K default hotkey triggers overlay system-wide (configurable)
 - [x] **WOVL-07**: Escape dismisses overlay without executing
 
 ### Windows Terminal Context (WCTX)
@@ -92,9 +92,9 @@ Requirements for Windows platform port. Each maps to roadmap phases.
 | WOVL-01 | Phase 11 | Complete |
 | WOVL-02 | Phase 11 | Complete |
 | WOVL-03 | Phase 11 | Complete |
-| WOVL-04 | Phase 11 | Pending |
-| WOVL-05 | Phase 11 | Pending |
-| WOVL-06 | Phase 11 | Pending |
+| WOVL-04 | Phase 11 | Complete |
+| WOVL-05 | Phase 11 | Complete |
+| WOVL-06 | Phase 11 | Complete |
 | WOVL-07 | Phase 11 | Complete |
 | WCTX-01 | Phase 12 | Pending |
 | WCTX-02 | Phase 12 | Pending |

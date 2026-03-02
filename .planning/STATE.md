@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-01)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** v0.2.1 Windows Support -- Phase 11 (Build Infrastructure and Overlay Foundation)
+**Current focus:** v0.2.1 Windows Support -- Phase 11 complete, ready for Phase 12
 
 ## Current Position
 
 Phase: 11 of 16 (Build Infrastructure and Overlay Foundation)
-Plan: 2 of 3
-Status: Plan 02 complete
-Last activity: 2026-03-02 -- Completed 11-02-PLAN.md (Windows overlay window setup)
+Plan: 3 of 3
+Status: Phase 11 complete
+Last activity: 2026-03-02 -- Completed 11-03-PLAN.md (Windows focus management)
 
-Progress: [==========                    ] 33%
+Progress: [=====                         ] 17%
 
 ## Performance Metrics
 
@@ -36,6 +36,7 @@ Progress: [==========                    ] 33%
 |-------|------|----------|-------|-------|
 | 11    | 01   | 6min     | 2     | 9     |
 | 11    | 02   | 2min     | 2     | 3     |
+| 11    | 03   | 2min     | 2     | 2     |
 
 ## Accumulated Context
 
@@ -55,6 +56,9 @@ v0.2.1 decisions:
 - Acrylic-only vibrancy on Windows, no Mica fallback, per locked CONTEXT.md decision (11-02)
 - WS_EX_TOOLWINDOW via direct Win32 API instead of Tauri skipTaskbar (buggy per #10422) (11-02)
 - raw-window-handle 0.6 as Windows-only dep for HWND access in window style manipulation (11-02)
+- Foreground window comparison for click-outside vs Escape/hotkey dismiss detection (11-03)
+- AttachThreadInput + SetForegroundWindow with AllowSetForegroundWindow fallback for focus restoration (11-03)
+- IsWindow validation before focus restoration to handle stale HWNDs gracefully (11-03)
 
 ### Pending Todos
 
@@ -70,6 +74,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-02 (Phase 11 Plan 02 execution)
-Stopped at: Completed 11-02-PLAN.md
+Last session: 2026-03-02 (Phase 11 Plan 03 execution)
+Stopped at: Completed 11-03-PLAN.md -- Phase 11 fully complete
 Resume file: None
