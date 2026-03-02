@@ -57,6 +57,94 @@ fn get_frontmost_pid() -> Option<i32> {
     None
 }
 
+/// Capture the HWND of the foreground window using Win32 GetForegroundWindow.
+///
+/// This MUST be called BEFORE showing the overlay because after the overlay
+/// appears, GetForegroundWindow returns our own overlay HWND.
+#[cfg(target_os = "windows")]
+fn get_foreground_hwnd() -> Option<isize> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+    let hwnd = unsafe { GetForegroundWindow() };
+    if hwnd == 0 {
+        None
+    } else {
+        Some(hwnd)
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn get_foreground_hwnd() -> Option<isize> {
+    None
+}
+
+/// Restore focus to the previously captured HWND using the
+/// AttachThreadInput + SetForegroundWindow workaround.
+///
+/// Windows restricts which processes can call SetForegroundWindow.
+/// The workaround: attach our thread's input to the target window's
+/// thread, call SetForegroundWindow, then detach.
+///
+/// Returns true if focus was successfully restored.
+#[cfg(target_os = "windows")]
+pub fn restore_focus(target_hwnd: isize) -> bool {
+    use windows_sys::Win32::System::Threading::GetCurrentThreadId;
+    use windows_sys::Win32::UI::WindowsAndMessaging::*;
+
+    unsafe {
+        // Validate the HWND is still a valid window (might have been closed)
+        if IsWindow(target_hwnd) == 0 {
+            eprintln!("[focus] target HWND {} is no longer valid", target_hwnd);
+            return false;
+        }
+
+        let target_thread = GetWindowThreadProcessId(target_hwnd, std::ptr::null_mut());
+        let our_thread = GetCurrentThreadId();
+
+        // Attach our thread's input queue to the target's thread
+        let attached = if target_thread != 0 && target_thread != our_thread {
+            AttachThreadInput(our_thread, target_thread, 1) != 0 // TRUE = attach
+        } else {
+            false
+        };
+
+        let result = SetForegroundWindow(target_hwnd);
+
+        // Always detach if we attached
+        if attached {
+            AttachThreadInput(our_thread, target_thread, 0); // FALSE = detach
+        }
+
+        if result != 0 {
+            eprintln!(
+                "[focus] SetForegroundWindow succeeded for HWND {}",
+                target_hwnd
+            );
+            true
+        } else {
+            eprintln!(
+                "[focus] SetForegroundWindow failed for HWND {}, trying fallback",
+                target_hwnd
+            );
+            // Fallback: AllowSetForegroundWindow then retry
+            // This handles edge cases where AttachThreadInput alone is insufficient
+            let mut target_pid: u32 = 0;
+            GetWindowThreadProcessId(target_hwnd, &mut target_pid);
+            AllowSetForegroundWindow(target_pid);
+            let retry = SetForegroundWindow(target_hwnd);
+            eprintln!(
+                "[focus] Fallback SetForegroundWindow result: {}",
+                retry != 0
+            );
+            retry != 0
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn restore_focus(_target_hwnd: isize) -> bool {
+    false
+}
+
 /// Compute a stable window key for the frontmost application identified by PID.
 ///
 /// Key format:
@@ -159,6 +247,21 @@ pub fn register_hotkey(app: AppHandle, shortcut_str: String) -> Result<(), Strin
                             }
                         }
 
+                        // Windows: capture HWND of foreground window before overlay steals focus
+                        #[cfg(target_os = "windows")]
+                        {
+                            let hwnd = get_foreground_hwnd();
+                            eprintln!(
+                                "[hotkey] Windows: capturing foreground HWND: {:?}",
+                                hwnd
+                            );
+                            if let Some(state) = app_handle.try_state::<AppState>() {
+                                if let Ok(mut prev) = state.previous_hwnd.lock() {
+                                    *prev = hwnd;
+                                }
+                            }
+                        }
+
                         // Pre-capture AX text BEFORE toggle_overlay steals focus.
                         #[cfg(target_os = "macos")]
                         {
@@ -230,6 +333,15 @@ pub fn register_hotkey(app: AppHandle, shortcut_str: String) -> Result<(), Strin
                     if let Some(state) = app_handle.try_state::<AppState>() {
                         if let Ok(mut fc) = state.pre_captured_focused_cwd.lock() {
                             *fc = None;
+                        }
+                    }
+                    // Windows: clear previous HWND on hide
+                    #[cfg(target_os = "windows")]
+                    {
+                        if let Some(state) = app_handle.try_state::<AppState>() {
+                            if let Ok(mut prev) = state.previous_hwnd.lock() {
+                                *prev = None;
+                            }
                         }
                     }
                 }
