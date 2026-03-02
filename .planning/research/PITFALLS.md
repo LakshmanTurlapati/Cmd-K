@@ -1,270 +1,252 @@
-# Domain Pitfalls: Tauri macOS Overlay App with Terminal Integration
+# Domain Pitfalls: Adding Windows Support to macOS Tauri Overlay App
 
-**Domain:** macOS overlay application -- per-terminal-window command history and AI follow-up context
-**Researched:** 2026-02-28 (v0.1.1 milestone update; v0.1.0 pitfalls preserved below)
-**Confidence:** HIGH (code reviewed against live codebase + verified with macOS process API docs)
-
----
-
-## v0.1.1 Critical Pitfalls
-
-Mistakes specific to adding per-terminal-window history and AI follow-up context to the existing system.
-
-### Pitfall 1: Using App PID Alone as the Terminal Window Key
-
-**What goes wrong:**
-A `HashMap<i32, WindowHistory>` keyed on the terminal app PID (e.g., `com.googlecode.iterm2` at PID 12345) maps ALL windows and tabs of that terminal application to a single history entry. Opening a second iTerm2 window, or switching to a different tab, silently overwrites or mixes the history of unrelated sessions. The app already captures `previous_app_pid` in `AppState` -- this PID is app-level, not window-level.
-
-**Why it happens:**
-`NSRunningApplication.runningApplicationWithProcessIdentifier` returns the app process, not the window or tab. One iTerm2 process owns dozens of windows and hundreds of tabs at the same PID. Developers see PID already captured in `AppState` and use it directly as the map key because it's convenient.
-
-**How to avoid:**
-Use a composite window key: `bundle_id + ":" + tty_device_path`. The TTY path (`/dev/ttys003`) is unique per pseudo-terminal session.
-
-The TTY is accessible without subprocesses: `proc_pidinfo(shell_pid, PROC_PIDTBSDINFO, ...)` returns a `proc_bsdinfo` struct containing `pbi_tdev` (the controlling terminal device number). Resolve that device number to a path via `devname_r()` or by matching `/dev/ttys*` entries. The shell PID is already found by `find_shell_pid()` in `process.rs` -- pass it to this call.
-
-For GPU terminals (Alacritty, kitty, WezTerm) where AX is unavailable and shell discovery may fail, fall back to `bundle_id + ":" + terminal_app_pid` (app-scoped, coarse) and document the limitation.
-
-Compute the key synchronously in the hotkey handler at the same point `previous_app_pid` is captured -- before `show_and_make_key()` is called. Store it in a new `previous_window_key: Mutex<Option<String>>` field in `AppState`.
-
-**Warning signs:**
-- History from one iTerm2 window appears in a freshly-opened second window
-- Arrow-up in the overlay cycles through commands from a completely different project directory
-- Shell type in history (zsh) mismatches the current window's shell (bash)
-
-**Phase to address:**
-Phase 1 (window identification). The key design must be locked in before history storage and arrow navigation are built -- everything downstream depends on it.
+**Domain:** Porting macOS Tauri overlay app (CMD+K) to Windows
+**Researched:** 2026-03-01 (v0.2.1 Windows milestone)
+**Confidence:** HIGH (verified against codebase, official Tauri docs, Windows API docs, community issues)
 
 ---
 
-### Pitfall 2: PID Reuse Corrupting Stale History Entries
+## Critical Pitfalls
+
+Mistakes that cause rewrites, broken builds, or fundamental architectural failures.
+
+### Pitfall 1: No NSPanel Equivalent on Windows -- Overlay Will Steal Focus
 
 **What goes wrong:**
-macOS recycles PIDs after processes exit. A shell that exits (user closes terminal tab) frees its PID. A new, unrelated shell may later receive the same PID. The history map then serves the new shell stale history from a completely different context -- wrong project, wrong directory, wrong commands.
+The entire macOS overlay UX depends on `tauri-nspanel` which converts a Tauri window into a macOS `NSPanel` with `NonactivatingPanel` style mask. This lets the overlay accept keyboard input without deactivating the underlying terminal. On Windows, `tauri-nspanel` simply does not exist. Using a standard Tauri `alwaysOnTop` window causes the terminal to lose focus, breaking the "capture-before-show" pattern where PID, AX text, and window key are captured from the frontmost app. When the overlay shows, `GetForegroundWindow()` returns the overlay's HWND, not the terminal.
 
 **Why it happens:**
-The history map has no mechanism to detect that a key's process has exited and its identity was reassigned. Maps grow over the app's daemon lifetime and are never cleaned up.
+macOS NSPanel is a first-class OS concept with decades of API support (Spotlight, Raycast all use it). Windows has no direct equivalent. Developers assume `alwaysOnTop: true` + `skipTaskbar: true` approximates NSPanel behavior, but it still activates the window and steals focus from the terminal beneath.
 
 **How to avoid:**
-- Use TTY-based keys rather than raw PIDs. TTY device paths (`/dev/ttys003`) are not reused while the pseudo-terminal is assigned; the kernel recycles them only after the window fully closes.
-- Add a liveness check before serving cached history: call `get_process_name(shell_pid)` -- if it returns `None` or returns a non-shell name, the entry is stale, evict it.
-- Include a `last_seen: Instant` in each history entry; evict entries not accessed within 4 hours.
+Use Win32 extended window styles via unsafe Rust FFI to the `windows` crate:
+1. Set `WS_EX_NOACTIVATE` on the overlay HWND to prevent focus stealing
+2. Set `WS_EX_TOOLWINDOW` to hide from Alt+Tab and taskbar
+3. Use `ShowWindow(SW_SHOWNOACTIVATE)` instead of standard show
+4. Handle `WM_MOUSEACTIVATE` returning `MA_NOACTIVATE` so clicks on the overlay do not steal focus from the terminal
+5. For keyboard input, call `SetForegroundWindow` only when the user explicitly types into the input field (focused via mouse click), then immediately `SetForegroundWindow` back to the terminal after paste
+
+The critical insight: the overlay must NOT activate when it appears. It should float above everything but the terminal remains the foreground window. Keyboard input to the overlay's webview requires careful `WM_MOUSEACTIVATE` handling -- the webview needs to receive input without the window becoming the "active" window in Win32 terms.
+
+Note: Tauri has a known bug (#10422) where `skipTaskbar` does not work on Windows. The workaround is to use `SetWindowLongPtrW` to set `WS_EX_TOOLWINDOW` and clear `WS_EX_APPWINDOW` on the HWND after window creation.
 
 **Warning signs:**
-- Overlay shows history with a CWD that does not match the current shell
-- Sporadic "wrong history" reports that are hard to reproduce (timing-dependent, only after PID recycle)
-- Shell type in history does not match the current terminal session
+- Overlay appears but terminal cursor stops blinking
+- Alt+Tab shows CMD+K in the task switcher
+- `GetForegroundWindow()` in the hotkey handler returns the overlay PID after the first toggle
+- Pressing Escape in the overlay does not return focus to the terminal
 
 **Phase to address:**
-Phase 1 (window identification). Eviction logic belongs in the same data structure as the history map.
+Phase 1 (Windows Overlay Foundation) -- this must be solved first; every other feature depends on the overlay not stealing focus.
 
 ---
 
-### Pitfall 3: Arrow Key Conflict with Textarea Cursor in Multi-line Input
+### Pitfall 2: SendInput Blocked by UIPI When Terminal Runs Elevated
 
 **What goes wrong:**
-Adding ArrowUp/ArrowDown history navigation to `CommandInput` works for single-line input but breaks when the user types a multi-line prompt (Shift+Enter). ArrowUp while the cursor is on line 2 of a 3-line input should move the cursor up one line within the textarea -- not navigate to a history entry. Intercepting all ArrowUp events unconditionally destroys the textarea's native cursor movement.
+The paste mechanism on macOS uses `CGEventPost` which works because macOS Accessibility API grants cross-process input rights globally. On Windows, `SendInput` is subject to User Interface Privilege Isolation (UIPI). If the user runs PowerShell or CMD as Administrator (elevated, high integrity), CMD+K (running non-elevated, medium integrity) cannot inject keystrokes into it. `SendInput` silently drops the input -- no error, no `GetLastError`, the function returns the count of events as if it succeeded but the keystrokes vanish. The user types a command, clicks paste, and nothing appears in their elevated terminal.
 
 **Why it happens:**
-The natural implementation intercepts `e.key === "ArrowUp"` at the top of `handleKeyDown` and calls `e.preventDefault()`. This works for single-line inputs (the only existing use case) but ignores the cursor's vertical position within multi-line content.
+UIPI is a Windows Vista+ security boundary. A medium-integrity process cannot send input to a high-integrity process. Most terminal users run non-elevated, but power users (sysadmins, developers running Docker) frequently use elevated terminals. The failure is completely silent.
 
 **How to avoid:**
-Gate history navigation on cursor line position:
-
-```typescript
-if (e.key === "ArrowUp") {
-  const el = textareaRef.current;
-  if (!el) return;
-  const textBefore = el.value.substring(0, el.selectionStart);
-  const isOnFirstLine = !textBefore.includes("\n");
-  if (isOnFirstLine) {
-    e.preventDefault();
-    navigateHistory(-1);
-  }
-  // else: let browser handle cursor movement within the textarea
-}
-if (e.key === "ArrowDown") {
-  const el = textareaRef.current;
-  if (!el) return;
-  const textAfter = el.value.substring(el.selectionEnd);
-  const isOnLastLine = !textAfter.includes("\n");
-  if (isOnLastLine) {
-    e.preventDefault();
-    navigateHistory(+1);
-  }
-}
-```
+1. Detect elevation of the target process before attempting paste: use `OpenProcessToken` + `GetTokenInformation(TokenElevation)` on the target terminal's PID
+2. If elevated, show a clear warning: "Cannot paste to elevated terminal. Either run CMD+K as Administrator or run your terminal without elevation."
+3. Do NOT run CMD+K as Administrator by default -- this is a security anti-pattern and triggers SmartScreen/UAC prompts
+4. Alternative: use clipboard-based paste (`SetClipboardData` + simulate Ctrl+V) which works in some elevated scenarios where the target terminal reads from clipboard directly rather than receiving SendInput events
+5. Long-term: investigate `UIAccess` manifest flag (requires code signing + installation to a trusted location like Program Files), which allows a medium-integrity process to send input to elevated windows
 
 **Warning signs:**
-- ArrowUp in a 2-line prompt jumps to a history entry instead of moving the cursor to line 1
-- User cannot edit multi-line prompts with arrow keys after history feature is added
-- Reports that the overlay "swallowed" cursor movement
+- Paste works to normal terminals but silently fails to "Run as Administrator" terminals
+- Users report "paste does nothing" intermittently (they sometimes run elevated, sometimes not)
+- `SendInput` returns success (non-zero) but no characters appear
 
 **Phase to address:**
-Phase 2 (arrow key navigation). Test explicitly with multi-line Shift+Enter prompts as a required acceptance criterion.
+Phase 3 (Terminal Paste) -- must be addressed during paste implementation, not deferred.
 
 ---
 
-### Pitfall 4: History Stored in Zustand State Is Wiped on Every Overlay Open
+### Pitfall 3: Windows Terminal Hides Shell PIDs Behind a Multi-Process Architecture
 
 **What goes wrong:**
-`turnHistory` in the Zustand store is cleared on every `show()` call (line 214 in `store/index.ts`: `turnHistory: []`). If per-window history is stored as a plain Zustand array, it is wiped every time the user dismisses and re-opens the overlay -- defeating the purpose of persistent session history entirely.
+On macOS, the process tree is simple: Terminal.app -> login -> zsh, or iTerm2 -> zsh. The app walks children with `proc_listchildpids` or `pgrep -P`. On Windows, Windows Terminal (wt.exe) is a single UWP/Win32 process that hosts multiple tabs, each running a separate ConPTY-connected shell (powershell.exe, cmd.exe, bash.exe). The shell processes are NOT direct children of wt.exe. They are spawned by `OpenConsole.exe` (the ConPTY host), which itself is spawned by the Windows Terminal process tree. The parent-child chain is: `WindowsTerminal.exe -> OpenConsole.exe -> powershell.exe`. But `GetForegroundWindow()` returns the HWND of `WindowsTerminal.exe`, and there is no documented public API to determine WHICH TAB is active.
 
 **Why it happens:**
-The existing `show()` intentionally resets all ephemeral state on each overlay open. This is correct for `streamingText`, `displayMode`, and destructive state, but wrong for per-window history, which must survive across multiple overlay invocations.
+Windows Terminal's architecture is fundamentally different from macOS terminal apps. A single window hosts multiple tabs, each with its own ConPTY session. Unlike macOS where each iTerm2 tab is visible in the AX tree, Windows Terminal does not expose per-tab information to external processes. The process tree enumeration finds ALL shell processes under the Windows Terminal tree, with no way to distinguish the active tab's shell from background tabs.
 
 **How to avoid:**
-Store per-window history in the Rust `AppState` as `Mutex<HashMap<String, WindowHistory>>`. The frontend fetches the current window's history via a Tauri command on each overlay open, and posts updates back after each completed turn. This decouples history persistence from the React component lifecycle entirely.
-
-Do NOT attempt to split the Zustand store into "ephemeral" vs. "persistent" slices -- the `show()` reset is a single `set({...})` call that would require careful surgery and is easy to break. Backend storage is the cleaner approach.
+1. Use `CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS)` + `Process32First/Next` to build the full process tree -- this is the Windows equivalent of `pgrep -P` and `proc_listchildpids`. The `PROCESSENTRY32.th32ParentProcessID` field gives parent PID
+2. For Windows Terminal specifically, find all shell processes descended from `WindowsTerminal.exe` and use a heuristic: the most recently focused shell (based on process creation time via `GetProcessTimes`) or the shell whose CWD matches the window title
+3. Windows Terminal exposes the current tab's shell name and CWD in the window title (e.g., "powershell - C:\Users\foo\project"). Parse the window title via `GetWindowTextW` on the HWND from `GetForegroundWindow()`
+4. Fall back to highest-PID heuristic (matching the macOS `find_shell_by_ancestry` pattern) when title parsing fails
+5. For CMD.exe and PowerShell.exe launched standalone (not inside Windows Terminal), they ARE the foreground process directly -- no tree walk needed
 
 **Warning signs:**
-- History works within a single overlay session but is empty when the overlay is reopened
-- Arrow-up navigation always starts from an empty state regardless of prior usage
-- `console.log` shows `turnHistory: []` immediately after `show()` triggers
+- `get_terminal_context` returns context from the wrong tab
+- History entries appear under the wrong window key
+- Multiple shell PIDs found with no way to pick the correct one
+- CWD is wrong when user has multiple tabs open in Windows Terminal
 
 **Phase to address:**
-Phase 1 (history storage architecture). This is an architecture decision that must precede any UI wiring.
+Phase 2 (Terminal Context Reading) -- process tree walking is the foundation for CWD, shell type, and visible output.
 
 ---
 
-### Pitfall 5: Unbounded History Map Growth in Long-Running Daemon Sessions
+### Pitfall 4: Breaking macOS When Adding Windows cfg Blocks
 
 **What goes wrong:**
-The Rust history map accumulates an entry for every terminal window and tab opened during the app's lifetime. A developer with 50 terminal tabs over a work week builds a map that never shrinks. Each entry holds up to 14 conversation turns; with verbose terminal output in context, each turn can be several kilobytes. Total memory footprint becomes measurable after heavy use. The app runs as a background daemon and is never restarted in normal use.
+The codebase has 15+ Rust files with `#[cfg(target_os = "macos")]` blocks and corresponding `#[cfg(not(target_os = "macos"))]` stubs. When adding Windows support, developers add `#[cfg(target_os = "windows")]` blocks but accidentally remove or modify the existing macOS code paths. Especially dangerous: changing a `#[cfg(not(target_os = "macos"))]` stub (which currently covers all non-macOS targets including Windows) to `#[cfg(target_os = "windows")]`, which now leaves Linux and other targets without an implementation -- future Linux support breaks. Or worse: editing the body of a `#[cfg(target_os = "macos")]` function while testing only on Windows, introducing a bug that is invisible until the next macOS build.
+
+Specific files at risk in this codebase:
+- `hotkey.rs`: `get_frontmost_pid()` -- macOS uses ObjC FFI, Windows needs `GetForegroundWindow`
+- `paste.rs`: entire `cg_keys` module is `#[cfg(target_os = "macos")]`
+- `process.rs`: `get_process_cwd`, `get_process_name`, `get_child_pids`, `find_shell_by_ancestry` all have macOS FFI + non-macOS stubs
+- `detect.rs`: `get_bundle_id`, `get_app_display_name` use ObjC runtime
+- `permissions.rs`: `check_accessibility_permission`, `request_accessibility_permission` use CoreFoundation
+- `ax_reader.rs`: entire 800-line `macos` module + non-macOS stubs
+- `lib.rs`: NSPanel setup, vibrancy, activation policy all in `#[cfg(target_os = "macos")]`
 
 **Why it happens:**
-HashMap entries are added on first overlay trigger from a new window but never removed. No eviction policy, no max-entries cap, no TTL.
+Rust's `#[cfg]` is evaluated at compile time. When developing on Windows, the macOS code paths are not compiled or tested. A typo, missing import, or changed function signature in macOS code is invisible until someone builds on macOS. CI that only runs on one platform misses the other.
 
 **How to avoid:**
-Implement LRU-style eviction:
-- Cap total entries at a fixed limit (50 windows is generous).
-- Track `last_accessed: SystemTime` per entry.
-- On each insert or update: if `len() > cap`, evict the entry with the oldest `last_accessed`.
-- Also evict entries not accessed within 4 hours regardless of cap.
-
-```rust
-fn evict_stale(map: &mut HashMap<String, WindowHistory>, cap: usize) {
-    let cutoff = SystemTime::now()
-        .checked_sub(Duration::from_secs(4 * 3600))
-        .unwrap_or(SystemTime::UNIX_EPOCH);
-    map.retain(|_, v| v.last_accessed > cutoff);
-    while map.len() > cap {
-        let oldest = map.iter()
-            .min_by_key(|(_, v)| v.last_accessed)
-            .map(|(k, _)| k.clone());
-        if let Some(k) = oldest { map.remove(&k); } else { break; }
-    }
-}
-```
-
-Call `evict_stale` before each insert.
+1. Adopt a platform-module pattern: `terminal/process_macos.rs`, `terminal/process_windows.rs`, `terminal/process.rs` (facade with `cfg` re-exports). Each platform file is self-contained -- editing the Windows file cannot touch the macOS file
+2. CI must build on BOTH macOS and Windows for every PR. Use `cargo check --target x86_64-pc-windows-msvc` on macOS (cross-check) and vice versa
+3. Replace `#[cfg(not(target_os = "macos"))]` stubs with explicit `#[cfg(target_os = "windows")]` implementations + `#[cfg(not(any(target_os = "macos", target_os = "windows")))]` stubs for future platforms
+4. Never edit a macOS `#[cfg]` block while developing on Windows -- changes to the macOS path require macOS compilation to verify
+5. Use the `cfg_if!` macro for cleaner three-way platform branching
 
 **Warning signs:**
-- App memory usage climbs steadily over a multi-day session (visible in Activity Monitor)
-- HashMap size visible via debug logging grows beyond expected terminal window count
-- RSS grows proportionally with number of terminal tabs opened since last restart
+- macOS build fails after a Windows PR merge
+- `cargo check --target x86_64-apple-darwin` on CI fails with "function not found" errors
+- Non-macOS stubs return `None` when they should have been replaced with Windows implementations
+- Tests pass on Windows but fail on macOS
 
 **Phase to address:**
-Phase 1 (history storage). Cap and eviction must be part of the initial data structure design.
+Phase 1 (Project Setup) -- establish the platform-module pattern and cross-platform CI before writing any Windows code.
 
 ---
 
-### Pitfall 6: Conversation Context Tokens Grow Linearly with Follow-Up Depth
+### Pitfall 5: Windows Defender SmartScreen Blocks Unsigned Binaries
 
 **What goes wrong:**
-Each follow-up query to grok-3 includes the full history (up to 14 turns) PLUS terminal context (shell, CWD, up to 25 lines of terminal output) in the first user message. In a long session with verbose terminal output, the effective payload per API call can exceed 6,000-8,000 tokens by turn 4. The existing 10-second SSE timeout can trigger on context-heavy requests. xAI rate limits at the token level may start blocking rapid follow-up sequences.
+On macOS, the app is already signed with a Developer ID certificate. On Windows, distributing an unsigned EXE triggers SmartScreen, which shows a full-screen blue warning: "Windows protected your PC -- Microsoft Defender SmartScreen prevented an unrecognized app from starting." Most users will not click "More info -> Run anyway." Even with an OV code signing certificate, SmartScreen still shows warnings until the certificate builds reputation (weeks to months of downloads). As of March 2024, even EV certificates no longer get instant SmartScreen bypass.
+
+Additionally, the NSIS uninstaller (`uninstall.exe`) is NOT signed by Tauri's signing process (Issue #7348), so even if the main EXE is signed, uninstallation triggers a separate UAC warning.
 
 **Why it happens:**
-`build_user_message()` in `ai.rs` includes terminal context in every first user turn. When the history is replayed across follow-ups, this context is embedded in the history payload that gets sent to the API repeatedly. The current 14-message hard cap was designed for turn count, not total token budget.
+Microsoft's SmartScreen reputation system is opaque and based on download volume + certificate age. New certificates start with zero reputation regardless of type (OV vs EV). Unlike Apple's notarization (which is a one-time per-build process), SmartScreen reputation builds over time through user downloads.
 
 **How to avoid:**
-- Include full terminal context (CWD, shell output) only in the FIRST user message of a session. For follow-up turns, the user message is the bare query only (context is already established).
-- Add a character-count secondary cap alongside the turn cap: if the sum of all history message content exceeds 6,000 characters, drop from the oldest end until under budget.
-- Track whether the current query is a follow-up (turnHistory length > 0) and call a stripped `build_follow_up_message(query)` instead of the full `build_user_message(query, ctx)`.
+1. Purchase a code signing certificate BEFORE starting development -- reputation building takes time
+2. Use an EV certificate if budget allows (still the fastest path to reputation, even post-March 2024)
+3. Configure `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` environment variables for Tauri's built-in signing
+4. Use the `signCommand` option in `tauri.conf.json` under `bundle > windows` if using an external signing tool (e.g., Azure SignTool for cloud-based EV certificates)
+5. Sign BOTH the MSI/NSIS installer AND the main EXE
+6. Start distributing signed beta builds early to begin building reputation
+7. Consider MSI over NSIS -- MSI triggers fewer false positives with enterprise security tools and is easier to deploy via Group Policy in enterprise environments
 
 **Warning signs:**
-- grok-3 API calls start timing out after 2-3 follow-up turns (context size growing)
-- xAI 429 rate limit errors appearing in rapid succession during follow-up sequences
-- Response latency degrades noticeably at follow-up turn 3 or beyond
+- Users report "Windows protected your PC" when downloading
+- Download counts are low because users abandon at the SmartScreen warning
+- Antivirus false positives on the unsigned EXE
+- Enterprise customers cannot install due to security policy
 
 **Phase to address:**
-Phase 3 (AI follow-up context). The `build_user_message` and history-passing logic in `ai.rs` needs deliberate refactoring alongside the history feature.
+Phase 7 (Build and Distribution) -- but certificate purchase should happen in Phase 1 to start building reputation early.
 
 ---
 
-### Pitfall 7: Window Key Computed After Overlay Shows Causes TOCTOU Race
+### Pitfall 6: Getting CWD on Windows Requires Reading Another Process's PEB
 
 **What goes wrong:**
-If the window key (bundle_id + TTY) is computed lazily inside `get_app_context` after the overlay has already shown and stolen focus, there is a race between the overlay appearing and the TTY lookup completing. If the user triggers Cmd+K from Window A, quickly switches to Window B before context detection finishes, the TTY resolved is Window B's but the event was triggered by Window A. The history assigned will belong to the wrong window.
+On macOS, getting a process's CWD is trivial: `proc_pidinfo(pid, PROC_PIDVNODEPATHINFO)` returns the CWD directly, or `lsof -p pid -d cwd` as a fallback. On Windows, there is NO public, documented, stable API to get the current working directory of another process. The only reliable method is reading the Process Environment Block (PEB) of the target process via `NtQueryInformationProcess(ProcessBasicInformation)` + `ReadProcessMemory` to extract `RTL_USER_PROCESS_PARAMETERS.CurrentDirectory`. This is an undocumented NT API that works but is technically internal. Microsoft explicitly notes: "These functions may be altered or unavailable in future versions of Windows."
 
 **Why it happens:**
-The existing "capture-before-show" pattern correctly captures `previous_app_pid` synchronously in the hotkey handler before `show_and_make_key()`. The window key must be captured with the same synchronicity. Any TTY lookup that forks a subprocess (`lsof`, `pgrep`) can take 50-200ms -- long enough for a context switch to occur.
+Unix exposes process state via `/proc/<pid>/cwd` (symlink) and `proc_pidinfo` (macOS). Windows has no such abstraction. The PEB approach is what Process Explorer, PowerShell, and every other tool uses internally, but it requires `PROCESS_QUERY_INFORMATION | PROCESS_VM_READ` access to the target process.
 
 **How to avoid:**
-Compute the complete window key synchronously in the hotkey handler at the same point `previous_app_pid` is captured:
-
-```rust
-// In hotkey handler (before show_and_make_key):
-let previous_pid = get_frontmost_pid();
-let shell_pid = find_shell_pid_fast(previous_pid); // direct proc walk, no subprocesses
-let window_key = compute_tty_key(previous_pid, shell_pid); // proc_pidinfo only
-state.previous_window_key = Mutex::new(Some(window_key));
-// THEN call show_and_make_key()
-```
-
-Use only `proc_pidinfo` with `PROC_PIDTBSDINFO` for TTY extraction -- this is a kernel syscall bounded to microseconds. Do not use `lsof` or `pgrep` in the key computation path.
+1. Use `NtQueryInformationProcess` + `ReadProcessMemory` to read PEB -> `RTL_USER_PROCESS_PARAMETERS` -> `CurrentDirectory.DosPath` -- this is the de facto standard approach
+2. The `windows` crate (`windows::Wdk::System::Threading::NtQueryInformationProcess`) exposes this function
+3. Handle the case where `OpenProcess` fails due to insufficient privileges (elevated terminal processes may deny access from a non-elevated CMD+K)
+4. Verify the approach works for 64-bit processes from a 64-bit CMD+K (WOW64 complications exist when reading 32-bit process PEB from 64-bit process, but in practice all modern shells are 64-bit)
+5. Fall back to parsing the Windows Terminal window title for CWD if PEB reading fails
+6. For PowerShell specifically, the CWD from PEB may lag behind the actual shell CWD (PowerShell changes directory with `Set-Location` which updates its internal state but the process CWD may not update immediately). Consider supplementing with `wmic process where processid=PID get commandline` or window title parsing
 
 **Warning signs:**
-- On fast Cmd+K sequences (open from Window A, close, quickly open again from Window B), history from A appears in B
-- History map shows keys that don't match the currently active terminal's TTY
-- Race is intermittent and only reproducible under speed stress
+- CWD returned is `C:\Windows\System32` for all terminals (default process CWD, PEB read failed)
+- Access denied errors when targeting elevated processes
+- CWD is correct for CMD but wrong for PowerShell (PEB CWD vs PowerShell's internal location)
 
 **Phase to address:**
-Phase 1 (window identification). Test with rapid alternating Cmd+K from two different terminal windows.
+Phase 2 (Terminal Context Reading) -- CWD is the most critical terminal context field.
 
 ---
 
-### Pitfall 8: History Navigation Draft Loss -- No Draft Cache on ArrowUp
+### Pitfall 7: Vibrancy Looks and Behaves Differently on Windows
 
 **What goes wrong:**
-User types a multi-word query ("list all docker containers sorted by size"), then accidentally presses ArrowUp to navigate history. The draft is replaced by a history entry. Pressing ArrowDown to return does not restore the original draft -- it was discarded.
+On macOS, `apply_vibrancy(&window, NSVisualEffectMaterial::HudWindow, None, Some(12.0))` gives a consistent frosted glass look. On Windows, the `window-vibrancy` crate (now built into Tauri v2) provides `apply_acrylic` and `apply_mica`, but they behave fundamentally differently:
+- Acrylic has significant performance issues when resizing/dragging on Windows 11 22621+
+- Mica only works on Windows 11, not Windows 10
+- Neither Acrylic nor Mica supports rounded corners natively -- the DWM (Desktop Window Manager) handles corner rounding automatically on Windows 11, but on Windows 10 windows are rectangular
+- The blur radius and color tint are different from macOS vibrancy
+- Transparent windows with `decorations: false` may show a white flash on creation before the vibrancy effect applies
 
 **Why it happens:**
-A naive history navigation implementation sets `inputValue` directly to the history entry without saving the current draft. Standard shell history navigation (bash/zsh) caches the current buffer and restores it on ArrowDown past the end of history -- but this behavior is not automatic.
+macOS vibrancy is a deeply integrated OS feature with fine-grained control (material, blending mode, corner radius). Windows Acrylic/Mica is a newer DWM composition effect with less flexibility. The Tauri `window-vibrancy` integration abstracts platform differences but cannot eliminate them.
 
 **How to avoid:**
-Cache the unsaved draft when navigation begins:
-
-```typescript
-const [historyDraft, setHistoryDraft] = useState<string | null>(null);
-const [historyIndex, setHistoryIndex] = useState<number>(-1);
-
-function navigateHistory(direction: -1 | 1) {
-  if (direction === -1 && historyIndex === -1) {
-    // Save draft before navigating away
-    setHistoryDraft(inputValue);
-  }
-  const newIndex = historyIndex + direction;
-  if (newIndex < -1) return; // Already at end
-  if (newIndex >= history.length) return; // Already at oldest
-  if (newIndex === -1) {
-    // Restore draft
-    setInputValue(historyDraft ?? "");
-    setHistoryDraft(null);
-  } else {
-    setInputValue(history[newIndex]);
-  }
-  setHistoryIndex(newIndex);
-}
-```
+1. Use Mica on Windows 11 (looks best, least performance overhead), fall back to Acrylic on Windows 10
+2. Detect Windows version at runtime: `windows::Win32::System::SystemInformation::GetVersionExW` or parse `winver`
+3. Set `decorations: false` and `transparent: true` in the window config (already done for macOS)
+4. Accept that rounded corners come from Windows 11 DWM automatically (do not try to implement them manually via clip-path on Windows 10)
+5. Add a small delay (50-100ms) before showing the window to avoid the white flash during vibrancy initialization
+6. Test on BOTH Windows 10 and Windows 11 -- the visual appearance is significantly different
 
 **Warning signs:**
-- Users report losing typed queries when accidentally pressing ArrowUp
-- ArrowDown at the end of history shows empty input instead of the original draft
+- White flash when overlay appears
+- Rectangular corners on Windows 10 (expected, not a bug)
+- Laggy overlay animation during drag/resize
+- Vibrancy effect not visible (window appears solid black or white)
 
 **Phase to address:**
-Phase 2 (arrow key navigation). This is part of the correct history UX, not an edge case.
+Phase 1 (Windows Overlay Foundation) -- visual fidelity is part of the overlay UX.
+
+---
+
+### Pitfall 8: Ctrl+K Conflicts with Browser and Editor Shortcuts
+
+**What goes wrong:**
+On macOS, Cmd+K is relatively conflict-free (few apps use it). On Windows, the equivalent Ctrl+K is already used by:
+- Chrome/Edge/Firefox: opens the address bar / search
+- VS Code: chord prefix for dozens of keybindings (Ctrl+K, Ctrl+C = comment, etc.)
+- Slack: focus the search bar
+- Notion: create a link
+- Microsoft Teams: open the search box
+- Word/Outlook: insert hyperlink
+
+When CMD+K registers Ctrl+K as a global hotkey, it steals the shortcut from every application on the system. Users lose critical shortcuts in their daily tools. Worse: some applications (VS Code) wait for a second key after Ctrl+K -- the global hotkey fires before VS Code sees the chord, causing VS Code to enter an inconsistent state.
+
+**Why it happens:**
+macOS has a cultural separation between Cmd (OS/app shortcuts) and Ctrl (terminal shortcuts). Windows conflates Ctrl for both purposes. Ctrl+K is an extremely popular shortcut across the Windows ecosystem, much more so than Cmd+K is on macOS.
+
+**How to avoid:**
+1. Default to a DIFFERENT hotkey on Windows: `Ctrl+Shift+K` or `Alt+Space` (which mirrors Spotlight/Raycast behavior)
+2. Make the hotkey configurable from the FIRST RUN onboarding (already have this feature on macOS)
+3. In the hotkey configuration UI, warn about known conflicts: "Ctrl+K conflicts with Chrome, VS Code, and Slack"
+4. Consider using `Win+K` but NOTE: Windows 10/11 reserves `Win+K` for "Connect to wireless displays" -- this will NOT work as a global hotkey
+5. Detect if the foreground application is a known conflicting app and show a brief notification if so
+6. Document recommended alternatives in the onboarding flow
+
+**Warning signs:**
+- User reports "Chrome search bar stopped working"
+- VS Code users report broken chord keybindings
+- GitHub issues titled "hotkey conflicts with [popular app]"
+- Low adoption on Windows despite macOS popularity
+
+**Phase to address:**
+Phase 1 (Windows Overlay Foundation) -- hotkey registration is the first user interaction.
 
 ---
 
@@ -274,79 +256,77 @@ Shortcuts that seem reasonable but create long-term problems.
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Key on PID alone (no TTY) | No change to AppState shape, works for single-window usage | History bleeds across iTerm2 tabs; cross-window contamination on PID reuse | Never -- TTY-based key is cheap to implement from the start |
-| Store history in Zustand only | No Rust changes needed | History wiped on every overlay open; invisible to Rust-side context building | Never -- backend storage is needed for durability |
-| No eviction policy on history map | Simpler code | Memory leak for long-running daemon in heavy-use environments | Acceptable in v0.1.1 only if a hard max_entries cap (20) is enforced |
-| Include full terminal context in every history turn | Simpler `build_user_message` | Token bloat at follow-up 3+; rate limit risk | Never -- first-turn-only context is trivially implementable |
-| Arrow-up always navigates history (no line check) | Simple 5-line implementation | Breaks multi-line input cursor movement | Never -- line-position check is 5 lines of code |
-| Prefix-search history on arrow-up (bash-style) | More polish | Conflicts with simple index-based navigation; adds complexity | Defer to v0.2 -- plain up/down is sufficient for v0.1.1 |
-
----
+| Using `wmic process` for process queries | Easy to implement, no FFI needed | wmic.exe is deprecated since Win10 21H1, spawns subprocess (100ms+ per call), breaks in future Windows | Never -- use `CreateToolhelp32Snapshot` from the start |
+| Hardcoding `i32` for PIDs on Windows | Matches macOS `pid_t` type, no refactoring | Windows PIDs are `DWORD` (u32), can exceed i32 range, causes subtle truncation bugs | Never -- use a `PlatformPid` type alias: `i32` on macOS, `u32` on Windows |
+| Using `clipboard + Ctrl+V SendInput` for paste | Simple, works for non-elevated terminals | Clobbers user clipboard, fails for elevated terminals, race condition between clipboard write and paste keystroke | MVP only -- replace with `SendInput` direct character injection or per-terminal API later |
+| Running CMD+K as Administrator | Bypasses UIPI, paste works everywhere | UAC prompt on every launch, security risk, breaks auto-start, unsigned EXE + UAC = red flag for users | Never -- use UIAccess manifest or detect+warn instead |
+| Using `GetWindowText` for terminal detection | Quick heuristic for identifying terminal apps | Window titles change with CWD, running process, user config; brittle pattern matching | Acceptable as supplementary signal, never as primary detection |
+| Single `process.rs` file with `#[cfg]` blocks | Less files, faster initial development | 600+ line file becomes 1200+ with Windows code interleaved, impossible to review, easy to accidentally modify wrong platform block | Never -- split into `process_macos.rs` + `process_windows.rs` from day one |
 
 ## Integration Gotchas
 
-Common mistakes when connecting history to existing components.
+Common mistakes when connecting platform-specific Windows services.
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| xAI history replay | Including terminal context fields in every historical user message | Context goes only in the first user message of the session; subsequent turns send bare query text |
-| `proc_pidinfo` PROC_PIDTBSDINFO | Treating `pbi_tdev` directly as a path string | `pbi_tdev` is a device number (major/minor encoded); resolve via `devname_r()` or match against `/dev/ttys*` entries |
-| Tauri `AppState` Mutex | Holding the lock across `await` points | Hold `Mutex` guard only for map read/write; drop before any `await`; or use `tokio::sync::Mutex` for async-native locking |
-| Zustand `show()` reset | Adding history fields to AppState and forgetting to exclude them from the show() reset | Keep window history in Rust backend; only fetch the relevant window's history into a local variable on show() |
-| Arrow key `e.preventDefault()` | Calling it unconditionally in textarea `onKeyDown` | Gate on cursor line position (see Pitfall 3); only prevent default when actually navigating history |
-| History turn trimming | Trimming from the newest end | Always trim from the oldest end (index 0); preserve the most recent N turns for coherent follow-up |
-| Liveness check in history fetch | Calling `get_process_name` with a stale PID during context detection race | Capture shell PID in the hotkey handler and store it alongside the window key |
-
----
+| Windows Credential Manager (keyring crate) | Using `features = ["apple-native"]` on Windows, or not specifying `windows-native` feature | Use `features = ["apple-native"]` on macOS, `features = ["windows-native"]` on Windows. In Cargo.toml: `[target.'cfg(target_os = "macos")'.dependencies] keyring = { version = "3", features = ["apple-native"] }` and `[target.'cfg(target_os = "windows")'.dependencies] keyring = { version = "3", features = ["windows-native"] }` |
+| Windows Credential Manager (threading) | Accessing keyring Entry from multiple threads simultaneously | keyring docs explicitly warn: "Operating on the same entry from different threads does not reliably sequence the operations." Serialize all keyring access through a single-threaded executor or use a mutex |
+| Windows Credential Manager (enterprise) | Assuming Credential Manager is always accessible | Credential Guard (default-on in Windows 11 22H2+ enterprise) may restrict credential access. Some enterprise Group Policies disable Credential Manager entirely. Add a fallback to encrypted file storage or detect policy restrictions |
+| System Tray on Windows | Assuming tray icon works identically to macOS menu bar | Windows system tray is in the bottom-right (not top-right). Tray icons can be hidden in the "overflow" area by default. Users must manually pin the icon. The app should prompt or document this |
+| `open` command for URLs | Using `open` (macOS command) to launch URLs/settings | Windows uses `start` or `ShellExecuteW`. Replace `std::process::Command::new("open")` with platform-specific: `cmd /c start` on Windows |
+| `pbcopy` for clipboard | Using `pbcopy` to write to clipboard | Windows has no `pbcopy`. Use `SetClipboardData` via Win32 API or the `clipboard-win` / `arboard` crate for cross-platform clipboard access |
 
 ## Performance Traps
 
-Patterns that work at small scale but fail as usage grows.
+Patterns that work at small scale but fail under real usage.
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| TTY device lookup using `lsof` in hotkey handler | 50-200ms added to overlay open latency; perceptible delay before overlay appears | Use `proc_pidinfo(PROC_PIDTBSDINFO)` only -- kernel syscall, no subprocess | Every hotkey trigger if `lsof` is in the synchronous path |
-| History map Mutex held across `await` points | Deadlock or very long lock hold times; other Tauri commands block waiting for the mutex | Hold Mutex guard only for map read/write; drop before any async operation | First time a second Tauri command fires while history update is in-flight |
-| Large `visible_output` in all history turns | API call latency grows 2-5x by follow-up 3-4 | Strip terminal context from history replay; context is first-turn-only | Follow-up query 3 or beyond in a verbose terminal session |
-| `HashMap::clear()` not releasing memory | App RSS stays high after many terminal tabs are opened and closed | Call `map.shrink_to_fit()` after bulk removal, or use entry-by-entry `remove()` | After a session where 30+ terminal tabs were opened then closed |
-
----
+| Spawning `wmic` or `tasklist` per hotkey press | 200-500ms delay before overlay appears | Use `CreateToolhelp32Snapshot` (single call, <5ms) | First hotkey press feels laggy |
+| Building full process tree on every hotkey | Snapshot of ALL processes (hundreds) parsed on main thread | Cache process tree, invalidate on timer (e.g., 2s TTL) | When system has 500+ processes |
+| `ReadProcessMemory` on every CWD query without caching | Cross-process memory read per overlay invocation | Cache CWD per shell PID with 1s TTL, invalidate on window key change | When user hammers hotkey rapidly |
+| Windows DPI change event causing overlay resize loop | Overlay flickers/resizes when dragged between monitors with different DPI | Handle `WM_DPICHANGED` once, debounce with 100ms delay | When user has mixed-DPI multi-monitor setup (very common on Windows: laptop 150% + external 100%) |
 
 ## Security Mistakes
 
-Domain-specific security issues for the history feature.
+Domain-specific security issues for a Windows overlay app.
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Persisting conversation history to disk (e.g., JSON file) | Terminal output may contain secrets (API keys, passwords from `cat .env`); disk persistence makes them recoverable | Keep history in-process only (Rust AppState); never persist to disk in v0.1.1 |
-| Including full shell history from `~/.zsh_history` in AI context | Sends sensitive command sequences to xAI API without user awareness | Use only the current session's overlay-generated history, never the shell's own history file |
-| Logging full history turns via `eprintln!` in production builds | Conversation content with potential secrets appears in system logs | Gate verbose history logging behind `#[cfg(debug_assertions)]` |
-
----
+| Running CMD+K as Administrator to bypass UIPI | Broad attack surface: any malicious command runs elevated | Never default to admin. Detect elevated terminals and warn. Use UIAccess manifest (requires code signing) for cross-integrity input |
+| Storing API key in plaintext config file instead of Credential Manager | Key exposed to any process that can read the file | Use keyring crate with `windows-native` feature. Already have Keychain on macOS -- port properly |
+| Using `clip.exe` or PowerShell clipboard for paste (spawns subprocess with key visible in process list) | API key or commands visible in `Get-Process` output | Use Win32 `SetClipboardData` API directly via the `windows` crate, or use `SendInput` character injection |
+| Not signing the EXE | SmartScreen blocks installation; antivirus false positives; enterprise GPO blocks unsigned software | Sign with EV or OV certificate. Budget this early -- it is a distribution requirement, not optional |
+| Ignoring Windows path traversal in CWD/command strings | Path injection if CWD contains special characters (e.g., `%APPDATA%` expansion) | Sanitize paths, use `\\?\` prefix for long paths, never pass CWD through shell expansion |
 
 ## UX Pitfalls
 
+Common user experience mistakes when porting macOS overlay UX to Windows.
+
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| No visual indicator that history navigation is available | User does not know ArrowUp history exists; feature is invisible | Show a subtle indicator (e.g., small arrow hint or turn count) in the overlay footer when history length > 0 |
-| History navigation changes input immediately with no way to undo | User accidentally navigates to a long previous command and cannot get back to their draft | Cache the unsaved draft on first ArrowUp press; restore it on ArrowDown past end (Pitfall 8) |
-| Follow-up context shows stale CWD from a previous session's history | User opens overlay from a new directory; AI responds as if in the old directory | Always refresh context on overlay open by re-running `get_app_context`; never use cached context from history turns as the current context |
-| Arrow navigation wraps around (oldest entry goes back to newest) | User presses ArrowUp past oldest entry and ends up at newest entry; disorienting | Do not wrap; clamp at oldest entry (ArrowUp has no effect when at oldest) and at draft (ArrowDown has no effect when at draft) |
-
----
+| Using macOS-style keyboard shortcuts in UI text ("Cmd+V", "Cmd+K") | Confuses Windows users who see unfamiliar modifier keys | Detect platform, show "Ctrl+V" on Windows, "Cmd+V" on macOS. Use Tauri's `navigator.platform` or pass OS type from Rust |
+| Onboarding asks for Accessibility permission (macOS concept) | Windows has no equivalent permission. Users see a confusing request with no action to take | Skip Accessibility step on Windows. Windows does not need explicit permission for input injection (UIPI is automatic based on integrity level) |
+| Overlay appears at macOS-style 25% from top | On Windows with taskbar at bottom, 25% from top may feel too high. Windows convention is more centered (like Start menu search, PowerToys Run) | Consider 30-35% from top on Windows, or let the user choose. Test with taskbar at top/left/right/bottom |
+| System tray icon not visible by default | Windows auto-hides new tray icons in the overflow area. Users think the app is not running | On first run, show a notification balloon from the tray icon explaining where to find it. Prompt user to pin the icon |
+| No context menu on right-click of tray icon | macOS menu bar apps use left-click for menu. Windows convention is right-click for context menu, left-click for primary action | Register both left-click (show overlay) and right-click (show settings menu) handlers on the tray icon |
+| Escape key dismissal assumes NSPanel resign behavior | On macOS, `panel.hide()` + `resign_key_window()` returns focus to the terminal. On Windows, hiding the overlay window does not automatically reactivate the previous foreground window | After hiding the overlay, explicitly call `SetForegroundWindow(previous_hwnd)` to return focus to the terminal. Store the previous HWND at hotkey capture time |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Window identification:** Works with single iTerm2 window -- verify it also isolates history between TWO simultaneously open iTerm2 windows with different CWDs
-- [ ] **Arrow navigation:** Works at a single-line prompt -- verify ArrowUp does NOT intercept cursor movement when on line 2 of a Shift+Enter multi-line input
-- [ ] **History persistence:** History survives overlay dismiss/reopen -- verify it is EMPTY for a brand-new terminal tab in the same app
-- [ ] **Follow-up context:** AI receives correct history -- verify Rust-side API payload size does NOT grow linearly with terminal output size after 3 turns
-- [ ] **GPU terminal fallback:** History isolated correctly for iTerm2 -- verify Alacritty (no AX/TTY) falls back to app-scoped key gracefully, not a crash
-- [ ] **Reset-on-show integrity:** History persists -- verify ALL other ephemeral state (streamingText, isDestructive, displayMode) still resets correctly on show()
-- [ ] **Rapid Cmd+K:** Window key correct under speed stress -- verify no TOCTOU race by alternating Cmd+K from two different terminal windows in quick succession
-- [ ] **Draft preservation:** ArrowUp and back down restores the original unsaved draft, not an empty string
+Things that appear complete but are missing critical pieces.
 
----
+- [ ] **Overlay window:** Shows on top -- but verify it does NOT appear in Alt+Tab, does NOT steal focus, and tray icon is visible (not in overflow)
+- [ ] **Hotkey registration:** Ctrl+K works -- but verify it does not break Chrome address bar, VS Code chords, or Slack search
+- [ ] **Terminal paste:** Works for normal PowerShell -- but verify it works for CMD, Git Bash, WSL terminals, AND fails gracefully for elevated terminals
+- [ ] **CWD detection:** Works for standalone CMD -- but verify it works for PowerShell (which may not update process CWD), Windows Terminal tabs, and WSL shells
+- [ ] **Window key computation:** Returns a key -- but verify it returns DIFFERENT keys for different Windows Terminal tabs, not the same key for all tabs
+- [ ] **API key storage:** Saves/loads via Credential Manager -- but verify it works on machines with Credential Guard enabled and under enterprise Group Policy restrictions
+- [ ] **Vibrancy effect:** Looks good on Windows 11 -- but verify appearance on Windows 10 (no Mica, no rounded corners), and on high-DPI displays
+- [ ] **Auto-start on login:** App starts at boot -- but verify it does NOT trigger UAC prompt and works via Task Scheduler or registry Run key
+- [ ] **Cross-platform build:** Windows build passes -- but verify macOS build still passes after all Windows changes (CI on both platforms)
+- [ ] **Process tree walk:** Finds shell PID -- but verify `DWORD` (u32) PIDs are handled correctly, not truncated to i32
+- [ ] **WSL detection:** Detects WSL bash -- but verify CWD resolves correctly (Linux path vs Windows path), and that the window key is stable across WSL restarts
 
 ## Recovery Strategies
 
@@ -354,130 +334,75 @@ When pitfalls occur despite prevention, how to recover.
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| PID-only key discovered after history UI is built | HIGH | Refactor AppState key type from `i32` to `String`; update all callers of history map; re-test all history scenarios |
-| History stored in Zustand (wiped on show) | HIGH | Migrate to backend HashMap; add `get_window_history` and `update_window_history` Tauri commands; update frontend to call them on show() and after each turn |
-| No eviction causing memory growth | LOW | Add `evict_stale()` call on each history update; no API surface change required |
-| Terminal context in all history turns (token bloat) | MEDIUM | Refactor `build_user_message` to detect first vs. follow-up turn; no state change required, only logic in `ai.rs` |
-| Arrow key eating multi-line cursor movement | LOW | Add `isOnFirstLine`/`isOnLastLine` guards to existing `handleKeyDown`; localized to `CommandInput.tsx` |
-| Draft loss on ArrowUp | LOW | Add `historyDraft` and `historyIndex` state; cache draft on first navigation; restore on ArrowDown past end |
-
----
+| Overlay steals focus (no WS_EX_NOACTIVATE) | MEDIUM | Add WS_EX_NOACTIVATE post-creation via SetWindowLongPtrW. Requires understanding Win32 window styles but does not require architectural changes |
+| SendInput fails for elevated terminals | LOW | Add elevation detection + warning UI. Does not require code restructuring |
+| macOS build broken by Windows changes | HIGH if discovered late, LOW if CI catches it | Add cross-platform CI immediately. Fix involves reverting or fixing cfg blocks |
+| SmartScreen blocks unsigned EXE | HIGH (reputation takes weeks) | Purchase certificate, sign, distribute, wait for reputation. No quick fix |
+| Wrong CWD for PowerShell | MEDIUM | Add window title parsing as supplementary CWD source. Requires additional code but not architectural change |
+| Ctrl+K conflicts break user workflows | LOW | Change default hotkey, add conflict detection. UI change only |
+| Clipboard clobbered during paste | MEDIUM | Implement save/restore clipboard pattern: read clipboard before writing command, restore after paste. Or switch to SendInput character injection |
+| PID type mismatch (i32 vs DWORD) | HIGH if caught late | Introduce `PlatformPid` type alias across entire codebase. Touches many files but is mechanical |
 
 ## Pitfall-to-Phase Mapping
 
+How roadmap phases should address these pitfalls.
+
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| PID alone as window key | Phase 1: Window identification | Test two simultaneously open iTerm2 windows; verify separate histories |
-| PID reuse corrupting history | Phase 1: Window identification | Close a terminal tab; verify liveness check evicts the stale entry |
-| History in Zustand wiped on show | Phase 1: History storage architecture | Verify history survives 5 overlay open/close cycles |
-| Unbounded map growth | Phase 1: History storage architecture | Simulate 100 window events; verify map size stays at or below cap |
-| Window key computed after overlay shows | Phase 1: Window identification | Rapid alternating Cmd+K test between two terminal windows |
-| Arrow key vs. multi-line cursor | Phase 2: Arrow key navigation | ArrowUp on line 2 of Shift+Enter multi-line prompt does not navigate history |
-| Draft loss on ArrowUp | Phase 2: Arrow key navigation | ArrowUp then ArrowDown restores the original draft |
-| Token bloat in follow-up context | Phase 3: AI follow-up context | Log API payload size for turns 1-5; verify no linear growth with terminal output |
-
----
-
-## v0.1.0 Foundation Pitfalls
-
-These remain applicable and are preserved from the original research (February 21, 2026). They are already resolved in the shipped v0.1.0 code.
-
-### Pitfall 9: Sandboxing Incompatible with Accessibility API
-
-**What goes wrong:** You cannot use the macOS Accessibility API from a sandboxed app. If sandboxing is enabled (required for App Store distribution), terminal state reading and paste into other apps both fail.
-
-**Prevention:** DO NOT enable `com.apple.security.app-sandbox`. Use Developer ID distribution (notarization only). Already resolved in v0.1.0.
-
-**Phase to address:** Resolved. Foundation phase.
-
----
-
-### Pitfall 10: AppleScript Command Injection via Unsanitized AI Responses
-
-**What goes wrong:** AI responses containing backticks or semicolons interpolated directly into AppleScript `do script` commands allow arbitrary terminal command execution.
-
-**Prevention:** Never directly interpolate AI responses into AppleScript strings. Escape properly or use temp file intermediary. Already resolved in v0.1.0 with the paste-not-execute approach.
-
-**Phase to address:** Resolved. Terminal integration phase.
-
----
-
-### Pitfall 11: Transparent Window Rendering Glitches on macOS Sonoma
-
-**What goes wrong:** Transparent Tauri windows exhibit visual artifacts after focus changes on Sonoma with Stage Manager.
-
-**Prevention:** Set `ActivationPolicy::Accessory` before any window operations. Already resolved in v0.1.0 (`lib.rs` line 55).
-
-**Phase to address:** Resolved. Foundation phase.
-
----
-
-### Pitfall 12: Global Hotkey Cmd+K Fires Twice on macOS
-
-**What goes wrong:** Tauri global-shortcut plugin bug (#10025) causes double-fire of hotkey events.
-
-**Prevention:** 200ms debounce via `last_hotkey_trigger` timestamp in AppState. Already resolved in v0.1.0.
-
-**Phase to address:** Resolved. Foundation phase.
-
----
-
-### Pitfall 13: Accessibility Permissions Silently Fail Without Prompting User
-
-**What goes wrong:** macOS Accessibility requires manual user action in System Settings; no automatic prompt. Failures are silent.
-
-**Prevention:** AX probe fallback for permission detection; onboarding wizard guides user. Already resolved in v0.1.0.
-
-**Phase to address:** Resolved. Foundation phase.
-
----
-
-### Pitfall 14: Non-Focusable Windows Still Steal Focus on macOS
-
-**What goes wrong:** `focusable: false` does not work on macOS in Tauri v2.
-
-**Prevention:** Use NSPanel (tauri-nspanel) with `nonactivating_panel` style mask and `can_become_key_window: true`. Already resolved in v0.1.0.
-
-**Phase to address:** Resolved. Foundation phase.
-
----
-
-### Pitfall 15: Streaming xAI Responses Cause IPC Performance Bottleneck
-
-**What goes wrong:** Streaming large AI responses through Tauri commands causes UI lag and high CPU if not chunked properly.
-
-**Prevention:** Use Tauri IPC Channel for streaming; forward individual tokens as they arrive. Already resolved in v0.1.0 (`stream_ai_response` in `ai.rs`).
-
-**Phase to address:** Resolved. AI integration phase.
-
----
-
-## Phase-Specific Warnings
-
-| Phase Topic | Likely Pitfall | Mitigation |
-|-------------|---------------|------------|
-| Phase 1: Window identification | Using app PID as map key | Compute bundle_id + TTY composite key synchronously in hotkey handler |
-| Phase 1: History storage | Zustand state wiped on show | Store history in Rust AppState HashMap, fetch on overlay open |
-| Phase 1: History storage | Unbounded map growth | Enforce cap + LRU eviction from the start |
-| Phase 2: Arrow key navigation | Multi-line input cursor conflict | Gate ArrowUp/Down on cursor line position |
-| Phase 2: Arrow key navigation | Draft loss on accidental navigation | Cache draft before first ArrowUp; restore on ArrowDown past end |
-| Phase 3: AI follow-up context | Token bloat at follow-up 3+ | Context in first user message only; character-count secondary cap on history |
-| Phase 3: AI follow-up context | Stale context in follow-up | Re-run `get_app_context` on every overlay open; never use history-embedded context as current context |
-
----
+| No NSPanel equivalent (focus stealing) | Phase 1: Overlay Foundation | Overlay appears without Alt+Tab entry; terminal cursor stays active; GetForegroundWindow still returns terminal HWND |
+| SendInput blocked by UIPI | Phase 3: Terminal Paste | Paste to normal terminal succeeds; paste to elevated terminal shows warning; no silent failure |
+| Windows Terminal process tree | Phase 2: Terminal Context | Correct CWD for active tab in multi-tab Windows Terminal; different window keys per tab |
+| Breaking macOS with cfg blocks | Phase 1: Project Setup | CI passes on both macOS and Windows; cargo check --target on both platforms |
+| SmartScreen blocks unsigned EXE | Phase 7: Distribution (certificate in Phase 1) | Signed EXE downloads without SmartScreen warning (after reputation period) |
+| PEB-based CWD reading | Phase 2: Terminal Context | CWD returned for CMD, PowerShell, Git Bash; graceful failure for elevated processes |
+| Vibrancy differences | Phase 1: Overlay Foundation | Acrylic/Mica applied on Win11; graceful fallback on Win10; no white flash |
+| Ctrl+K hotkey conflicts | Phase 1: Overlay Foundation | Default hotkey does not conflict with Chrome/VS Code; configurable; conflict warning in UI |
+| PID type mismatch (i32 vs u32) | Phase 1: Project Setup | PlatformPid type alias used everywhere; no truncation; CI verifies |
+| WSL boundary crossing | Phase 2: Terminal Context | WSL CWD resolves to Windows path; window key stable; paste works in WSL shell |
+| Clipboard clobber during paste | Phase 3: Terminal Paste | User clipboard preserved after paste; or use non-clipboard paste method |
+| Enterprise Credential Guard | Phase 4: Credential Storage | API key saved/loaded on enterprise machines; fallback if Credential Manager restricted |
 
 ## Sources
 
-- Codebase review: `src-tauri/src/state.rs`, `src-tauri/src/commands/terminal.rs`, `src-tauri/src/terminal/process.rs`, `src-tauri/src/terminal/ax_reader.rs`, `src/store/index.ts`, `src/hooks/useKeyboard.ts`, `src/components/CommandInput.tsx`, `src-tauri/src/commands/ai.rs`
-- macOS process API: [proc_pidinfo library (mmastrac)](https://github.com/mmastrac/proc_pidinfo), [macOS PID reuse (HackTricks)](https://book.hacktricks.wiki/en/macos-hardening/macos-security-and-privilege-escalation/macos-proces-abuse/macos-ipc-inter-process-communication/macos-xpc/macos-xpc-connecting-process-check/macos-pid-reuse.html)
-- macOS window identification: [GetWindowID utility (smokris)](https://github.com/smokris/GetWindowID), [iTerm2 Variables documentation](https://iterm2.com/documentation-variables.html)
-- TTY session identification: [The TTY demystified (Linus Akesson)](https://www.linusakesson.net/programming/tty/)
-- LLM context management: [Context Window Management Strategies (getmaxim.ai)](https://www.getmaxim.ai/articles/context-window-management-strategies-for-long-context-ai-agents-and-chatbots/), [LLM performance degradation at context limits](https://demiliani.com/2025/11/02/understanding-llm-performance-degradation-a-deep-dive-into-context-window-limits/)
-- xAI Grok token limits: [xAI Models and Pricing](https://docs.x.ai/developers/models), [Grok 3 context window analysis](https://www.byteplus.com/en/topic/568342)
-- Tauri state management: [Tauri v2 State Management docs](https://v2.tauri.app/develop/state-management/), [Tauri HashMap state discussion](https://github.com/tauri-apps/tauri/discussions/7279)
-- Rust HashMap memory: [Handling memory leaks in Rust (LogRocket)](https://blog.logrocket.com/handling-memory-leaks-rust/)
-- Arrow key in React textarea: [stopPropagation for input navigation (DEV Community)](https://dev.to/rajeshroyal/practical-use-of-the-eventstoppropagation-react-mui-data-grid-allowing-arrow-key-navigation-for-571a)
+### Official Documentation
+- [Tauri v2 Windows Code Signing](https://v2.tauri.app/distribute/sign/windows/)
+- [Tauri v2 Window Customization](https://v2.tauri.app/learn/window-customization/)
+- [Tauri v2 Windows Installer](https://v2.tauri.app/distribute/windows-installer/)
+- [Microsoft SendInput API (UIPI)](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput)
+- [Microsoft NtQueryInformationProcess](https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntqueryinformationprocess)
+- [Microsoft High DPI Desktop Development](https://learn.microsoft.com/en-us/windows/win32/hidpi/high-dpi-desktop-application-development-on-windows)
+- [Microsoft Extended Window Styles (WS_EX_NOACTIVATE)](https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles)
+- [Microsoft Console Screen Buffers](https://learn.microsoft.com/en-us/windows/console/console-screen-buffers)
+- [Microsoft WSL Filesystem Interop](https://learn.microsoft.com/en-us/windows/wsl/filesystems)
+- [Microsoft CreateToolhelp32Snapshot](https://learn.microsoft.com/en-us/windows/win32/api/tlhelp32/nf-tlhelp32-createtoolhelp32snapshot)
+- [Rust windows crate GetForegroundWindow](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/UI/WindowsAndMessaging/fn.GetForegroundWindow.html)
+- [Rust windows crate PROCESS_BASIC_INFORMATION](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/Threading/struct.PROCESS_BASIC_INFORMATION.html)
+
+### Tauri GitHub Issues
+- [#10422: skipTaskbar not working on Windows](https://github.com/tauri-apps/tauri/issues/10422)
+- [#11566: focus config not working on Windows](https://github.com/tauri-apps/tauri/issues/11566)
+- [#7348: NSIS uninstall.exe not code signed](https://github.com/tauri-apps/tauri/issues/7348)
+- [#11673: NSIS plugins not signed](https://github.com/tauri-apps/tauri/issues/11673)
+- [#3610: Window size increases across monitors with different DPI](https://github.com/tauri-apps/tauri/issues/3610)
+- [#11754: Windows EV certificate custom signing command issues](https://github.com/tauri-apps/tauri/issues/11754)
+
+### Windows Terminal Issues
+- [#5694: Identify WindowsTerminal process ID](https://github.com/microsoft/terminal/issues/5694)
+- [#14902: Find window process doesn't locate active tab](https://github.com/microsoft/terminal/issues/14902)
+- [#262: ConPTY overlapped I/O not supported](https://github.com/microsoft/terminal/issues/262)
+
+### Crate Documentation
+- [keyring crate (windows-native backend)](https://docs.rs/keyring)
+- [windows-native-keyring-store](https://docs.rs/windows-native-keyring-store/latest/windows_native_keyring_store/)
+- [window-vibrancy crate (Acrylic/Mica)](https://github.com/tauri-apps/window-vibrancy)
+- [Rust windows crate CreateToolhelp32Snapshot](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/Diagnostics/ToolHelp/fn.CreateToolhelp32Snapshot.html)
+
+### Community Resources
+- [Tracking active process in Windows with Rust](https://hellocode.co/blog/post/tracking-active-process-windows-rust/)
+- [Building a Process Tree with ToolHelp and PID Reuse](https://trainsec.net/library/windows-internals/building-a-process-tree/)
+- [SmartScreen reputation post-March 2024 changes](https://learn.microsoft.com/en-us/answers/questions/5584097/how-to-bypass-windows-defender-smartscreen-even-af)
+- [Claude Code Ctrl+V paste issue in legacy conhost](https://github.com/anthropics/claude-code/issues/12298)
 
 ---
-*Pitfalls research for: per-terminal-window command history and AI follow-up context (Tauri v2 macOS overlay, v0.1.1 milestone)*
-*Researched: 2026-02-28*
+*Pitfalls research for: Adding Windows support to CMD+K macOS Tauri overlay app*
+*Researched: 2026-03-01*
