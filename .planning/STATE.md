@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-01)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** v0.2.1 Windows Support -- defining requirements
+**Current focus:** v0.2.1 Windows Support -- Phase 11 (Build Infrastructure and Overlay Foundation)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 11 of 16 (Build Infrastructure and Overlay Foundation)
 Plan: --
-Status: Defining requirements
-Last activity: 2026-03-01 -- Milestone v0.2.1 started
+Status: Ready to plan
+Last activity: 2026-03-01 -- Roadmap created for v0.2.1 Windows Support (Phases 11-16)
 
 Progress: [                              ] 0%
 
@@ -30,20 +30,19 @@ Progress: [                              ] 0%
 - Timeline: 2 days (2026-02-28 to 2026-03-01)
 - Git: 32 commits, 47 files changed, 4,637 insertions
 
-| Phase | Plan | Duration | Tasks | Files |
-|-------|------|----------|-------|-------|
-| 08-01 | Window key + history backend | 5min | 2 | 7 |
-| 08-02 | Frontend IPC integration | 2min | 2 | 1 |
-| 08-03 | Multi-tab IDE shell PID resolution | 4min | 2 | 4 |
-| 09-01 | Arrow-key history navigation | 3min | 2 | 3 |
-| 10-01 | Per-window turnHistory + conditional AI context | 3min | 2 | 3 |
-| 10-02 | Preferences UI: turn limit slider + clear history | 2min | 2 | 4 |
+**v0.2.1:** No plans executed yet.
 
 ## Accumulated Context
 
 ### Decisions
 
-All decisions archived in PROJECT.md Key Decisions table.
+All prior decisions archived in PROJECT.md Key Decisions table.
+
+v0.2.1 decisions pending:
+- Default hotkey: Ctrl+Shift+K on Windows (not Ctrl+K -- too many conflicts)
+- Acrylic for Win10, Mica for Win11 vibrancy
+- WS_EX_TOOLWINDOW to hide from Alt+Tab
+- Phases 12 and 13 can be developed in parallel (architecturally independent)
 
 ### Pending Todos
 
@@ -51,11 +50,14 @@ None.
 
 ### Blockers/Concerns
 
-- 12 non-critical tech debt items from v0.1.0 (see milestones/v1.0-MILESTONE-AUDIT.md)
-- 1 minor tech debt from v0.1.1: stale comment in history.rs (see milestones/v0.1.1-MILESTONE-AUDIT.md)
+- WS_EX_NOACTIVATE + WebView keyboard input interaction needs prototyping on Windows hardware
+- PEB CWD reading requires unsafe Rust with cross-process memory access
+- uiautomation crate maturity (less battle-tested than macOS AX APIs)
+- SmartScreen reputation for unsigned binaries takes weeks to build
+- 13 non-critical tech debt items from v0.1.0 and v0.1.1
 
 ## Session Continuity
 
-Last session: 2026-03-01 (v0.1.1 milestone completion)
-Stopped at: Milestone archived, ready for next milestone
+Last session: 2026-03-01 (v0.2.1 roadmap creation)
+Stopped at: Roadmap created, ready to plan Phase 11
 Resume file: None
