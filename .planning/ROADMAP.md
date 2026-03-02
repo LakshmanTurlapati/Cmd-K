@@ -52,12 +52,12 @@
   3. Overlay does not appear in Alt+Tab window switcher or taskbar
   4. Previous terminal window HWND is captured before overlay appears, and focus returns to that terminal on dismiss (Escape or command accept)
   5. Overlay floats above all windows with always-on-top behavior
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 11-01: TBD
-- [ ] 11-02: TBD
-- [ ] 11-03: TBD
+- [ ] 11-01-PLAN.md -- Build infrastructure: platform-gate Cargo.toml deps, cfg-gate macOS imports, extend AppState
+- [ ] 11-02-PLAN.md -- Windows overlay window: Acrylic/Mica vibrancy, WS_EX_TOOLWINDOW, always-on-top, show/hide commands
+- [ ] 11-03-PLAN.md -- Windows focus management: HWND capture, AttachThreadInput focus restore, Ctrl+Shift+K hotkey
 
 ### Phase 12: Terminal Context -- Process Tree, CWD, Detection
 **Goal**: CMD+K identifies the active terminal's shell process, reads its working directory, and detects the shell type -- all without shell plugins
