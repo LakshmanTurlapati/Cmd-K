@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-01)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** v0.2.1 Windows Support -- Phase 11 complete, ready for Phase 12
+**Current focus:** v0.2.1 Windows Support -- Phase 11 complete (with gap closure), ready for Phase 12
 
 ## Current Position
 
 Phase: 11 of 16 (Build Infrastructure and Overlay Foundation)
-Plan: 3 of 3
+Plan: 4 of 4
 Status: Phase 11 complete
-Last activity: 2026-03-02 -- Completed 11-03-PLAN.md (Windows focus management)
+Last activity: 2026-03-02 -- Completed 11-04-PLAN.md (Windows HWND capture dead code fix)
 
 Progress: [=====                         ] 17%
 
@@ -37,6 +37,7 @@ Progress: [=====                         ] 17%
 | 11    | 01   | 6min     | 2     | 9     |
 | 11    | 02   | 2min     | 2     | 3     |
 | 11    | 03   | 2min     | 2     | 2     |
+| 11    | 04   | 1min     | 1     | 1     |
 
 ## Accumulated Context
 
@@ -59,6 +60,7 @@ v0.2.1 decisions:
 - Foreground window comparison for click-outside vs Escape/hotkey dismiss detection (11-03)
 - AttachThreadInput + SetForegroundWindow with AllowSetForegroundWindow fallback for focus restoration (11-03)
 - IsWindow validation before focus restoration to handle stale HWNDs gracefully (11-03)
+- Move HWND capture block to before get_frontmost_pid() call for correct scope independence on Windows (11-04)
 
 ### Pending Todos
 
@@ -74,6 +76,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-02 (Phase 11 Plan 03 execution)
-Stopped at: Completed 11-03-PLAN.md -- Phase 11 fully complete
+Last session: 2026-03-02 (Phase 11 Plan 04 execution)
+Stopped at: Completed 11-04-PLAN.md -- Phase 11 gap closure complete, all 9 truths verified
 Resume file: None
