@@ -238,27 +238,29 @@ pub fn register_hotkey(app: AppHandle, shortcut_str: String) -> Result<(), Strin
 
                 // Only capture PID when about to show (not when hiding)
                 if !is_currently_visible {
+                    // Windows: capture HWND of foreground window BEFORE overlay steals focus.
+                    // This MUST be outside the PID-gated block because get_frontmost_pid()
+                    // returns None on Windows -- the HWND capture is independent of macOS PID.
+                    #[cfg(target_os = "windows")]
+                    {
+                        let hwnd = get_foreground_hwnd();
+                        eprintln!(
+                            "[hotkey] Windows: capturing foreground HWND: {:?}",
+                            hwnd
+                        );
+                        if let Some(state) = app_handle.try_state::<AppState>() {
+                            if let Ok(mut prev) = state.previous_hwnd.lock() {
+                                *prev = hwnd;
+                            }
+                        }
+                    }
+
                     let pid = get_frontmost_pid();
                     eprintln!("[hotkey] overlay hidden, capturing frontmost PID: {:?}", pid);
                     if let Some(pid) = pid {
                         if let Some(state) = app_handle.try_state::<AppState>() {
                             if let Ok(mut prev) = state.previous_app_pid.lock() {
                                 *prev = Some(pid);
-                            }
-                        }
-
-                        // Windows: capture HWND of foreground window before overlay steals focus
-                        #[cfg(target_os = "windows")]
-                        {
-                            let hwnd = get_foreground_hwnd();
-                            eprintln!(
-                                "[hotkey] Windows: capturing foreground HWND: {:?}",
-                                hwnd
-                            );
-                            if let Some(state) = app_handle.try_state::<AppState>() {
-                                if let Ok(mut prev) = state.previous_hwnd.lock() {
-                                    *prev = hwnd;
-                                }
                             }
                         }
 
