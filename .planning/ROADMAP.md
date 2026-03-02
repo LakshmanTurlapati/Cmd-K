@@ -52,12 +52,13 @@
   3. Overlay does not appear in Alt+Tab window switcher or taskbar
   4. Previous terminal window HWND is captured before overlay appears, and focus returns to that terminal on dismiss (Escape or command accept)
   5. Overlay floats above all windows with always-on-top behavior
-**Plans**: 3 plans
+**Plans**: 4 plans
 
 Plans:
-- [ ] 11-01-PLAN.md -- Build infrastructure: platform-gate Cargo.toml deps, cfg-gate macOS imports, extend AppState
-- [ ] 11-02-PLAN.md -- Windows overlay window: Acrylic/Mica vibrancy, WS_EX_TOOLWINDOW, always-on-top, show/hide commands
-- [ ] 11-03-PLAN.md -- Windows focus management: HWND capture, AttachThreadInput focus restore, Ctrl+Shift+K hotkey
+- [x] 11-01-PLAN.md -- Build infrastructure: platform-gate Cargo.toml deps, cfg-gate macOS imports, extend AppState
+- [x] 11-02-PLAN.md -- Windows overlay window: Acrylic/Mica vibrancy, WS_EX_TOOLWINDOW, always-on-top, show/hide commands
+- [x] 11-03-PLAN.md -- Windows focus management: HWND capture, AttachThreadInput focus restore, Ctrl+Shift+K hotkey
+- [ ] 11-04-PLAN.md -- Gap closure: fix HWND capture dead code (move outside PID-gated block)
 
 ### Phase 12: Terminal Context -- Process Tree, CWD, Detection
 **Goal**: CMD+K identifies the active terminal's shell process, reads its working directory, and detects the shell type -- all without shell plugins
@@ -153,7 +154,7 @@ Plans:
 | 8. Window Identification & History Storage | v0.1.1 | 3/3 | Complete | 2026-03-01 |
 | 9. Arrow Key History Navigation | v0.1.1 | 1/1 | Complete | 2026-03-01 |
 | 10. AI Follow-up Context Per Window | v0.1.1 | 2/2 | Complete | 2026-03-01 |
-| 11. Build Infrastructure and Overlay Foundation | 3/3 | Complete   | 2026-03-02 | - |
+| 11. Build Infrastructure and Overlay Foundation | v0.2.1 | 3/4 | Gap closure | - |
 | 12. Terminal Context -- Process Tree, CWD, Detection | v0.2.1 | 0/? | Not started | - |
 | 13. Paste and Input Simulation | v0.2.1 | 0/? | Not started | - |
 | 14. Terminal Output Reading via UIA | v0.2.1 | 0/? | Not started | - |
