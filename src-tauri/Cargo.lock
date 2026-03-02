@@ -328,6 +328,7 @@ dependencies = [
  "futures-util",
  "keyring",
  "once_cell",
+ "raw-window-handle",
  "regex",
  "serde",
  "serde_json",

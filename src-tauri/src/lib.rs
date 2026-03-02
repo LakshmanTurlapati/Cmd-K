@@ -113,26 +113,66 @@ pub fn run() {
                 panel.set_has_shadow(false);
             }
 
-            // Windows: placeholder setup (actual Windows overlay setup in Plan 02)
+            // Windows: Acrylic vibrancy, always-on-top, WS_EX_TOOLWINDOW
+            //
+            // DPI awareness: Tauri v2 + WebView2 handles DPI scaling automatically.
+            // Window uses logical coordinates (LogicalPosition/LogicalSize) for correct
+            // rendering at 100%, 150%, 200% scaling. No manual DPI configuration needed.
             #[cfg(target_os = "windows")]
             {
-                // TODO(Phase 11 Plan 02): Configure WS_EX_TOOLWINDOW, WS_EX_NOACTIVATE,
-                // Acrylic/Mica vibrancy, and always-on-top for Windows overlay.
-                window.hide().ok();
+                use window_vibrancy::apply_acrylic;
+
+                // Apply Acrylic blur -- closest to macOS NSVisualEffectView behind-window blur
+                // per locked decision in CONTEXT.md.
+                // RGBA: (18, 18, 18, 125) matches macOS HudWindow darkness
+                apply_acrylic(&window, Some((18, 18, 18, 125)))
+                    .expect("Acrylic vibrancy requires Windows 10 1903+");
+                eprintln!("[setup] Acrylic vibrancy applied");
+
+                // Always-on-top: equivalent to macOS NSPanel floating level
+                window
+                    .set_always_on_top(true)
+                    .expect("Failed to set always-on-top");
+
+                // Apply WS_EX_TOOLWINDOW to hide from Alt+Tab and taskbar.
+                // Tauri's skipTaskbar is buggy (see issue #10422), so we set
+                // the extended window style directly via Win32 API.
+                use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+                use windows_sys::Win32::UI::WindowsAndMessaging::*;
+
+                if let Ok(handle) = window.window_handle() {
+                    if let RawWindowHandle::Win32(win32) = handle.as_raw() {
+                        let hwnd = win32.hwnd.get() as isize;
+                        unsafe {
+                            let ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+                            let new_style = (ex_style | WS_EX_TOOLWINDOW as isize)
+                                & !(WS_EX_APPWINDOW as isize);
+                            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, new_style);
+                        }
+                        eprintln!("[setup] WS_EX_TOOLWINDOW applied (hwnd={})", hwnd);
+                    }
+                }
             }
 
             // Set up menu bar tray icon with K.png branding
             setup_tray(app)?;
 
-            // Register default hotkey "Super+K" (Cmd+K on macOS)
+            // Register default hotkey -- platform-specific:
+            // macOS: Super+K (Cmd+K)
+            // Windows: Ctrl+Shift+K (Ctrl+K conflicts with too many apps per CONTEXT.md)
             // If registration fails (hotkey conflict), the error is logged but app continues
             // The user can change the hotkey via "Change Hotkey..." in the tray menu
+            #[cfg(target_os = "macos")]
+            let default_hotkey = "Super+K";
+            #[cfg(not(target_os = "macos"))]
+            let default_hotkey = "Ctrl+Shift+K";
+
             let app_handle = app.handle().clone();
-            if let Err(e) = register_hotkey(app_handle, "Super+K".to_string()) {
+            if let Err(e) = register_hotkey(app_handle, default_hotkey.to_string()) {
                 eprintln!(
-                    "Warning: Failed to register default hotkey 'Super+K': {}. \
+                    "Warning: Failed to register default hotkey '{}': {}. \
                     Use 'Change Hotkey...' in the menu bar to set a different hotkey.",
-                    e
+                    default_hotkey, e
                 );
             }
 

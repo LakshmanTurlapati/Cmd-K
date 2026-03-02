@@ -40,4 +40,5 @@ keyring = { version = "3", features = ["apple-native"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_System_Threading"] }
+raw-window-handle = "0.6"
 keyring = { version = "3", features = ["windows-native"] }
