@@ -121,7 +121,8 @@ pub fn check_accessibility_permission() -> bool {
 #[tauri::command]
 #[cfg(not(target_os = "macos"))]
 pub fn check_accessibility_permission() -> bool {
-    false
+    // Windows and Linux do not require accessibility permission -- always granted.
+    true
 }
 
 /// Requests accessibility permission using AXIsProcessTrustedWithOptions.
@@ -198,7 +199,8 @@ pub fn request_accessibility_permission(prompt: bool) -> bool {
 #[tauri::command]
 #[cfg(not(target_os = "macos"))]
 pub fn request_accessibility_permission(_prompt: bool) -> bool {
-    false
+    // Windows and Linux do not require accessibility permission -- always granted.
+    true
 }
 
 /// Open a URL in the default browser.

@@ -70,7 +70,14 @@ pub fn get_app_context(app: AppHandle) -> Option<terminal::AppContext> {
         .ok()
         .and_then(|mut pt| pt.take());
 
-    let result = terminal::detect_full(pid, pre_captured);
+    // On Windows, also pass the previous HWND for UIA text reading
+    let previous_hwnd = state
+        .previous_hwnd
+        .lock()
+        .ok()
+        .and_then(|g| *g);
+
+    let result = terminal::detect_full_with_hwnd(pid, pre_captured, previous_hwnd);
     eprintln!(
         "[terminal] detect_full({}) returned: {:?}",
         pid,
