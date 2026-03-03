@@ -39,18 +39,14 @@ The overlay must appear on top of the currently active application and feel inst
 - CTXT-02: turnHistory restored from per-window map on overlay open -- v0.1.1
 - CTXT-03: Terminal context only in first user message to prevent token bloat -- v0.1.1
 
-## Current Milestone: v0.2.1 Windows Support
+## Current Milestone: v0.2.2 Overlay UX Fixes (macOS)
 
-**Goal:** Port the entire CMD+K experience to Windows -- same overlay UX, same AI engine, same zero-setup philosophy, platform-native layer underneath
+**Goal:** Fix overlay z-order so system dialogs appear above it, and make the overlay draggable with session-scoped position memory
 
 **Target features:**
-- Windows overlay with Mica/Acrylic frosted glass vibrancy (Ctrl+K hotkey)
-- Terminal context reading (CWD, recent output) for Windows Terminal, PowerShell, CMD, Git Bash, WSL, Hyper -- zero shell plugins
-- Auto-paste into active terminal using Windows APIs
-- API key storage via Windows Credential Manager
-- System tray icon and background daemon on Windows
-- Per-terminal-window history and AI follow-up context (ported from macOS)
-- Onboarding flow adapted for Windows permissions
+- System overlays (permission dialogs, accessibility popups) can appear above the CMD+K overlay
+- Overlay is draggable by the user
+- Overlay remembers last dragged position (one global position, session-scoped, resets on relaunch)
 
 ### Active
 
@@ -69,10 +65,10 @@ The overlay must appear on top of the currently active application and feel inst
 
 ## Context
 
-Shipped v0.1.1 with per-terminal-window command history and AI follow-up context.
+Shipped v0.2.1 with full Windows port (Acrylic vibrancy, Win32 APIs, NSIS installer).
 Tech stack: Tauri v2 (Rust + React + TypeScript), NSPanel for overlay, xAI/Grok for AI, macOS Accessibility API + raw libproc FFI for terminal context.
-11 phases (8 in v0.1.0 + 3 in v0.1.1), 27 plans executed over 10 days (2026-02-21 to 2026-03-01).
-All 26 requirements satisfied (16 v0.1.0 + 10 v0.1.1). Minor tech debt: stale comment in history.rs.
+14 phases across 3 milestones (v0.1.0, v0.1.1, v0.2.1), 33 plans executed over 13 days.
+All 43 requirements satisfied across milestones. Known v0.2.1 gaps deferred (E2E Windows testing, hotkey spec mismatch, IPC race).
 
 ## Constraints
 
@@ -105,4 +101,4 @@ All 26 requirements satisfied (16 v0.1.0 + 10 v0.1.1). Minor tech debt: stale co
 | Frontend-side turn limit capping | Pre-cap in Zustand; Rust stores all, frontend slices | Good -- user-configurable without IPC |
 
 ---
-*Last updated: 2026-03-01 after v0.2.1 milestone start*
+*Last updated: 2026-03-03 after v0.2.2 milestone start*
