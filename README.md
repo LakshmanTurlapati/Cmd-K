@@ -88,13 +88,13 @@ graph TB
     end
 
     subgraph Tauri["Tauri 2 -- Rust Backend"]
-        NSP[NSPanel Overlay]
+        OVR_WIN[Platform Overlay]
         CTX[Context Detection]
         AI[AI Streaming Engine]
         SAFE[Safety Layer]
-        KC[Keychain Storage]
-        PASTE[AppleScript Paste]
-        TRAY[Menu Bar Tray]
+        CRED[Credential Storage]
+        PASTE[Paste Dispatch]
+        TRAY[System Tray]
     end
 
     subgraph React["React 19 Frontend"]
@@ -104,15 +104,28 @@ graph TB
         SET[Settings Panel]
     end
 
-    subgraph External["External Services"]
-        XAI[xAI Grok API]
-        AX[macOS Accessibility API]
+    subgraph macOS["macOS Platform"]
+        NSP[NSPanel + Vibrancy]
+        AX[Accessibility API]
         PROC[libproc / Process Table]
         KEYS[macOS Keychain]
+        AS[AppleScript Paste]
     end
 
-    HK --> NSP
-    NSP --> OVR
+    subgraph Windows["Windows Platform"]
+        W32[Win32 WS_EX_TOOLWINDOW + Acrylic]
+        UIA[UI Automation Reader]
+        WPROC[Process Tree Walking]
+        WCRED[Windows Credential Manager]
+        SI[SendInput / arboard Paste]
+    end
+
+    subgraph External["External Services"]
+        XAI[xAI Grok API]
+    end
+
+    HK --> OVR_WIN
+    OVR_WIN --> OVR
     OVR --> INPUT
     INPUT --> STORE
     STORE --> AI
@@ -122,10 +135,15 @@ graph TB
     SAFE --> PASTE
 
     CTX --> AX
+    CTX --> UIA
     CTX --> PROC
-    KC --> KEYS
+    CTX --> WPROC
+    CRED --> KEYS
+    CRED --> WCRED
     AI --> CTX
-    AI --> KC
+    AI --> CRED
+    PASTE --> AS
+    PASTE --> SI
 
     TRAY --> SET
     TRAY --> ONB
@@ -213,51 +231,61 @@ cmd-k/
 │   │   ├── CommandInput.tsx      # Auto-growing textarea, /settings trigger
 │   │   ├── ResultsArea.tsx       # Streaming display, syntax highlighting, copy
 │   │   ├── DestructiveBadge.tsx  # Red warning badge with AI tooltip
-│   │   ├── HotkeyConfig.tsx      # Hotkey rebinding dialog
+│   │   ├── HotkeyConfig.tsx      # Hotkey rebinding dialog (platform-aware)
 │   │   ├── HotkeyRecorder.tsx    # Custom key capture
 │   │   ├── Onboarding/           # 4-step setup wizard
 │   │   └── Settings/             # Tabbed preferences panel
 │   ├── hooks/
 │   │   ├── useKeyboard.ts        # Escape dismiss, Ctrl+C cancel
 │   │   └── useWindowAutoSize.ts  # Dynamic Tauri window sizing
+│   ├── utils/
+│   │   └── platform.ts           # Platform detection utilities
 │   └── lib/
 │       └── utils.ts              # Tailwind merge utilities
 │
 ├── src-tauri/                    # Tauri 2 Rust backend
-│   ├── Cargo.toml                # Rust dependencies
+│   ├── Cargo.toml                # Rust deps (cfg-gated per platform)
 │   ├── src/
 │   │   ├── main.rs               # Binary entrypoint
-│   │   ├── lib.rs                # Tauri app init, NSPanel, plugins
-│   │   ├── state.rs              # AppState (hotkey, visibility, PID)
+│   │   ├── lib.rs                # Tauri app init (platform-branched)
+│   │   ├── state.rs              # AppState (hotkey, visibility, PID, HWND)
 │   │   ├── commands/
-│   │   │   ├── ai.rs             # SSE streaming to xAI, two-mode prompts
+│   │   │   ├── ai.rs             # SSE streaming, platform-aware prompts
 │   │   │   ├── xai.rs            # API validation, model fetching
-│   │   │   ├── safety.rs         # 50+ destructive regex patterns, AI explanation
+│   │   │   ├── safety.rs         # 50+ destructive patterns, AI explanation
 │   │   │   ├── terminal.rs       # Context detection IPC bridge
-│   │   │   ├── paste.rs          # AppleScript dispatch to terminals
-│   │   │   ├── keychain.rs       # macOS Keychain read/write
-│   │   │   ├── hotkey.rs         # Global shortcut registration
+│   │   │   ├── paste.rs          # Platform paste (AppleScript / SendInput)
+│   │   │   ├── keychain.rs       # Credential storage (Keychain / WCM)
+│   │   │   ├── hotkey.rs         # Global shortcut + focus capture
 │   │   │   ├── window.rs         # Overlay positioning, multi-monitor
-│   │   │   ├── tray.rs           # Menu bar tray icon and menu
+│   │   │   ├── tray.rs           # System tray icon and menu
 │   │   │   └── permissions.rs    # Accessibility permission check
 │   │   └── terminal/
-│   │       ├── detect.rs         # Bundle ID resolution, app name cleaning
-│   │       ├── process.rs        # libproc CWD/shell/process tree walking
-│   │       ├── ax_reader.rs      # Accessibility API text extraction
+│   │       ├── mod.rs            # Terminal detection orchestrator
+│   │       ├── detect.rs         # macOS: Bundle ID, app name cleaning
+│   │       ├── detect_windows.rs # Windows: foreground window detection
+│   │       ├── process.rs        # Process tree walking (libproc / Win32)
+│   │       ├── ax_reader.rs      # macOS: Accessibility API text extraction
+│   │       ├── uia_reader.rs     # Windows: UI Automation text extraction
 │   │       ├── browser.rs        # Browser DevTools console detection
 │   │       └── filter.rs         # Sensitive data scrubbing
 │   └── icons/                    # App icons
 │
-├── extension/                    # Legacy: VS Code extension
-├── cli/                          # Legacy: VS Code extension CLI
-├── K.png                         # Menu bar tray icon
+├── scripts/
+│   ├── build-dmg.sh              # macOS: signed + notarized DMG pipeline
+│   └── build-windows.sh          # Windows: NSIS installer build
+│
+├── showcase/                     # Project website (cmd-k.site)
+├── K.png                         # Tray icon
 ├── LICENSE                       # MIT
-└── package.json                  # Frontend dependencies
+└── package.json                  # Frontend deps + build:mac / build:windows
 ```
 
 ---
 
 ## Supported Terminals
+
+### macOS
 
 | Terminal | Context Detection | Output Reading | Notes |
 |---|---|---|---|
@@ -267,6 +295,20 @@ cmd-k/
 | **kitty** | Partial (CWD, shell) | Not available | GPU-rendered; no AX text exposure |
 | **WezTerm** | Partial (CWD, shell) | Not available | GPU-rendered; no AX text exposure |
 | **VS Code / Cursor** | Shell detected inside editor | Via editor AX tree | Integrated terminal recognized as shell |
+
+### Windows
+
+| Terminal | Context Detection | Output Reading | Notes |
+|---|---|---|---|
+| **Windows Terminal** | Full (CWD, shell, output) | UI Automation | Auto-paste via SendInput |
+| **PowerShell** | Full (CWD, shell, output) | UI Automation | Auto-paste via SendInput |
+| **Command Prompt** | Full (CWD, shell, output) | UI Automation | Auto-paste via SendInput |
+| **VS Code / Cursor** | Shell detected inside editor | Via UIA tree | Integrated terminal recognized as shell |
+
+### Cross-Platform
+
+| Target | Context Detection | Output Reading | Notes |
+|---|---|---|---|
 | **Browser DevTools** | Console detected | Not applicable | Chrome, Safari, Firefox, Arc, Edge, Brave |
 
 ---
@@ -285,12 +327,10 @@ cmd-k/
 
 ## Roadmap
 
-- [x] **Phase 1** -- Foundation & Overlay: System-wide NSPanel with global hotkey
-- [x] **Phase 2** -- Settings & Configuration: Keychain storage, onboarding wizard
-- [ ] **Phase 3** -- Terminal Context Reading: CWD, shell, output detection across terminals
-- [x] **Phase 4** -- AI Command Generation: xAI streaming, two-mode prompts, syntax highlighting
-- [x] **Phase 5** -- Safety Layer: Destructive pattern detection, AI risk explanations
-- [ ] **Phase 6** -- Terminal Pasting: AppleScript auto-paste with clipboard fallback
+- [x] **v0.1.0** -- macOS native app: overlay, hotkey, context detection, AI streaming, safety layer, terminal pasting
+- [x] **v0.1.1** -- Command history, arrow-key navigation, per-window AI follow-up context
+- [x] **v0.2.1** -- Windows support: Win32 overlay, UIA reader, SendInput paste, NSIS installer, cross-platform builds
+- [ ] **Next** -- Linux support, CI/CD, additional terminal integrations
 
 ---
 
