@@ -160,7 +160,7 @@ Plans:
 | 14. Terminal Output Reading via UIA | v0.2.1 | code complete | Complete | 2026-03-02 |
 | 15. Platform Polish and Safety | v0.2.1 | code complete | Complete | 2026-03-02 |
 | 16. Build, Distribution, and Integration Testing | v0.2.1 | code complete | Human Needed (E2E) | 2026-03-02 |
-| 01. Merge Windows branch | v0.2.1 | 2/2 | Complete | 2026-03-03 |
+| 01. Merge Windows branch | v0.2.1 | Complete    | 2026-03-03 | 2026-03-03 |
 
 ### Phase 1: Merge Windows branch — resolve conflicts and ensure platform-independent builds
 
