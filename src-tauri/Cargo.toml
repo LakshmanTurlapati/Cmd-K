@@ -39,6 +39,17 @@ core-foundation-sys = "0.8"
 keyring = { version = "3", features = ["apple-native"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_System_Threading"] }
+windows-sys = { version = "0.59", features = [
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Foundation",
+    "Win32_System_Threading",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_Security",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Wdk_System_Threading",
+] }
 raw-window-handle = "0.6"
 keyring = { version = "3", features = ["windows-native"] }
+arboard = "3"
+uiautomation = "0.24"
