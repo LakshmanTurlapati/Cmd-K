@@ -1,5 +1,6 @@
 import { Store } from "@tauri-apps/plugin-store";
 import { useOverlayStore } from "@/store";
+import { isWindows } from "@/utils/platform";
 import { StepAccessibility } from "./StepAccessibility";
 import { StepApiKey } from "./StepApiKey";
 import { StepModelSelect } from "./StepModelSelect";
@@ -24,7 +25,11 @@ export function OnboardingWizard() {
   };
 
   const handleNext = async () => {
-    const nextStep = onboardingStep + 1;
+    let nextStep = onboardingStep + 1;
+    // Skip Accessibility step (index 2) on Windows — not required
+    if (isWindows() && nextStep === 2) {
+      nextStep = 3;
+    }
     setOnboardingStep(nextStep);
     await persistStep(nextStep);
   };

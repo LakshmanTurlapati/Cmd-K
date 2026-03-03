@@ -1,4 +1,5 @@
 import { useOverlayStore } from "@/store";
+import { displayModifier } from "@/utils/platform";
 
 interface StepDoneProps {
   onComplete: () => void;
@@ -10,9 +11,14 @@ export function StepDone({ onComplete }: StepDoneProps) {
 
   const formatHotkey = (hotkey: string) => {
     return hotkey
-      .replace("Super", "Cmd")
-      .replace("Key", "")
       .split("+")
+      .map((part) => {
+        if (part === "Super") return displayModifier("Super");
+        if (part === "Control") return "Ctrl";
+        if (part === "Alt") return displayModifier("Alt");
+        if (part.startsWith("Key")) return part.slice(3);
+        return part;
+      })
       .join(" + ");
   };
 

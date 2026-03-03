@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { isWindows } from "@/utils/platform";
 
 interface HotkeyRecorderProps {
   onCapture: (shortcut: string) => void;
@@ -22,10 +23,11 @@ function codeToDisplayName(code: string): string {
 }
 
 function keysToDisplayString(keys: CapturedKeys): string {
+  const win = isWindows();
   const parts: string[] = [];
-  if (keys.meta) parts.push("Cmd");
+  if (keys.meta) parts.push(win ? "Win" : "Cmd");
   if (keys.ctrl) parts.push("Ctrl");
-  if (keys.alt) parts.push("Option");
+  if (keys.alt) parts.push(win ? "Alt" : "Option");
   if (keys.shift) parts.push("Shift");
   if (keys.key) parts.push(codeToDisplayName(keys.key));
   return parts.join(" + ");
