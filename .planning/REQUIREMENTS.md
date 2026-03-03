@@ -37,17 +37,17 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ZORD-01 | — | Pending |
-| ZORD-02 | — | Pending |
-| OPOS-01 | — | Pending |
-| OPOS-02 | — | Pending |
-| OPOS-03 | — | Pending |
+| ZORD-01 | Phase 17 | Pending |
+| ZORD-02 | Phase 17 | Pending |
+| OPOS-01 | Phase 18 | Pending |
+| OPOS-02 | Phase 18 | Pending |
+| OPOS-03 | Phase 18 | Pending |
 
 **Coverage:**
 - v0.2.2 requirements: 5 total
-- Mapped to phases: 0
-- Unmapped: 5 ⚠️
+- Mapped to phases: 5
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-03*
-*Last updated: 2026-03-03 after initial definition*
+*Last updated: 2026-03-03 after roadmap creation*

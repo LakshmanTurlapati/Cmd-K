@@ -5,6 +5,7 @@
 - v0.1.0 MVP -- Phases 1-7.1 (shipped 2026-02-28) | [Archive](milestones/v1.0-ROADMAP.md)
 - v0.1.1 Command History & Follow-ups -- Phases 8-10 (shipped 2026-03-01) | [Archive](milestones/v0.1.1-ROADMAP.md)
 - v0.2.1 Windows Support -- Phases 11-16, 01-merge (shipped 2026-03-03) | [Archive](milestones/v0.2.1-ROADMAP.md)
+- v0.2.2 Overlay UX Fixes (macOS) -- Phases 17-18 (in progress)
 
 ## Phases
 
@@ -44,7 +45,38 @@
 
 </details>
 
+### v0.2.2 Overlay UX Fixes (macOS) -- In Progress
+
+- [ ] **Phase 17: Overlay Z-Order** - System dialogs and OS overlays appear above the CMD+K panel
+- [ ] **Phase 18: Draggable Overlay Positioning** - User can drag the overlay and it remembers position within the session
+
+## Phase Details
+
+### Phase 17: Overlay Z-Order
+**Goal**: System UI elements (permission dialogs, Notification Center, Spotlight) can appear above the CMD+K overlay while the overlay still floats above normal application windows
+**Depends on**: Nothing (first phase of v0.2.2)
+**Requirements**: ZORD-01, ZORD-02
+**Success Criteria** (what must be TRUE):
+  1. When an Accessibility permission dialog appears while the overlay is open, the dialog is visible and interactable above the overlay
+  2. Notification Center, Spotlight, and other system overlays render above the CMD+K overlay when invoked
+  3. The overlay still floats above all normal application windows (the existing behavior that matters most is preserved)
+  4. Fullscreen app behavior is not regressed -- the overlay still appears on top of fullscreen apps
+**Plans**: TBD
+
+### Phase 18: Draggable Overlay Positioning
+**Goal**: User can reposition the overlay by dragging it, and the overlay reopens at the last dragged position until the app is relaunched
+**Depends on**: Phase 17 (z-order changes may affect window properties that dragging interacts with)
+**Requirements**: OPOS-01, OPOS-02, OPOS-03
+**Success Criteria** (what must be TRUE):
+  1. User can click and drag the overlay to move it to a different position on screen
+  2. After dismissing and re-invoking the overlay (Cmd+K), it appears at the last dragged position rather than the default center
+  3. After quitting and relaunching the app, the overlay appears at the default position (not the previously dragged position)
+**Plans**: TBD
+
 ## Progress
+
+**Execution Order:**
+Phases execute in numeric order: 17 then 18.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -66,3 +98,5 @@
 | 15. Platform Polish and Safety | v0.2.1 | code complete | Complete | 2026-03-02 |
 | 16. Build, Distribution, and Integration Testing | v0.2.1 | code complete | Complete | 2026-03-02 |
 | 01. Merge Windows branch | v0.2.1 | 2/2 | Complete | 2026-03-03 |
+| 17. Overlay Z-Order | v0.2.2 | 0/TBD | Not started | - |
+| 18. Draggable Overlay Positioning | v0.2.2 | 0/TBD | Not started | - |

@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v0.2.2
 milestone_name: Overlay UX Fixes (macOS)
-status: defining_requirements
+status: ready_to_plan
 last_updated: "2026-03-03"
 progress:
-  total_phases: 0
+  total_phases: 2
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -18,14 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Defining requirements for v0.2.2
+**Current focus:** Phase 17 -- Overlay Z-Order
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-03 — Milestone v0.2.2 started
+Phase: 17 of 18 (Overlay Z-Order)
+Plan: -- (not yet planned)
+Status: Ready to plan
+Last activity: 2026-03-03 -- Roadmap created for v0.2.2
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
@@ -49,10 +51,6 @@ Last activity: 2026-03-03 — Milestone v0.2.2 started
 
 ## Accumulated Context
 
-### Roadmap Evolution
-
-(New milestone — no roadmap changes yet)
-
 ### Decisions
 
 All prior decisions archived in PROJECT.md Key Decisions table.
@@ -63,10 +61,11 @@ None.
 
 ### Blockers/Concerns
 
-- NSPanel Status window level blocks system overlays (this milestone's target)
+- NSPanel Status window level blocks system overlays -- this is the core problem Phase 17 solves
+- Z-order change must not regress overlay-above-normal-apps behavior
 
 ## Session Continuity
 
-Last session: 2026-03-03 (Milestone v0.2.2 started)
-Stopped at: Defining requirements
-Resume file: —
+Last session: 2026-03-03 (Roadmap created for v0.2.2)
+Stopped at: Roadmap created, ready to plan Phase 17
+Resume file: --
