@@ -47,7 +47,7 @@
 
 ### v0.2.2 Overlay UX Fixes (macOS) -- In Progress
 
-- [ ] **Phase 17: Overlay Z-Order** - System dialogs and OS overlays appear above the CMD+K panel
+- [x] **Phase 17: Overlay Z-Order** - System dialogs and OS overlays appear above the CMD+K panel (completed 2026-03-03)
 - [ ] **Phase 18: Draggable Overlay Positioning** - User can drag the overlay and it remembers position within the session
 
 ## Phase Details
@@ -63,7 +63,7 @@
   4. Fullscreen app behavior is not regressed -- the overlay still appears on top of fullscreen apps
 **Plans**: 1 plan
 Plans:
-- [ ] 17-01-PLAN.md — Lower NSPanel level from Status to Floating, verify z-order with system UI
+- [x] 17-01-PLAN.md — Lower NSPanel level from Status to Floating, verify z-order with system UI
 
 ### Phase 18: Draggable Overlay Positioning
 **Goal**: User can reposition the overlay by dragging it, and the overlay reopens at the last dragged position until the app is relaunched
@@ -100,5 +100,5 @@ Phases execute in numeric order: 17 then 18.
 | 15. Platform Polish and Safety | v0.2.1 | code complete | Complete | 2026-03-02 |
 | 16. Build, Distribution, and Integration Testing | v0.2.1 | code complete | Complete | 2026-03-02 |
 | 01. Merge Windows branch | v0.2.1 | 2/2 | Complete | 2026-03-03 |
-| 17. Overlay Z-Order | v0.2.2 | 0/1 | Planned | - |
+| 17. Overlay Z-Order | v0.2.2 | 1/1 | Complete | 2026-03-03 |
 | 18. Draggable Overlay Positioning | v0.2.2 | 0/TBD | Not started | - |

@@ -9,8 +9,8 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Overlay Z-Order
 
-- [ ] **ZORD-01**: System permission and accessibility dialogs can appear above the CMD+K overlay
-- [ ] **ZORD-02**: System UI elements (Notification Center, Spotlight, other system overlays) can appear above the CMD+K overlay
+- [x] **ZORD-01**: System permission and accessibility dialogs can appear above the CMD+K overlay
+- [x] **ZORD-02**: System UI elements (Notification Center, Spotlight, other system overlays) can appear above the CMD+K overlay
 
 ### Overlay Positioning
 
@@ -37,8 +37,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ZORD-01 | Phase 17 | Pending |
-| ZORD-02 | Phase 17 | Pending |
+| ZORD-01 | Phase 17 | Complete |
+| ZORD-02 | Phase 17 | Complete |
 | OPOS-01 | Phase 18 | Pending |
 | OPOS-02 | Phase 18 | Pending |
 | OPOS-03 | Phase 18 | Pending |

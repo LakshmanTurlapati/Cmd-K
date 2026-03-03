@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v0.2.2
 milestone_name: Overlay UX Fixes (macOS)
-status: ready_to_plan
+status: executing
 last_updated: "2026-03-03"
 progress:
   total_phases: 2
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
 ---
 
 # Project State
@@ -22,12 +22,12 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 
 ## Current Position
 
-Phase: 17 of 18 (Overlay Z-Order)
+Phase: 18 of 18 (Draggable Overlay Positioning)
 Plan: -- (not yet planned)
-Status: Ready to plan
-Last activity: 2026-03-03 -- Roadmap created for v0.2.2
+Status: Phase 17 complete, ready to plan Phase 18
+Last activity: 2026-03-03 -- Completed Phase 17 (Overlay Z-Order)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [#####░░░░░] 50%
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Progress: [░░░░░░░░░░] 0%
 ### Decisions
 
 All prior decisions archived in PROJECT.md Key Decisions table.
+- [Phase 17]: Used PanelLevel::Floating (3) instead of ModalPanel (8) -- standard macOS level for utility panels
 
 ### Pending Todos
 
@@ -61,11 +62,11 @@ None.
 
 ### Blockers/Concerns
 
-- NSPanel Status window level blocks system overlays -- this is the core problem Phase 17 solves
-- Z-order change must not regress overlay-above-normal-apps behavior
+- ~~NSPanel Status window level blocks system overlays~~ -- RESOLVED in Phase 17 (lowered to Floating)
+- ~~Z-order change must not regress overlay-above-normal-apps behavior~~ -- VERIFIED, no regression
 
 ## Session Continuity
 
-Last session: 2026-03-03 (Roadmap created for v0.2.2)
-Stopped at: Roadmap created, ready to plan Phase 17
-Resume file: --
+Last session: 2026-03-03 (Phase 17 completed)
+Stopped at: Completed 17-01-PLAN.md -- Phase 17 done, ready to plan Phase 18
+Resume file: .planning/phases/17-overlay-z-order/17-01-SUMMARY.md
