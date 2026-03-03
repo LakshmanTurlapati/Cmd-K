@@ -87,6 +87,10 @@ pub struct AppState {
     /// Per-window query history. Key is the window key, value is a bounded deque of entries.
     /// Capped at MAX_HISTORY_PER_WINDOW entries per window, MAX_TRACKED_WINDOWS total windows.
     pub history: Mutex<HashMap<String, VecDeque<HistoryEntry>>>,
+    /// HWND of the foreground window captured BEFORE showing overlay (Windows only).
+    /// Used by focus restoration on overlay dismiss.
+    /// HWND is a pointer-sized integer (isize) on Windows.
+    pub previous_hwnd: Mutex<Option<isize>>,
 }
 
 impl Default for AppState {
@@ -100,6 +104,7 @@ impl Default for AppState {
             current_window_key: Mutex::new(None),
             pre_captured_focused_cwd: Mutex::new(None),
             history: Mutex::new(HashMap::new()),
+            previous_hwnd: Mutex::new(None),
         }
     }
 }

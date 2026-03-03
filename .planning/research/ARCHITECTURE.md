@@ -1,645 +1,894 @@
-# Architecture Research
+# Architecture Research: Windows Platform Support
 
-**Domain:** Tauri v2 macOS overlay -- per-terminal-window command history and AI follow-up context
-**Researched:** 2026-02-28
-**Confidence:** HIGH
-
----
-
-## Context: This is a Milestone Architecture Doc (v0.1.1)
-
-This document is scoped to how the v0.1.1 features integrate with the existing v0.1.0 architecture. It does not re-document the base architecture -- it documents what changes, what stays the same, and where the seams are.
-
-The three features to add:
-
-1. Per-terminal-window command history (up to 7 entries, session-scoped)
-2. Arrow key navigation in overlay input to recall previous prompts
-3. AI follow-up context -- AI sees the full `turnHistory` for the active terminal window
+**Domain:** Tauri v2 cross-platform overlay -- porting macOS CMD+K to Windows
+**Researched:** 2026-03-01
+**Confidence:** HIGH (core patterns), MEDIUM (specific Windows API edge cases)
 
 ---
 
-## System Overview: What Changes in v0.1.1
+## Context: This is a Platform Port Architecture Doc (v0.2.1)
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        macOS System Layer                            │
-│  (Accessibility API, NSPanel, Global Hotkey, CGWindowListCopyInfo)  │
-└────────────────────────────────────┬────────────────────────────────┘
-                                     │
-┌────────────────────────────────────┴────────────────────────────────┐
-│                     Tauri Core Process (Rust)                        │
-│                                                                      │
-│  ┌───────────────────────────────────────────────────────────────┐  │
-│  │  AppState (state.rs)                        [MODIFIED]         │  │
-│  │  + previous_window_id: Mutex<Option<u32>>                     │  │
-│  │  (existing: hotkey, previous_app_pid, pre_captured_text, ...) │  │
-│  └───────────────────────────────────────────────────────────────┘  │
-│                                                                      │
-│  ┌─────────────────────────┐  ┌──────────────────────────────────┐  │
-│  │  commands/hotkey.rs     │  │  commands/window_id.rs  [NEW]    │  │
-│  │  [MODIFIED]             │  │  get_terminal_window_id()        │  │
-│  │  + capture window ID    │  │  Uses CGWindowListCopyWindowInfo │  │
-│  │    before show_overlay  │  │  keyed by previous_app_pid       │  │
-│  └─────────────────────────┘  └──────────────────────────────────┘  │
-│                                                                      │
-│  (all other command modules unchanged)                               │
-└────────────────────────────────────┬────────────────────────────────┘
-                                     │
-                           Tauri IPC (Commands/Events)
-                                     │
-                                     ▼
-┌────────────────────────────────────┴────────────────────────────────┐
-│                    WebView Process (Web Frontend)                    │
-│                                                                      │
-│  ┌───────────────────────────────────────────────────────────────┐  │
-│  │  src/store/index.ts (Zustand)               [MODIFIED]         │  │
-│  │                                                                │  │
-│  │  NEW state:                                                    │  │
-│  │    windowHistories: Map<string, WindowHistory>                 │  │
-│  │    activeWindowKey: string | null                              │  │
-│  │    historyNavIndex: number  (-1 = not navigating)             │  │
-│  │                                                                │  │
-│  │  CHANGED behavior:                                             │  │
-│  │    show() -- calls get_terminal_window_id, sets key,          │  │
-│  │              loads that window's turnHistory                   │  │
-│  │    submitQuery() -- saves turnHistory to windowHistories map   │  │
-│  │    turnHistory -- still current-session slice (unchanged use)  │  │
-│  └───────────────────────────────────────────────────────────────┘  │
-│                                                                      │
-│  ┌─────────────────────────────┐  ┌──────────────────────────────┐  │
-│  │  CommandInput.tsx           │  │  Overlay.tsx                 │  │
-│  │  [MODIFIED]                 │  │  [UNCHANGED]                 │  │
-│  │  + ArrowUp/ArrowDown key    │  │                              │  │
-│  │    handlers using history   │  │                              │  │
-│  │    navigation actions       │  │                              │  │
-│  └─────────────────────────────┘  └──────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────┘
-```
+This document analyzes how every Rust module and frontend component maps from macOS to Windows. It identifies what is already cross-platform, what needs a Windows-specific implementation, and what the abstraction strategy should be. The build order is dependency-driven.
 
 ---
 
-## Window Identification Strategy
+## Module Classification: What Changes, What Stays
 
-### The Problem
+### Already Cross-Platform (Zero Changes)
 
-A user can have multiple Terminal.app windows open at once, or multiple iTerm2 sessions. The `previous_app_pid` captures the *application* PID, but a single application process can own multiple windows. We need a stable key that identifies "which specific terminal window was active."
+These modules have no platform-specific code and work identically on Windows:
 
-### Approach: CGWindowListCopyWindowInfo for Window ID
+| Module | Why Cross-Platform |
+|--------|--------------------|
+| `commands/ai.rs` | Pure HTTP/SSE streaming via reqwest + eventsource-stream. No OS APIs. |
+| `commands/xai.rs` | HTTP API validation. No OS APIs. |
+| `commands/safety.rs` | Regex pattern matching (once_cell + regex). No OS APIs. |
+| `commands/history.rs` | Pure Zustand/Rust HashMap operations. No OS APIs. |
+| `state.rs` | Rust structs with Mutex fields. No OS APIs. |
+| `terminal/filter.rs` | Regex-based sensitive data redaction. No OS APIs. |
+| `commands/keychain.rs` | Uses `keyring` crate which already supports Windows Credential Manager (feature: `windows-native`). **Already cross-platform.** |
+| All React components | React 19, Zustand, Tailwind CSS, Radix UI. Platform-agnostic web layer. |
+| `src/store/index.ts` | Zustand store logic. All platform behavior enters via Tauri IPC, which is abstracted. |
 
-macOS CoreGraphics provides `CGWindowListCopyWindowInfo`, which returns a list of all on-screen windows with their `kCGWindowNumber` (CGWindowID, a u32) and `kCGWindowOwnerPID`. The CGWindowID is stable for the lifetime of the window within the current user session -- it does not persist across app restarts, but that matches the "session-scoped" history requirement.
+**Key finding: `keychain.rs` requires NO code changes.** The `keyring` crate v3 with `windows-native` feature uses Windows Credential Manager on Windows and macOS Keychain on macOS transparently. The current Cargo.toml has `features = ["apple-native"]` -- this needs to become platform-conditional (see Cargo.toml section).
 
-**The key derivation:** For the `previous_app_pid`, enumerate windows owned by that PID and pick the first on-screen window (layer 0, normal window). This gives a stable `u32` CGWindowID.
+### Needs Windows Implementation (Platform-Specific Modules)
 
-**Window key format:** `"{bundle_id}:{window_id}"`, e.g. `"com.apple.Terminal:14320"` or `"com.googlecode.iterm2:8891"`. Bundle ID is included so keys are human-readable in logs and debuggable.
+| Module | macOS API | Windows Equivalent | Complexity |
+|--------|-----------|-------------------|------------|
+| `commands/hotkey.rs` (`get_frontmost_pid`) | `NSWorkspace.frontmostApplication.processIdentifier` via ObjC FFI | `GetForegroundWindow()` + `GetWindowThreadProcessId()` via Win32 API | Low |
+| `commands/paste.rs` | AppleScript dispatch + CGEventPost (Cmd+V, Ctrl+U) | `clipboard-win` + `SendInput` (Ctrl+V) via Win32 API | Medium |
+| `commands/permissions.rs` | `AXIsProcessTrusted` + AX probe | No equivalent needed -- Windows has no global accessibility permission gate | Low (mostly removal) |
+| `commands/window.rs` | `tauri_nspanel::ManagerExt` for NSPanel show/hide/positioning | Tauri native window with `always_on_top` + `WS_EX_NOACTIVATE` via raw HWND | High |
+| `commands/tray.rs` | macOS menu bar tray with `icon_as_template` | Windows system tray (Tauri's tray API is cross-platform, minor adjustments) | Low |
+| `terminal/ax_reader.rs` | macOS Accessibility API (`AXUIElement*` FFI) | Windows UI Automation API (`uiautomation` crate or direct COM) | High |
+| `terminal/process.rs` | `libproc` FFI (`proc_pidinfo`, `proc_pidpath`, `proc_listchildpids`) | `NtQueryInformationProcess` + `sysinfo` crate for process tree | High |
+| `terminal/detect.rs` | `NSRunningApplication` ObjC FFI for bundle ID + display name | `GetModuleFileNameExW` + `GetWindowTextW` via Win32 | Medium |
+| `terminal/browser.rs` | macOS AX API for DevTools detection | Windows UI Automation for DevTools window detection | Medium |
+| `lib.rs` (setup) | NSPanel creation, vibrancy, activation policy, panel level | HWND manipulation, Acrylic/Mica vibrancy, skip-taskbar | High |
 
-**Fallback:** If `CGWindowListCopyWindowInfo` finds no windows for the PID (possible for GPU terminals that have unusual window structures), fall back to `"{bundle_id}:{pid}"`. This means a multi-window Terminal.app scenario degrades to per-application history, which is acceptable compared to no history at all.
+---
 
-**Why not AX-based window identification?** The AX `_AXUIElementGetWindow` function that converts AXUIElementRef to CGWindowID is a private API (underscore prefix). Using private macOS APIs risks breakage on OS updates. `CGWindowListCopyWindowInfo` is a public, stable CoreGraphics API. Both arrive at the same CGWindowID -- the public API is the correct path.
+## Platform Abstraction Strategy
 
-### Implementation: New Rust Function
+### Recommendation: `cfg(target_os)` Conditional Compilation with Platform Submodules
 
-New file: `src-tauri/src/commands/window_id.rs`
+Use the **same pattern already established in the codebase**. The existing code already uses `#[cfg(target_os = "macos")]` extensively with paired `#[cfg(not(target_os = "macos"))]` stubs. This is the correct approach. Do NOT introduce trait-based dispatch -- it would add unnecessary abstraction layers for a two-platform app.
+
+**Pattern (already in use):**
 
 ```rust
-// Get a stable window key for the terminal window that was frontmost.
-// Called in the hotkey handler BEFORE toggle_overlay (same timing as PID capture).
-// Returns "bundle_id:window_id" or "bundle_id:pid" as fallback.
+// ax_reader.rs -- existing pattern
 #[cfg(target_os = "macos")]
-pub fn get_window_key(pid: i32) -> Option<String> {
-    use crate::terminal::detect::get_bundle_id;
-    use std::ffi::c_void;
+mod macos {
+    // macOS implementation using AX FFI
+}
 
-    // CGWindowListCopyWindowInfo FFI
-    extern "C" {
-        fn CGWindowListCopyWindowInfo(
-            option: u32,      // CGWindowListOption
-            relativeToWindow: u32,  // CGWindowID, kCGNullWindowID = 0
-        ) -> *mut c_void;   // CFArrayRef
-        fn CFArrayGetCount(array: *const c_void) -> isize;
-        fn CFArrayGetValueAtIndex(array: *const c_void, idx: isize) -> *const c_void;
-        fn CFRelease(cf: *const c_void);
-        // ... (CFDictionary key lookups, CFNumber extraction)
-    }
+#[cfg(target_os = "windows")]  // NEW: add Windows module alongside
+mod windows {
+    // Windows implementation using UI Automation
+}
 
-    let bundle_id = get_bundle_id(pid)?;
+// Public API delegates to platform module
+#[cfg(target_os = "macos")]
+pub fn read_terminal_text(app_pid: i32, bundle_id: &str) -> Option<String> {
+    macos::read_terminal_text(app_pid, bundle_id)
+}
 
-    // kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements = 1 | 16 = 17
-    // Enumerate on-screen windows, filter by owner PID
-    // Extract kCGWindowNumber for the matching window
-    // Return format: "com.apple.Terminal:14320"
-
-    // Fallback if no window found: "com.apple.Terminal:{pid}"
-    Some(format!("{}:{}", bundle_id, pid))  // placeholder, full impl in plan
+#[cfg(target_os = "windows")]
+pub fn read_terminal_text(app_pid: i32, bundle_id: &str) -> Option<String> {
+    windows::read_terminal_text(app_pid, bundle_id)
 }
 ```
 
-The actual implementation uses CFDictionary key extraction with `CFDictionaryGetValue` and `CFNumberGetValue` -- the same FFI pattern already used extensively in `detect.rs` and `permissions.rs`.
+**Why this pattern:**
+- The codebase already has `#[cfg(not(target_os = "macos"))]` stubs returning `None` for every platform-specific function -- those stubs become real Windows implementations
+- No runtime dispatch overhead
+- Each platform's code is isolated in its own module
+- The public function signatures remain identical -- callers never change
+- The Tauri command layer and frontend are completely unaware of the platform
 
-### Integration Point: Hotkey Handler
+**What changes from existing stubs:**
+- Replace `#[cfg(not(target_os = "macos"))]` (catch-all stub) with `#[cfg(target_os = "windows")]` (real implementation) + keep `#[cfg(not(any(target_os = "macos", target_os = "windows")))]` as the stub for future Linux
 
-`src-tauri/src/commands/hotkey.rs` -- the `on_shortcut` closure already captures `previous_app_pid` and `pre_captured_text` before calling `toggle_overlay`. Window ID capture slots in here:
+---
+
+## Component-by-Component Windows Architecture
+
+### 1. Overlay Window (lib.rs + commands/window.rs)
+
+**macOS current approach:**
+- `tauri_nspanel` converts Tauri window to NSPanel
+- NSPanel with `can_become_key_window = true` + `NonactivatingPanel` style
+- `PanelLevel::Status` to float above fullscreen apps
+- `CollectionBehavior::full_screen_auxiliary().can_join_all_spaces()`
+- `window_vibrancy::apply_vibrancy()` with HudWindow material
+
+**Windows approach:**
+
+`tauri_nspanel` is macOS-only. On Windows, use Tauri's native window with post-creation HWND manipulation:
 
 ```rust
-// Existing code already does:
-//   1. get_frontmost_pid() -> store in state.previous_app_pid
-//   2. ax_reader::read_focused_text_fast(pid) -> store in state.pre_captured_text
-//   3. toggle_overlay(...)
+#[cfg(target_os = "windows")]
+fn setup_overlay_window(window: &tauri::WebviewWindow) -> Result<(), String> {
+    use windows::Win32::UI::WindowsAndMessaging::*;
+    use windows::Win32::Foundation::HWND;
 
-// v0.1.1 addition: after step 1, before step 3:
-let window_key = window_id::get_window_key(pid);
-if let Some(state) = app_handle.try_state::<AppState>() {
-    if let Ok(mut wk) = state.previous_window_key.lock() {
-        *wk = window_key;
+    // Get raw HWND from Tauri window
+    let hwnd = window.hwnd().map_err(|e| e.to_string())?;
+
+    unsafe {
+        // Set always-on-top (equivalent to PanelLevel::Status)
+        SetWindowPos(
+            hwnd,
+            HWND_TOPMOST,
+            0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+        );
+
+        // Set WS_EX_NOACTIVATE + WS_EX_TOOLWINDOW:
+        // - WS_EX_NOACTIVATE: prevents the window from stealing focus
+        //   from the terminal (equivalent to NSPanel NonactivatingPanel)
+        // - WS_EX_TOOLWINDOW: hides from taskbar and Alt+Tab
+        //   (equivalent to skipTaskbar + ActivationPolicy::Accessory)
+        let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE) as u32;
+        SetWindowLongW(
+            hwnd,
+            GWL_EXSTYLE,
+            (ex_style | WS_EX_NOACTIVATE.0 | WS_EX_TOOLWINDOW.0) as i32,
+        );
     }
+
+    // Apply Mica (Win11) or Acrylic (Win10) vibrancy
+    // window-vibrancy crate already supports this
+    if let Err(_) = window_vibrancy::apply_mica(&window, None) {
+        // Fallback to Acrylic on Windows 10
+        let _ = window_vibrancy::apply_acrylic(&window, Some((0, 0, 0, 128)));
+    }
+
+    Ok(())
 }
 ```
 
-`AppState` gets one new field:
+**Critical consideration: WS_EX_NOACTIVATE + keyboard input.**
+The macOS NSPanel approach allows `can_become_key_window = true` while being non-activating. On Windows, `WS_EX_NOACTIVATE` prevents the window from receiving keyboard focus entirely. The workaround is:
+
+1. Set `WS_EX_NOACTIVATE` initially when the overlay is hidden
+2. On show: temporarily remove `WS_EX_NOACTIVATE`, call `SetForegroundWindow` to take focus, then use `SetFocus` on the webview
+3. On hide: restore `WS_EX_NOACTIVATE` and call `SetForegroundWindow` back to the previous terminal window
+
+This is more complex than macOS but achievable. The key insight: we do NOT need the overlay to remain non-activating while visible (the user needs to type). We need it to:
+- Not appear in taskbar or Alt+Tab (WS_EX_TOOLWINDOW handles this)
+- Stay on top (HWND_TOPMOST handles this)
+- Return focus to the terminal after dismiss (explicit `SetForegroundWindow(previous_hwnd)` handles this)
+
+**The overlay show/hide flow on Windows:**
+
+```
+Show:
+  1. Store previous HWND via GetForegroundWindow()
+  2. Position window on current monitor (same logic as macOS, Tauri API is cross-platform)
+  3. Remove WS_EX_NOACTIVATE temporarily
+  4. window.show() + window.set_focus()
+  5. Emit "overlay-shown" to frontend
+
+Hide:
+  1. window.hide()
+  2. Restore WS_EX_NOACTIVATE
+  3. SetForegroundWindow(previous_hwnd) to return focus to terminal
+```
+
+### 2. Frontmost App Detection (hotkey.rs)
+
+**macOS:** `NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier` via ObjC FFI
+
+**Windows:**
 
 ```rust
-pub previous_window_key: Mutex<Option<String>>,
-```
+#[cfg(target_os = "windows")]
+fn get_frontmost_pid() -> Option<i32> {
+    use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+    use windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
 
-A new Tauri command `get_previous_window_key() -> Option<String>` exposes this to the frontend during context detection. No new complexity in AppState -- same Mutex pattern as `previous_app_pid`.
-
----
-
-## Zustand Store Extension
-
-### New Types
-
-```typescript
-// Add to src/store/index.ts
-
-export interface WindowHistory {
-  // Prompts the user entered for this window (for ArrowUp navigation)
-  promptHistory: string[];   // max 7 entries, oldest first
-  // Full AI conversation turns for follow-up context
-  turnHistory: TurnMessage[];  // max 14 entries (7 pairs), oldest first
-}
-```
-
-### New State Fields
-
-```typescript
-// Add to OverlayState interface:
-
-windowHistories: Record<string, WindowHistory>;   // keyed by "bundle_id:window_id"
-activeWindowKey: string | null;                    // key of current terminal window
-historyNavIndex: number;                           // -1 = not navigating; 0..n = index in promptHistory
-historyNavSnapshot: string;                        // saved input before nav started (to restore on Escape)
-```
-
-### Changed Behavior in `show()`
-
-```typescript
-show: () => {
-  // ... existing reset logic stays identical ...
-  set((state) => ({
-    visible: true,
-    // ... existing fields reset ...
-    turnHistory: [],    // will be replaced after window key resolves
-    historyNavIndex: -1,
-    historyNavSnapshot: "",
-  }));
-
-  (async () => {
-    try {
-      const hasPermission = await invoke<boolean>("check_accessibility_permission");
-      useOverlayStore.getState().setAccessibilityGranted(hasPermission);
-
-      // NEW: resolve window key before loading history
-      const windowKey = await invoke<string | null>("get_previous_window_key");
-      const ctx = await invoke<AppContext | null>("get_app_context");
-
-      useOverlayStore.getState().setAppContext(ctx);
-      useOverlayStore.getState().setActiveWindowKey(windowKey);  // NEW action
-    } catch (err) {
-      console.error("[store] context detection error:", err);
-    } finally {
-      useOverlayStore.getState().setIsDetectingContext(false);
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.0 == 0 {
+            return None;
+        }
+        let mut pid: u32 = 0;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        if pid > 0 {
+            Some(pid as i32)
+        } else {
+            None
+        }
     }
-  })();
-},
-```
-
-### `setActiveWindowKey` action (new)
-
-When the active window key is set, the store restores `turnHistory` from the persisted `windowHistories` map:
-
-```typescript
-setActiveWindowKey: (key: string | null) => set((state) => {
-  if (!key) return { activeWindowKey: null };
-  const existing = state.windowHistories[key];
-  return {
-    activeWindowKey: key,
-    turnHistory: existing?.turnHistory ?? [],
-  };
-}),
-```
-
-### Changed Behavior in `submitQuery()`
-
-After building `trimmedHistory`, save it back to the per-window map and also update the prompt history:
-
-```typescript
-// After building trimmedHistory (existing logic unchanged)...
-
-// NEW: persist to per-window map
-const currentKey = useOverlayStore.getState().activeWindowKey;
-if (currentKey) {
-  set((state) => {
-    const existing = state.windowHistories[currentKey] ?? {
-      promptHistory: [],
-      turnHistory: [],
-    };
-    const updatedPrompts = [
-      ...existing.promptHistory.filter(p => p !== query),  // deduplicate
-      query,
-    ].slice(-7);  // keep last 7
-    return {
-      windowHistories: {
-        ...state.windowHistories,
-        [currentKey]: {
-          promptHistory: updatedPrompts,
-          turnHistory: trimmedHistory,
-        },
-      },
-    };
-  });
 }
 ```
 
-### History Navigation State Machine
+Additionally, store the HWND (not just PID) in AppState for focus restoration:
 
-Arrow key navigation is local state in the `CommandInput` component, but uses store actions to read history. The navigation state lives in the store (not local component state) so it can be cleared on overlay hide.
-
-```
-historyNavIndex = -1  (not navigating, showing live inputValue)
-    |
-ArrowUp pressed (inputValue saved to historyNavSnapshot if index was -1)
-    |
-historyNavIndex = promptHistory.length - 1  (most recent entry)
-    |
-ArrowUp again -> index--  (older entry)
-    |
-ArrowDown -> index++  (newer entry)
-    |
-index reaches -1 -> restore historyNavSnapshot to inputValue
-    |
-Escape or Enter -> historyNavIndex resets to -1
+```rust
+// New AppState field for Windows
+#[cfg(target_os = "windows")]
+pub previous_app_hwnd: Mutex<Option<isize>>,  // HWND as isize
 ```
 
-New store actions:
+**Confidence: HIGH** -- `GetForegroundWindow` + `GetWindowThreadProcessId` is the standard Windows approach, well-documented, stable API.
+
+### 3. Terminal Context: Process Inspection (terminal/process.rs)
+
+**macOS:** `libproc` FFI for CWD (`proc_pidinfo` PROC_PIDVNODEPATHINFO), process name (`proc_pidpath`), child PIDs (`proc_listchildpids`), plus `pgrep`/`ps` fallbacks.
+
+**Windows:**
+
+| Function | Windows API | Crate |
+|----------|------------|-------|
+| Get CWD of remote process | `NtQueryInformationProcess` + `ReadProcessMemory` to read PEB -> RTL_USER_PROCESS_PARAMS -> CurrentDirectory | `windows` crate (`Wdk::System::Threading`) |
+| Get process name | `GetModuleFileNameExW` or `QueryFullProcessImageNameW` | `windows` crate |
+| Get child PIDs | `CreateToolhelp32Snapshot` + `Process32Next` filtering by `th32ParentProcessID` | `windows` crate |
+| Get parent PID | `CreateToolhelp32Snapshot` + `Process32First/Next` | `windows` crate |
+
+**CWD reading is the hardest part.** On Windows, reading a remote process's CWD requires:
+1. `OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, pid)`
+2. `NtQueryInformationProcess(ProcessBasicInformation)` to get PEB address
+3. `ReadProcessMemory` to read PEB structure
+4. `ReadProcessMemory` to read `RTL_USER_PROCESS_PARAMS`
+5. `ReadProcessMemory` to read the `CurrentDirectory.DosPath` UNICODE_STRING
+
+**Alternative (simpler but slower):** Use the `sysinfo` crate which provides cross-platform process inspection. However, `sysinfo` does NOT expose CWD on Windows (the field is always empty). So the PEB approach is required.
+
+**Alternative fallback for CWD:** Shell-specific approaches:
+- PowerShell: `(Get-Process -Id $pid).Path` does not give CWD, but `$PWD` environment variable can be read from the process environment block
+- cmd.exe: The PEB approach works
+- For WSL processes: CWD must be translated from Linux paths to Windows paths via `/mnt/c/...`
+
+**Process tree walking on Windows:**
+The `CreateToolhelp32Snapshot` API is equivalent to macOS's `proc_listchildpids`. The approach is:
+1. Take a snapshot of all processes
+2. Iterate and filter by `th32ParentProcessID == target_pid`
+3. Walk the same shell detection logic (KNOWN_SHELLS check, MULTIPLEXERS, SHELL_WRAPPERS)
+
+Windows shell names differ:
+```rust
+const KNOWN_SHELLS_WINDOWS: &[&str] = &[
+    "powershell.exe", "pwsh.exe",  // PowerShell 5.1 and 7+
+    "cmd.exe",                      // Command Prompt
+    "bash.exe",                     // Git Bash / WSL
+    "wsl.exe",                      // WSL launcher
+    "zsh.exe", "fish.exe",          // Rare on Windows but possible via MSYS2
+    "nu.exe",                       // Nushell
+];
+```
+
+**Confidence: MEDIUM** -- The core APIs are well-documented, but reading remote process CWD via PEB is complex and may fail for elevated/protected processes. Needs thorough testing.
+
+### 4. Terminal Text Reading (terminal/ax_reader.rs)
+
+**macOS:** Accessibility API (`AXUIElement*`) to walk the AX tree and read `AXValue` from text areas.
+
+**Windows:** Microsoft UI Automation (UIA) API.
+
+**Approach:** Use the `uiautomation` crate (wrapper around Windows UIA COM API) or use the `windows` crate directly for `IUIAutomation` COM interface.
+
+```rust
+#[cfg(target_os = "windows")]
+mod windows_impl {
+    use uiautomation::UIAutomation;
+
+    pub fn read_terminal_text(app_pid: i32, _app_name: &str) -> Option<String> {
+        let automation = UIAutomation::new().ok()?;
+        let root = automation.get_root_element().ok()?;
+
+        // Find the terminal window by PID
+        let condition = automation.create_property_condition(
+            uiautomation::types::UIProperty::ProcessId,
+            app_pid.into(),
+        ).ok()?;
+
+        let element = root.find_first(
+            uiautomation::types::TreeScope::Children,
+            &condition,
+        ).ok()?;
+
+        // Walk to find text content
+        // Windows Terminal exposes UIA TextPattern
+        // PowerShell/cmd expose legacy console text via UIA
+        let text_pattern = element.get_text_pattern().ok()?;
+        let text = text_pattern.get_document_range().ok()?
+            .get_text(-1).ok()?;
+
+        if text.is_empty() { None } else { Some(text) }
+    }
+}
+```
+
+**Terminal-specific UIA patterns:**
+- **Windows Terminal:** Exposes `ITextProvider` (UIA Text Pattern) for reading terminal content
+- **PowerShell (conhost):** The console host exposes text via UIA, accessible through `ITextProvider`
+- **cmd.exe (conhost):** Same as PowerShell -- both use conhost which supports UIA
+- **Git Bash (mintty):** May have limited UIA support -- needs testing
+- **WSL terminals:** Depends on the host terminal (Windows Terminal provides UIA)
+
+**NVDA (screen reader) has confirmed that Windows Terminal and conhost support UIA text reading**, which validates this approach.
+
+**Confidence: MEDIUM** -- UIA text reading from Windows Terminal is proven (NVDA does it), but the exact Rust implementation path via `uiautomation` crate needs validation. The crate is actively maintained (latest release 2024) but less battle-tested than macOS AX API usage.
+
+### 5. Paste to Terminal (commands/paste.rs)
+
+**macOS:** AppleScript dispatch (iTerm2 `write text`, Terminal.app `keystroke`) + CGEventPost fallback (Cmd+V, Ctrl+U).
+
+**Windows:**
+
+```rust
+#[cfg(target_os = "windows")]
+pub fn paste_to_terminal(app: AppHandle, command: String) -> Result<(), String> {
+    // 1. Write to Windows clipboard
+    clipboard_win::set_clipboard_string(&command)
+        .map_err(|e| format!("Clipboard error: {}", e))?;
+
+    // 2. Restore focus to the terminal
+    let state = app.try_state::<AppState>()
+        .ok_or("AppState not found")?;
+    let hwnd = state.previous_app_hwnd.lock()
+        .map_err(|_| "mutex poisoned")?
+        .ok_or("no previous HWND")?;
+
+    unsafe {
+        SetForegroundWindow(HWND(hwnd));
+        std::thread::sleep(Duration::from_millis(100));
+
+        // 3. Clear current line (Ctrl+U equivalent for PowerShell/cmd)
+        //    PowerShell: Escape key clears line
+        //    cmd.exe: Escape key clears line
+        //    Git Bash: Ctrl+U works (same as macOS)
+        send_key(VK_ESCAPE, &[])?;
+        std::thread::sleep(Duration::from_millis(50));
+
+        // 4. Paste via Ctrl+V (universal on Windows)
+        send_key(VK_V, &[VK_CONTROL])?;
+    }
+
+    Ok(())
+}
+
+// SendInput helper for simulating keystrokes
+unsafe fn send_key(vk: VIRTUAL_KEY, modifiers: &[VIRTUAL_KEY]) -> Result<(), String> {
+    let mut inputs: Vec<INPUT> = Vec::new();
+
+    // Press modifiers
+    for &m in modifiers {
+        inputs.push(make_key_input(m, true));
+    }
+    // Press key
+    inputs.push(make_key_input(vk, true));
+    // Release key
+    inputs.push(make_key_input(vk, false));
+    // Release modifiers (reverse order)
+    for &m in modifiers.iter().rev() {
+        inputs.push(make_key_input(m, false));
+    }
+
+    let sent = SendInput(&inputs, std::mem::size_of::<INPUT>() as i32);
+    if sent as usize != inputs.len() {
+        return Err("SendInput failed".to_string());
+    }
+    Ok(())
+}
+```
+
+**Terminal-specific paste behavior:**
+- **Windows Terminal:** Ctrl+V pastes (with bracketed paste mode in modern shells)
+- **PowerShell (conhost):** Right-click or Ctrl+V pastes
+- **cmd.exe:** Ctrl+V pastes (modern Windows), right-click pastes (legacy)
+- **Git Bash (mintty):** Shift+Insert or right-click pastes; Ctrl+V may not work. Need to detect mintty and use Shift+Insert instead
+- **WSL:** Depends on host terminal
+
+**Confirm command (Enter keystroke):** Same `SendInput` pattern with `VK_RETURN`.
+
+**Confidence: HIGH** -- `SendInput` is the standard Windows approach for simulating keystrokes, well-documented. The clipboard API is straightforward.
+
+### 6. Permissions (commands/permissions.rs)
+
+**macOS:** Accessibility permission check via `AXIsProcessTrusted()` + probe fallback. Opens System Settings.
+
+**Windows:** Windows does NOT have an equivalent global accessibility permission gate. UI Automation and `SendInput` work without special permissions for standard (non-elevated) processes.
+
+```rust
+#[cfg(target_os = "windows")]
+pub fn check_accessibility_permission() -> bool {
+    true  // No equivalent permission gate on Windows
+}
+
+#[cfg(target_os = "windows")]
+pub fn request_accessibility_permission(_prompt: bool) -> bool {
+    true  // No-op on Windows
+}
+
+#[cfg(target_os = "windows")]
+pub fn open_accessibility_settings() {
+    // No-op on Windows, or could open Windows Settings as a convenience
+}
+```
+
+**However:** If CMD+K needs to read/write to elevated (admin) processes, the app itself may need to be elevated. This is an edge case -- most terminal sessions are user-level.
+
+**Confidence: HIGH** -- Windows UI Automation and SendInput do not require special permissions for user-level processes.
+
+### 7. Terminal Detection (terminal/detect.rs)
+
+**macOS:** `NSRunningApplication` ObjC FFI for bundle ID and display name.
+
+**Windows:** No bundle IDs on Windows. Use executable path/name instead.
+
+```rust
+#[cfg(target_os = "windows")]
+pub fn get_bundle_id(pid: i32) -> Option<String> {
+    // On Windows, return the exe name as the "bundle ID equivalent"
+    // e.g., "WindowsTerminal.exe", "powershell.exe", "cmd.exe"
+    get_process_exe_name(pid)
+}
+
+#[cfg(target_os = "windows")]
+fn get_process_exe_name(pid: i32) -> Option<String> {
+    use windows::Win32::System::Threading::*;
+    use windows::Win32::System::ProcessStatus::*;
+
+    unsafe {
+        let handle = OpenProcess(
+            PROCESS_QUERY_LIMITED_INFORMATION,
+            false,
+            pid as u32,
+        ).ok()?;
+
+        let mut buf = [0u16; 260];
+        let len = GetModuleFileNameExW(handle, None, &mut buf);
+        CloseHandle(handle);
+
+        if len == 0 { return None; }
+
+        let path = String::from_utf16_lossy(&buf[..len as usize]);
+        std::path::Path::new(&path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|s| s.to_string())
+    }
+}
+```
+
+**Windows terminal identifiers (equivalent to macOS TERMINAL_BUNDLE_IDS):**
+
+```rust
+#[cfg(target_os = "windows")]
+pub const TERMINAL_EXE_NAMES: &[&str] = &[
+    "WindowsTerminal.exe",      // Windows Terminal
+    "powershell.exe",            // PowerShell 5.1
+    "pwsh.exe",                  // PowerShell 7+
+    "cmd.exe",                   // Command Prompt
+    "mintty.exe",                // Git Bash (MSYS2)
+    "ConEmu.exe",                // ConEmu
+    "ConEmu64.exe",
+    "Hyper.exe",                 // Hyper terminal
+    "Alacritty.exe",             // Alacritty
+    "wezterm-gui.exe",           // WezTerm
+    "kitty.exe",                 // kitty
+];
+
+#[cfg(target_os = "windows")]
+pub const IDE_EXE_NAMES: &[&str] = &[
+    "Code.exe",                  // VS Code
+    "Code - Insiders.exe",       // VS Code Insiders
+    "Cursor.exe",                // Cursor IDE
+];
+```
+
+**Window key format on Windows:** `"exe_name:shell_pid"` instead of `"bundle_id:shell_pid"`. Same concept, different identifier. The frontend does not parse window keys -- they are opaque strings used as HashMap keys.
+
+**Confidence: HIGH** -- Standard Win32 process inspection APIs.
+
+### 8. Browser Console Detection (terminal/browser.rs)
+
+**macOS:** AX API to walk windows and find DevTools title.
+
+**Windows:** UI Automation to enumerate windows and check titles.
+
+```rust
+#[cfg(target_os = "windows")]
+pub fn detect_console(app_pid: i32, _app_name: &str) -> (bool, Option<String>) {
+    // Use UI Automation to enumerate windows of the browser process
+    // Check window titles for "DevTools", "Developer Tools", etc.
+    // Same title-matching logic as macOS (is_devtools_title)
+    // If found, attempt to read text from UIA TextPattern
+    (false, None)  // Stub initially, implement after core features
+}
+```
+
+**This is lower priority than terminal context reading.** Browser console detection is a nice-to-have feature. The macOS implementation returns `(false, None)` for many cases already. Safe to stub initially and implement later.
+
+### 9. System Tray (commands/tray.rs)
+
+**Tauri's tray API is already cross-platform.** The existing `TrayIconBuilder` code works on both macOS and Windows. Adjustments needed:
+
+- **Icon format:** macOS uses template images (white icons on transparent). Windows uses colored `.ico` files. The `tauri.conf.json` already includes `icons/icon.ico`.
+- **Left-click behavior:** On macOS, `show_menu_on_left_click(false)` follows convention. On Windows, left-click typically shows the menu. Add a platform check:
+
+```rust
+let show_on_left = cfg!(target_os = "windows");
+builder = builder.show_menu_on_left_click(show_on_left);
+```
+
+- **`icon_as_template(true)`:** This is macOS-only (template rendering for menu bar). On Windows it is ignored.
+
+**Confidence: HIGH** -- Tauri's tray API abstracts platform differences well.
+
+### 10. Vibrancy / Visual Effects
+
+**macOS:** `window_vibrancy::apply_vibrancy()` with `NSVisualEffectMaterial::HudWindow`
+
+**Windows:** `window_vibrancy::apply_mica()` (Win11) or `window_vibrancy::apply_acrylic()` (Win10)
+
+```rust
+#[cfg(target_os = "windows")]
+{
+    // Try Mica first (Windows 11, cleaner look)
+    if let Err(_) = window_vibrancy::apply_mica(&window, None) {
+        // Fall back to Acrylic (Windows 10, slightly noisier)
+        let _ = window_vibrancy::apply_acrylic(&window, Some((18, 18, 18, 200)));
+    }
+}
+```
+
+The `window-vibrancy` crate (v0.5+) already supports both platforms. This is a matter of calling the right function per platform.
+
+**Confidence: HIGH** -- `window-vibrancy` is maintained by the Tauri team, cross-platform by design.
+
+---
+
+## Cargo.toml Changes
+
+The keyring crate needs platform-conditional features:
+
+```toml
+[dependencies]
+keyring = { version = "3" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }
+tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2.1" }
+accessibility-sys = "0.2"
+core-foundation-sys = "0.8"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
+windows = { version = "0.58", features = [
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_System_Threading",
+    "Win32_System_ProcessStatus",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_Foundation",
+] }
+clipboard-win = "5"
+uiautomation = "0.7"
+```
+
+**Note:** `tauri-nspanel`, `accessibility-sys`, and `core-foundation-sys` are macOS-only dependencies. They must be moved to a `[target.'cfg(target_os = "macos")'.dependencies]` section to avoid compilation errors on Windows.
+
+---
+
+## lib.rs Setup: Platform-Conditional Initialization
+
+```rust
+pub fn run() {
+    let mut builder = tauri::Builder::default()
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_positioner::init())
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_http::init())
+        .manage(AppState::default());
+
+    // macOS-only: NSPanel plugin
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.plugin(tauri_nspanel::init());
+    }
+
+    builder
+        .setup(|app| {
+            let window = app.get_webview_window("main")
+                .expect("Window 'main' should exist");
+
+            #[cfg(target_os = "macos")]
+            setup_macos_overlay(app, &window)?;
+
+            #[cfg(target_os = "windows")]
+            setup_windows_overlay(app, &window)?;
+
+            // Tray setup is cross-platform
+            setup_tray(app)?;
+
+            // Hotkey registration is cross-platform (shortcut string differs)
+            let default_hotkey = if cfg!(target_os = "macos") {
+                "Super+K"
+            } else {
+                "Ctrl+K"
+            };
+            let app_handle = app.handle().clone();
+            if let Err(e) = register_hotkey(app_handle, default_hotkey.to_string()) {
+                eprintln!("Warning: Failed to register default hotkey: {}", e);
+            }
+
+            window.hide().ok();
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            // ... same command list, all commands use cfg internally
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running CMD+K application");
+}
+```
+
+---
+
+## Window Key Changes
+
+The `compute_window_key` function in `hotkey.rs` works the same on both platforms conceptually. The key format shifts:
+
+- **macOS:** `"com.apple.Terminal:12345"` (bundle_id:shell_pid)
+- **Windows:** `"WindowsTerminal.exe:12345"` (exe_name:shell_pid)
+
+The frontend treats window keys as opaque strings. No frontend changes needed for this.
+
+---
+
+## Frontend Changes
+
+The React/Zustand frontend is **almost entirely platform-agnostic**. Changes needed:
+
+### 1. Default Hotkey Display
+
+The settings UI shows the hotkey string. Default changes from "Cmd+K" to "Ctrl+K" on Windows. This is driven by the stored hotkey string from Rust, not hardcoded in React.
+
+### 2. Onboarding Flow
+
+The macOS onboarding includes an "Accessibility Permission" step. On Windows, this step is not needed. The onboarding component should check via IPC:
 
 ```typescript
-navigateHistoryUp: () => set((state) => {
-  const key = state.activeWindowKey;
-  if (!key) return {};
-  const prompts = state.windowHistories[key]?.promptHistory ?? [];
-  if (prompts.length === 0) return {};
-  if (state.historyNavIndex === -1) {
-    // Save current input before starting navigation
-    const snapshot = state.inputValue;
-    const newIndex = prompts.length - 1;
-    return {
-      historyNavSnapshot: snapshot,
-      historyNavIndex: newIndex,
-      inputValue: prompts[newIndex],
-    };
-  }
-  const newIndex = Math.max(0, state.historyNavIndex - 1);
-  return { historyNavIndex: newIndex, inputValue: prompts[newIndex] };
-}),
-
-navigateHistoryDown: () => set((state) => {
-  if (state.historyNavIndex === -1) return {};
-  const key = state.activeWindowKey;
-  if (!key) return {};
-  const prompts = state.windowHistories[key]?.promptHistory ?? [];
-  const newIndex = state.historyNavIndex + 1;
-  if (newIndex >= prompts.length) {
-    // Past end: restore snapshot
-    return {
-      historyNavIndex: -1,
-      inputValue: state.historyNavSnapshot,
-      historyNavSnapshot: "",
-    };
-  }
-  return { historyNavIndex: newIndex, inputValue: prompts[newIndex] };
-}),
-
-resetHistoryNav: () => set({
-  historyNavIndex: -1,
-  historyNavSnapshot: "",
-}),
+const hasAccessibilityStep = await invoke<boolean>("check_accessibility_permission");
+// On Windows, this returns true immediately, so the step is skipped
 ```
 
-### Memory Bound
+The existing onboarding logic likely already handles `check_accessibility_permission() === true` as "permission granted, skip step."
 
-The `windowHistories` map grows unboundedly during a session (one entry per distinct terminal window). Terminals opened during a session are typically 1-5 windows. Even at 20 windows, each holding 7 prompts of ~200 chars and 14 turns of ~500 chars each, the total is under 100KB -- negligible. No eviction needed for v0.1.1.
+### 3. System Prompt
 
-The histories are in-memory only (not persisted to disk). A new app launch starts fresh. This is correct for the "session-scoped" requirement.
+`ai.rs` currently says "You are a terminal command generator for macOS." This should be platform-aware:
 
----
+```rust
+#[cfg(target_os = "macos")]
+const PLATFORM: &str = "macOS";
+#[cfg(target_os = "windows")]
+const PLATFORM: &str = "Windows";
 
-## Data Flow Changes
-
-### Existing Flow (v0.1.0)
-
-```
-Cmd+K pressed
-  -> hotkey.rs: capture PID, pre-capture AX text -> store in AppState
-  -> toggle_overlay(show)
-  -> frontend emit "overlay-shown"
-  -> store.show() -> reset turnHistory=[], detect context
-  -> get_app_context IPC -> returns AppContext
-  -> AI query -> stream_ai_response -> build turnHistory locally
-  -> next query uses same turnHistory (in-memory, until overlay show resets)
+let system_prompt = format!(
+    "You are a terminal command generator for {}. Given the user's task description and terminal \
+     context, output ONLY the exact command(s) to run...",
+    PLATFORM
+);
 ```
 
-### New Flow (v0.1.1)
+### 4. Destructive Command Patterns
 
-```
-Cmd+K pressed
-  -> hotkey.rs: capture PID -> capture window key (NEW) -> pre-capture AX text
-  -> toggle_overlay(show)
-  -> frontend emit "overlay-shown"
-  -> store.show() -> reset historyNavIndex=-1, turnHistory=[] (will be replaced)
-  -> PARALLEL:
-       get_previous_window_key IPC (NEW, fast: reads AppState field)
-       get_app_context IPC (unchanged)
-       check_accessibility_permission IPC (unchanged)
-  -> setActiveWindowKey(key) -> restores turnHistory from windowHistories[key]
-  -> AI query -> stream_ai_response (unchanged IPC, uses restored turnHistory)
-  -> submitQuery() -> saves updated turnHistory + promptHistory to windowHistories[key]
-  -> Arrow keys -> navigate promptHistory for activeWindowKey
-```
+`safety.rs` patterns include macOS-specific commands (`diskutil erase`). Windows equivalents should be added:
 
-The critical insight: `turnHistory` in the store is still the single "current session's conversation." The only change is that on overlay open it is *restored* from the per-window map rather than always starting empty. The `stream_ai_response` IPC call is completely unchanged -- it still receives `history` as a `TurnMessage[]` array. No Rust changes needed for the AI command.
-
----
-
-## Component Boundaries: New vs. Modified vs. Unchanged
-
-### New Components
-
-| File | What it is | Purpose |
-|------|-----------|---------|
-| `src-tauri/src/commands/window_id.rs` | New Rust module | `get_window_key(pid)` using CGWindowListCopyWindowInfo, plus `get_previous_window_key` Tauri command |
-
-### Modified Components
-
-| File | What changes | Scope of change |
-|------|-------------|-----------------|
-| `src-tauri/src/state.rs` | Add `previous_window_key: Mutex<Option<String>>` | 2-line addition |
-| `src-tauri/src/lib.rs` | Register `get_previous_window_key` command; import `window_id` module | ~5 lines |
-| `src-tauri/src/commands/hotkey.rs` | Call `window_id::get_window_key(pid)` after PID capture; store result in AppState | ~10 lines in closure |
-| `src/store/index.ts` | Add `windowHistories`, `activeWindowKey`, `historyNavIndex/Snapshot` state; modify `show()` and `submitQuery()`; add navigation actions | Largest change: ~80 new lines, ~20 modified |
-| `src/components/CommandInput.tsx` | Add ArrowUp/ArrowDown key handlers that call navigation actions; conditionally prevent default when history available | ~25 lines |
-
-### Unchanged Components
-
-| File | Why unchanged |
-|------|--------------|
-| `src-tauri/src/commands/ai.rs` | `stream_ai_response` receives `history: Vec<TurnMessage>` -- the caller (store) manages what it passes; no change needed |
-| `src-tauri/src/commands/paste.rs` | Paste logic uses `previous_app_pid`, not window key |
-| `src-tauri/src/commands/terminal.rs` | `get_app_context` unchanged -- window key is a separate concern |
-| `src-tauri/src/terminal/*` | All detection modules unchanged |
-| `src/components/Overlay.tsx` | No new UI elements needed for history/follow-up |
-| `src/components/ResultsArea.tsx` | Follow-up context is implicit (turnHistory is populated) |
-| All Settings/Onboarding components | Unrelated to this feature |
-
----
-
-## Architectural Patterns
-
-### Pattern 1: Capture-Before-Show (existing, extended)
-
-**What:** All data about the external application state must be captured in the hotkey handler BEFORE `toggle_overlay` calls `show_and_make_key()`, because after that point `frontmostApplication` returns CMD+K itself.
-
-**Extension for v0.1.1:** Window key is added to this pre-show capture sequence alongside PID and AX text. The hotkey handler captures: `(pid, window_key, pre_captured_text)` in that order before calling `toggle_overlay`.
-
-**Trade-off:** Adds one more FFI call (`CGWindowListCopyWindowInfo`) in the hotkey handler critical path. This call is fast (enumerates on-screen windows from the window server, no AX tree walking) -- benchmark expectation under 5ms.
-
-### Pattern 2: Window-Keyed Map in Zustand
-
-**What:** `windowHistories: Record<string, WindowHistory>` is the central data structure. It accumulates per-window state across multiple overlay invocations without any manual lifecycle management.
-
-**When to use:** When an app visits the same context repeatedly and needs to accumulate state over multiple visits. This is equivalent to a session-scoped cache keyed by an identity token.
-
-**Trade-off:** The map grows monotonically during a session. For the expected use (1-10 terminal windows per session), this is trivially small. The simplicity of append-only writes without eviction makes the logic easier to reason about and test.
-
-### Pattern 3: Restore-on-Activate
-
-**What:** When the overlay shows, `setActiveWindowKey` both sets the active key and restores `turnHistory` from the map. The restore is synchronous within the Zustand action -- no async or effect needed.
-
-**Why:** The AI streaming code in `submitQuery` reads `state.turnHistory` directly. By restoring at key-set time (which happens during the async context detection sequence, before any query), the existing streaming code sees the correct history with no changes.
-
-**Trade-off:** There is a short window (~50-200ms) between `show()` resetting `turnHistory=[]` and `setActiveWindowKey` restoring it. During this window, `turnHistory` is empty. This is acceptable because no query can be submitted until the user finishes typing, and context detection completes in ~200-750ms (existing behavior).
-
-### Pattern 4: Navigation Cursor in Store (not Component)
-
-**What:** `historyNavIndex` lives in the Zustand store rather than local React state in `CommandInput`.
-
-**Why:** The navigation index must be reset when the overlay hides (in `hide()`) and when a query is submitted. If it lived in component state, resetting it from store actions (which don't have component references) would require complex event wiring.
-
-**Trade-off:** Navigation state is slightly over-centralized -- `historyNavIndex` is only consumed by `CommandInput`. But the reset-on-hide requirement makes store placement clearly correct.
-
----
-
-## Data Flow Diagrams
-
-### Window Key Resolution Flow
-
-```
-Hotkey fires (hotkey.rs)
-    |
-    v
-get_frontmost_pid()   [existing, fast ObjC FFI]
-    |
-    v
-window_id::get_window_key(pid)  [NEW, CGWindowListCopyWindowInfo]
-    |-- finds windows for pid: returns "bundle_id:window_id"
-    |-- no windows found: returns "bundle_id:pid"  (fallback)
-    |
-    v
-AppState.previous_window_key <- Some(key)   [new Mutex field]
-    |
-    v
-[existing: pre_captured_text capture, then toggle_overlay]
-```
-
-### History Restore Flow (on overlay open)
-
-```
-store.show() called
-    |
-    +-- set({ turnHistory: [], historyNavIndex: -1, ... })  [sync reset]
-    |
-    +-- async IIFE starts:
-         |
-         PARALLEL:
-         |-- invoke("get_previous_window_key")  [reads AppState, ~1ms]
-         |-- invoke("get_app_context")          [AX detection, ~200-750ms]
-         |-- invoke("check_accessibility_permission")
-         |
-         both resolve:
-         |
-         v
-         setActiveWindowKey(windowKey)
-           |-- windowHistories[key] exists?
-           |     YES -> restore turnHistory from map
-           |     NO  -> turnHistory stays []
-         setAppContext(ctx)
-         setIsDetectingContext(false)
-```
-
-### History Save Flow (on query submit)
-
-```
-submitQuery(query) called
-    |
-    [... existing streaming + destructive check logic (unchanged) ...]
-    |
-    v
-build trimmedHistory   [existing, slices to 14 entries]
-    |
-    v
-save to windowHistories[activeWindowKey]:  [NEW]
-    promptHistory <- deduplicated + appended query, sliced to 7
-    turnHistory   <- trimmedHistory
-    |
-    v
-set({ turnHistory: trimmedHistory, ... })  [existing update]
-```
-
-### Arrow Key Navigation Flow
-
-```
-User presses ArrowUp in CommandInput (textarea)
-    |
-    v
-handleKeyDown in CommandInput.tsx
-    |
-    check: is cursor at start of textarea?  (or textarea is single-line empty)
-    YES ->
-        e.preventDefault()
-        store.navigateHistoryUp()
-            |-- historyNavIndex == -1?
-            |     save inputValue to historyNavSnapshot
-            |     index <- promptHistory.length - 1
-            |-- else
-            |     index <- max(0, index - 1)
-            set inputValue <- promptHistory[newIndex]
-    NO  -> default textarea behavior (cursor moves)
+```rust
+// Windows-specific destructive patterns (add to existing set)
+r"\bformat\s+[A-Za-z]:",          // format C:  (already present)
+r"\bRemove-Item\s+.*-Recurse",    // PowerShell rm -rf equivalent
+r"\bdel\s+/[sS]",                 // cmd.exe recursive delete
+r"\brd\s+/[sS]",                  // cmd.exe recursive rmdir
+r"\bReg\s+Delete\b",              // Registry deletion
+r"\bStop-Process\s+.*-Force",     // PowerShell kill -9 equivalent
+r"\bnet\s+stop\b",                // Stop Windows service
+r"\bdism\b",                       // DISM system image manipulation
+r"\bbcdedit\b",                   // Boot configuration
 ```
 
 ---
 
-## Integration Points
+## Data Flow: Overlay Show/Hide on Windows
 
-### Rust Backend
-
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| `hotkey.rs` -> `window_id.rs` | Direct function call (same crate) | Called in hotkey closure before toggle |
-| `window_id.rs` -> `AppState` | `app_handle.try_state::<AppState>()` | Same mutex pattern as `previous_app_pid` |
-| Frontend -> `get_previous_window_key` | Tauri IPC invoke | New command, reads `AppState.previous_window_key` |
-| `window_id.rs` -> `CoreGraphics` | Raw C FFI via `extern "C"` | Same pattern as existing libproc FFI |
-
-### Frontend
-
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| `store.show()` -> Rust | `invoke("get_previous_window_key")` | Parallel with existing IPC calls |
-| `CommandInput` -> store | `navigateHistoryUp/Down` actions | Arrow key handlers |
-| `store.submitQuery()` -> store | Zustand state update | Writes to `windowHistories` map |
-
----
-
-## Build Order (considering dependencies)
-
-The dependency chain determines implementation order:
-
-1. **`state.rs`** -- add `previous_window_key` field. Zero dependencies. All subsequent Rust work depends on this.
-
-2. **`commands/window_id.rs`** -- new file with `get_window_key()` and `get_previous_window_key` Tauri command. Depends on `state.rs` (step 1) and `terminal/detect.rs` (existing, `get_bundle_id`). The CGWindowListCopyWindowInfo FFI is self-contained.
-
-3. **`commands/hotkey.rs`** -- add window key capture call. Depends on `window_id.rs` (step 2). Small change to existing closure.
-
-4. **`lib.rs`** -- register new command, import new module. Depends on steps 1-3. Compile gate: `cargo build` must pass here before moving to frontend.
-
-5. **`store/index.ts` -- new state types and fields** -- add `WindowHistory`, `windowHistories`, `activeWindowKey`, `historyNavIndex/Snapshot`. Add `setActiveWindowKey`, `navigateHistoryUp`, `navigateHistoryDown`, `resetHistoryNav` actions. Modify `show()` to call `get_previous_window_key` and invoke `setActiveWindowKey`. Modify `submitQuery()` to persist to `windowHistories`. Depends on step 4 (new IPC command must exist).
-
-6. **`CommandInput.tsx` -- ArrowUp/Down handlers** -- add keyboard navigation. Depends on step 5 (store actions must exist). This is the final user-visible piece.
+```
+Ctrl+K pressed
+  -> hotkey handler fires (cross-platform, tauri_plugin_global_shortcut)
+  -> get_frontmost_pid():
+       [macOS] NSWorkspace -> processIdentifier
+       [Windows] GetForegroundWindow -> GetWindowThreadProcessId
+  -> store PID in AppState.previous_app_pid
+  -> [Windows only] store HWND in AppState.previous_app_hwnd
+  -> pre-capture AX/UIA text:
+       [macOS] ax_reader::read_focused_text_fast(pid)
+       [Windows] uia_reader::read_focused_text_fast(pid)
+  -> compute_window_key(pid, focused_cwd)
+  -> toggle_overlay():
+       [macOS] panel.show_and_make_key()
+       [Windows] remove WS_EX_NOACTIVATE, window.show(), window.set_focus()
+  -> frontend receives "overlay-shown" event
+  -> store.show() executes (identical on both platforms)
+  -> IPC calls: get_window_key, get_app_context (platform-specific Rust, same IPC interface)
+  -> user types query, submits
+  -> stream_ai_response (identical on both platforms)
+  -> paste_to_terminal:
+       [macOS] AppleScript/CGEventPost
+       [Windows] clipboard-win + SendInput(Ctrl+V)
+  -> focus restoration:
+       [macOS] panel.resign_key_window + panel.make_key_window
+       [Windows] SetForegroundWindow(previous_hwnd)
+```
 
 ---
 
-## Anti-Patterns
+## Build System
 
-### Anti-Pattern 1: Storing Window ID as the Primary Key in AppState
+### Single Codebase, Platform-Conditional Compilation
 
-**What people do:** Replace `previous_app_pid` with `previous_window_id` everywhere, including in paste and context detection logic.
+The existing project structure supports this. Rust's `cfg(target_os)` at compile time means:
+- **On macOS:** Only macOS code is compiled. `tauri-nspanel`, `accessibility-sys` dependencies are used.
+- **On Windows:** Only Windows code is compiled. `windows`, `clipboard-win`, `uiautomation` dependencies are used.
 
-**Why it's wrong:** The existing context detection (`get_app_context`) and paste (`paste_to_terminal`) use `previous_app_pid` because they need to make ObjC/AX calls that are PID-scoped. `CGWindowID` is not a substitute for PID in these APIs. Conflating the two causes silent failures.
+### CI/CD: GitHub Actions Matrix
 
-**Do this instead:** Keep `previous_app_pid` unchanged for all existing functionality. Add `previous_window_key` as a separate field solely for history keying.
+```yaml
+strategy:
+  matrix:
+    include:
+      - os: macos-latest
+        target: aarch64-apple-darwin
+      - os: macos-latest
+        target: x86_64-apple-darwin
+      - os: windows-latest
+        target: x86_64-pc-windows-msvc
+```
 
-### Anti-Pattern 2: Persisting `windowHistories` to tauri-plugin-store
+Tauri provides `tauri-action` for building platform-specific installers:
+- macOS: `.dmg` (existing)
+- Windows: `.msi` or `.exe` installer via NSIS or WiX
 
-**What people do:** Persist window histories to disk so they survive app restarts, using the existing tauri-plugin-store (already in the app for API key/hotkey storage).
+### Development
 
-**Why it's wrong:** CGWindowIDs are not stable across app restarts -- a new launch of Terminal.app gets new window IDs. Persisted histories would never match live window keys, creating orphaned data that grows forever. Additionally, terminal command history may contain sensitive data (API keys accidentally typed as commands, passwords, etc.) that should not persist to disk without explicit user consent.
-
-**Do this instead:** Keep `windowHistories` in-memory only (Zustand state). Fresh start on each app launch. If disk persistence is desired in a future milestone, design it around user-controlled export, not automatic persistence.
-
-### Anti-Pattern 3: Using ArrowUp in a Multi-Line Textarea for Navigation Unconditionally
-
-**What people do:** Intercept ArrowUp/ArrowDown on the textarea and always override with history navigation, breaking multi-line input cursor movement.
-
-**Why it's wrong:** The `CommandInput` textarea already supports multi-line input (shift+Enter). A user editing a multi-line prompt expects ArrowUp to move the cursor between lines, not jump to history.
-
-**Do this instead:** Only intercept ArrowUp when the cursor is at position 0 of a single-line input (or the textarea has only one line and cursor is at start). When there are multiple lines, let default textarea cursor movement happen. This matches the behavior of bash/zsh history navigation (which also only works when the line is single-line).
-
-### Anti-Pattern 4: Calling CGWindowListCopyWindowInfo Inside `get_app_context` (Async)
-
-**What people do:** Add window ID resolution inside the `get_app_context` Tauri command handler, since that's already called asynchronously after the overlay shows.
-
-**Why it's wrong:** `get_app_context` runs after the overlay has taken focus. At that point, the frontmost window of the terminal app may no longer be reported as "on screen" in the same way, or the window list may have changed. The window key must be captured in the hotkey handler BEFORE `show_and_make_key()`, following the established Capture-Before-Show pattern.
-
-**Do this instead:** Capture window key in `hotkey.rs` alongside PID capture, store in `AppState`, expose via a fast dedicated IPC command (`get_previous_window_key`) that just reads the stored value.
+Cross-compilation from macOS to Windows is possible but fragile. **Recommendation: develop and test Windows features on a Windows machine or VM.** Use CI for cross-platform build validation.
 
 ---
 
-## Scaling Considerations
+## Suggested Build Order (Dependency-Driven)
 
-This feature is entirely session-scoped and in-memory. There is no backend state, no database, no network calls added. Scaling dimensions that matter:
+### Phase 1: Build Infrastructure (no user-visible features)
 
-| Concern | Expected (1-5 windows) | Edge case (20 windows) | Impact |
-|---------|----------------------|----------------------|--------|
-| `windowHistories` map size | < 5KB | < 100KB | None |
-| CGWindowListCopyWindowInfo call cost | < 5ms | < 5ms (window count bounded by OS) | None |
-| `get_previous_window_key` IPC latency | < 1ms | < 1ms | None |
-| Arrow key navigation render | O(1) array index | O(1) | None |
+1. **Cargo.toml restructure** -- Move macOS-only dependencies to `[target.'cfg(target_os = "macos")']`, add Windows dependencies
+2. **lib.rs conditional setup** -- Split `setup()` into `setup_macos_overlay()` and `setup_windows_overlay()`
+3. **Compile gate:** `cargo build --target x86_64-pc-windows-msvc` must pass with stubs
 
-No scaling concerns exist for the target usage of this application (single-user macOS app).
+### Phase 2: Overlay Window on Windows
+
+4. **Window HWND manipulation** -- `WS_EX_TOOLWINDOW`, `HWND_TOPMOST`, vibrancy (Mica/Acrylic)
+5. **Show/hide cycle** -- Focus management, `WS_EX_NOACTIVATE` toggle
+6. **Hotkey: `get_frontmost_pid` Windows implementation** -- `GetForegroundWindow` + `GetWindowThreadProcessId`
+7. **Store HWND for focus restoration**
+
+### Phase 3: Terminal Context on Windows
+
+8. **`terminal/detect.rs` Windows implementation** -- Process exe name detection, terminal/IDE classification
+9. **`terminal/process.rs` Windows implementation** -- Process tree walking via `CreateToolhelp32Snapshot`, CWD via PEB reading
+10. **`terminal/ax_reader.rs` -> `terminal/uia_reader.rs`** -- UI Automation text reading from Windows Terminal/conhost
+
+### Phase 4: Paste and Input Simulation
+
+11. **`commands/paste.rs` Windows implementation** -- Clipboard + `SendInput(Ctrl+V)`
+12. **Line clearing** -- `SendInput(VK_ESCAPE)` for PowerShell/cmd, `SendInput(Ctrl+U)` for bash
+
+### Phase 5: Polish and Platform-Specific UI
+
+13. **Permissions: stub Windows implementation** (always returns true)
+14. **Onboarding flow adaptation** (skip accessibility step)
+15. **AI system prompt: platform awareness** ("You are a terminal command generator for Windows...")
+16. **Safety patterns: add Windows-specific destructive commands**
+17. **Tray icon adjustments** (left-click behavior, icon format)
+18. **Default hotkey: Ctrl+K on Windows**
+
+### Phase 6: Integration Testing
+
+19. **End-to-end testing** on Windows: Windows Terminal, PowerShell, cmd.exe, Git Bash
+20. **WSL terminal support** (stretch goal)
+21. **Windows installer** (NSIS or WiX via Tauri)
+
+### Dependency Graph
+
+```
+Phase 1 (Cargo.toml + lib.rs)
+    |
+    +---> Phase 2 (Overlay window)
+    |         |
+    |         +---> Phase 4 (Paste, needs HWND from Phase 2)
+    |
+    +---> Phase 3 (Terminal context, independent of overlay)
+    |         |
+    |         +---> Phase 5 (Polish, depends on Phase 3 for terminal detection)
+    |
+    +---> Phase 6 (Integration, depends on all above)
+```
+
+Phases 2 and 3 can be developed in parallel since they are independent.
+
+---
+
+## Anti-Patterns to Avoid
+
+### Anti-Pattern 1: Trait-Based Platform Abstraction
+
+**What:** Define a `PlatformBackend` trait with methods like `get_frontmost_pid()`, `read_terminal_text()`, etc., and implement it for macOS and Windows.
+
+**Why wrong:** Adds an abstraction layer that the codebase does not need. There are only two platforms, the public function signatures are already identical, and `cfg(target_os)` gives zero runtime overhead. Trait objects add vtable dispatch. The existing codebase successfully uses `cfg` -- changing patterns mid-project creates inconsistency.
+
+**Do this instead:** Continue using `cfg(target_os)` with platform submodules, exactly as already done in `ax_reader.rs`, `process.rs`, etc.
+
+### Anti-Pattern 2: Windows-First Development on macOS
+
+**What:** Write all Windows code on a macOS machine, relying on `cargo check --target x86_64-pc-windows-msvc` to validate.
+
+**Why wrong:** `cargo check` verifies syntax and type checking but cannot run the code. Windows API calls have subtle behavioral differences (HWND focus semantics, SendInput timing, UIA tree structure) that only manifest at runtime. GPU terminal UIA support varies between terminals.
+
+**Do this instead:** Use a Windows machine or VM for development and testing. Use macOS CI to verify macOS builds are not broken by the changes.
+
+### Anti-Pattern 3: Shimming NSPanel Behavior with a Tauri Plugin
+
+**What:** Write a Windows Tauri plugin that replicates NSPanel's non-activating panel behavior.
+
+**Why wrong:** The macOS NSPanel behavior (non-activating + keyboard input) has no direct Win32 equivalent. Attempting to replicate it creates a maintenance burden. The Windows UX for overlay apps (PowerToys Run, Windows PowerToys, etc.) uses a different pattern: take focus, then return focus on dismiss.
+
+**Do this instead:** Accept that Windows overlay behavior differs slightly. Take focus on show, return focus on hide. This matches user expectations on Windows.
+
+### Anti-Pattern 4: Using `sysinfo` Crate for CWD
+
+**What:** Use the `sysinfo` crate's `Process::cwd()` method for reading remote process CWD on Windows.
+
+**Why wrong:** `sysinfo` returns an empty string for CWD on Windows. The CWD field is not implemented on Windows in sysinfo.
+
+**Do this instead:** Read CWD from the Process Environment Block (PEB) using `NtQueryInformationProcess` + `ReadProcessMemory`, or shell-specific fallback methods.
+
+---
+
+## New Components Summary
+
+| Component | Platform | Purpose |
+|-----------|----------|---------|
+| `terminal/uia_reader.rs` | Windows | UI Automation text reading (replaces AX reader) |
+| `terminal/process_win.rs` or inline `windows` mod | Windows | Process tree walking + CWD via PEB |
+| `terminal/detect_win.rs` or inline `windows` mod | Windows | Exe name detection, terminal classification |
+| `commands/paste_win.rs` or inline `windows` mod | Windows | Clipboard + SendInput paste |
+| `commands/hotkey_win.rs` or inline `windows` mod | Windows | GetForegroundWindow + HWND storage |
+
+All of these can be either separate files or `mod windows { }` blocks inside existing files, following the `ax_reader.rs` pattern.
 
 ---
 
 ## Sources
 
-- `src-tauri/src/state.rs` -- existing AppState structure showing Mutex field pattern
-- `src-tauri/src/commands/hotkey.rs` -- existing capture-before-show pattern
-- `src-tauri/src/terminal/detect.rs` -- existing `get_bundle_id` ObjC FFI pattern
-- `src/store/index.ts` -- existing Zustand store showing `turnHistory` and `show()` behavior
-- [CGWindowListCopyWindowInfo Apple Developer Documentation](https://developer.apple.com/documentation/coregraphics/1455137-cgwindowlistcopywindowinfo)
-- [pdubs -- CGWindowListCopyWindowInfo for PID-to-window mapping](https://github.com/mikesmithgh/pdubs)
-- [GetWindowID -- CGWindowID retrieval utility](https://github.com/smokris/GetWindowID)
-- [macOS window enumeration patterns](https://www.symdon.info/posts/1729078231/)
-- [Accessibility API: AXUIElement to window discussion](https://developer.apple.com/forums/thread/121114)
+- [window-vibrancy crate](https://github.com/tauri-apps/window-vibrancy) -- Windows Acrylic/Mica support (HIGH confidence)
+- [uiautomation-rs crate](https://github.com/leexgone/uiautomation-rs) -- Windows UI Automation wrapper (MEDIUM confidence)
+- [keyring crate](https://github.com/open-source-cooperative/keyring-rs) -- Cross-platform credential storage including Windows Credential Manager (HIGH confidence)
+- [Windows SendInput documentation](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput) -- Keyboard simulation (HIGH confidence)
+- [GetForegroundWindow documentation](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getforegroundwindow) -- Active window detection (HIGH confidence)
+- [NtQueryInformationProcess documentation](https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntqueryinformationprocess) -- Remote process PEB/CWD reading (MEDIUM confidence)
+- [WS_EX_NOACTIVATE behavior](https://devblogs.microsoft.com/oldnewthing/20240919-00/?p=110283) -- Non-activating window caveats (HIGH confidence)
+- [NVDA UIA console support](https://github.com/nvaccess/nvda/pull/9614) -- Validates UIA text reading from Windows Terminal (MEDIUM confidence)
+- [Tauri v2 Window Customization](https://v2.tauri.app/learn/window-customization/) -- Tauri window configuration (HIGH confidence)
+- [clipboard-win crate](https://crates.io/crates/clipboard-win) -- Windows clipboard operations (HIGH confidence)
+- [Tauri v2 System Tray](https://v2.tauri.app/learn/system-tray/) -- Cross-platform tray API (HIGH confidence)
+- [Windows Extended Window Styles](https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles) -- WS_EX flags reference (HIGH confidence)
+- Codebase analysis: `src-tauri/src/` -- all existing modules reviewed for platform coupling
 
 ---
 
-*Architecture research for: CMD+K v0.1.1 per-terminal-window history and AI follow-up context*
-*Researched: 2026-02-28*
+*Architecture research for: CMD+K v0.2.1 Windows platform support*
+*Researched: 2026-03-01*

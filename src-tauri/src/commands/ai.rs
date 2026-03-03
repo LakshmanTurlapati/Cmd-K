@@ -7,8 +7,9 @@ use tauri_plugin_http::reqwest;
 const SERVICE: &str = "com.lakshmanturlapati.cmd-k";
 const ACCOUNT: &str = "xai_api_key";
 
-/// System prompt for terminal mode: strict command-only output.
+/// System prompt for terminal mode on macOS: strict command-only output.
 /// Placeholder {shell_type} is replaced at runtime.
+#[cfg(target_os = "macos")]
 const TERMINAL_SYSTEM_PROMPT_TEMPLATE: &str =
     "You are a terminal command generator for macOS. Given the user's task description and terminal \
      context, output ONLY the exact command(s) to run. No explanations, no markdown, no code fences. \
@@ -16,9 +17,40 @@ const TERMINAL_SYSTEM_PROMPT_TEMPLATE: &str =
      Prefer common POSIX tools (grep, find, sed, awk) over modern alternatives (rg, fd, jq). \
      The user is on macOS with {shell_type} shell.";
 
+/// System prompt for terminal mode on Windows: strict command-only output.
+/// Placeholder {shell_type} is replaced at runtime.
+#[cfg(target_os = "windows")]
+const TERMINAL_SYSTEM_PROMPT_TEMPLATE: &str =
+    "You are a terminal command generator for Windows. Given the user's task description and terminal \
+     context, output ONLY the exact command(s) to run. No explanations, no markdown, no code fences. \
+     Just the raw command(s). If multiple commands are needed, separate them with && or use pipes. \
+     The user is on Windows with {shell_type} shell. Use native Windows commands when appropriate. \
+     For PowerShell, prefer cmdlets (Get-ChildItem, Select-String, etc.). \
+     For CMD, use standard commands (dir, findstr, etc.). \
+     For bash/Git Bash, use POSIX tools.";
+
+/// Fallback system prompt for other platforms.
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+const TERMINAL_SYSTEM_PROMPT_TEMPLATE: &str =
+    "You are a terminal command generator. Given the user's task description and terminal \
+     context, output ONLY the exact command(s) to run. No explanations, no markdown, no code fences. \
+     Just the raw command(s). If multiple commands are needed, separate them with && or use pipes. \
+     The user has {shell_type} shell.";
+
 /// System prompt for assistant mode: concise conversational responses.
+#[cfg(target_os = "macos")]
 const ASSISTANT_SYSTEM_PROMPT: &str =
     "You are a concise assistant accessed via a macOS overlay. Answer in 2-3 sentences maximum. \
+     Be direct and helpful. No markdown formatting, no code fences unless the user explicitly asks for code.";
+
+#[cfg(target_os = "windows")]
+const ASSISTANT_SYSTEM_PROMPT: &str =
+    "You are a concise assistant accessed via a Windows overlay. Answer in 2-3 sentences maximum. \
+     Be direct and helpful. No markdown formatting, no code fences unless the user explicitly asks for code.";
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+const ASSISTANT_SYSTEM_PROMPT: &str =
+    "You are a concise assistant accessed via a desktop overlay. Answer in 2-3 sentences maximum. \
      Be direct and helpful. No markdown formatting, no code fences unless the user explicitly asks for code.";
 
 /// Represents a previous conversation turn passed from the frontend.

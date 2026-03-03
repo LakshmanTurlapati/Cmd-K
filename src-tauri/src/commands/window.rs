@@ -1,4 +1,6 @@
 use tauri::{AppHandle, Emitter, LogicalPosition, Manager};
+
+#[cfg(target_os = "macos")]
 use tauri_nspanel::ManagerExt;
 
 use crate::state::AppState;
@@ -16,11 +18,26 @@ pub fn show_overlay(app: AppHandle) -> Result<(), String> {
     // Position overlay on the monitor where the user is working
     position_overlay(&app)?;
 
-    let panel = app
-        .get_webview_panel("main")
-        .map_err(|e| format!("Panel 'main' not found: {:?}", e))?;
+    // macOS: use NSPanel show_and_make_key for non-activating overlay
+    #[cfg(target_os = "macos")]
+    {
+        let panel = app
+            .get_webview_panel("main")
+            .map_err(|e| format!("Panel 'main' not found: {:?}", e))?;
 
-    panel.show_and_make_key();
+        panel.show_and_make_key();
+    }
+
+    // Non-macOS: use standard Tauri window show + focus
+    #[cfg(not(target_os = "macos"))]
+    {
+        let window = app
+            .get_webview_window("main")
+            .ok_or_else(|| "Window 'main' not found".to_string())?;
+
+        window.show().map_err(|e| e.to_string())?;
+        window.set_focus().map_err(|e| e.to_string())?;
+    }
 
     // Update visibility state
     if let Some(state) = app.try_state::<AppState>() {
@@ -38,11 +55,76 @@ pub fn show_overlay(app: AppHandle) -> Result<(), String> {
 /// Hide the overlay panel by calling hide() to remove it from screen.
 #[tauri::command]
 pub fn hide_overlay(app: AppHandle) -> Result<(), String> {
-    let panel = app
-        .get_webview_panel("main")
-        .map_err(|e| format!("Panel 'main' not found: {:?}", e))?;
+    // macOS: use NSPanel hide
+    #[cfg(target_os = "macos")]
+    {
+        let panel = app
+            .get_webview_panel("main")
+            .map_err(|e| format!("Panel 'main' not found: {:?}", e))?;
 
-    panel.hide();
+        panel.hide();
+    }
+
+    // Non-macOS: use standard Tauri window hide + Windows focus restoration
+    #[cfg(not(target_os = "macos"))]
+    {
+        let window = app
+            .get_webview_window("main")
+            .ok_or_else(|| "Window 'main' not found".to_string())?;
+
+        // Windows: check if we are still the foreground window BEFORE hiding.
+        // If the user clicked outside, another window is already foreground
+        // and we should NOT forcefully restore focus to the original previous_hwnd.
+        #[cfg(target_os = "windows")]
+        let should_restore_focus = {
+            use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+
+            let our_hwnd: isize = if let Ok(handle) = window.window_handle() {
+                if let RawWindowHandle::Win32(win32) = handle.as_raw() {
+                    win32.hwnd.get() as isize
+                } else {
+                    0
+                }
+            } else {
+                0
+            };
+
+            use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+            let current_fg = unsafe { GetForegroundWindow() };
+            // If our overlay is still the foreground window, this is an Escape/hotkey dismiss
+            // and we should restore focus. If another window is foreground, the user clicked
+            // outside and that window should keep focus.
+            our_hwnd != 0 && current_fg == our_hwnd as windows_sys::Win32::Foundation::HWND
+        };
+
+        window.hide().map_err(|e| e.to_string())?;
+
+        // Windows: restore focus to previously captured window if appropriate,
+        // then clear previous_hwnd (we own the full lifecycle: read → restore → clear).
+        #[cfg(target_os = "windows")]
+        {
+            if should_restore_focus {
+                if let Some(state) = app.try_state::<AppState>() {
+                    let prev_hwnd = state.previous_hwnd.lock().ok().and_then(|g| *g);
+                    if let Some(hwnd) = prev_hwnd {
+                        let restored = crate::commands::hotkey::restore_focus(hwnd);
+                        eprintln!(
+                            "[hide_overlay] focus restored to HWND {}: {}",
+                            hwnd, restored
+                        );
+                    }
+                }
+            } else {
+                eprintln!("[hide_overlay] not restoring focus -- user clicked outside");
+            }
+            // Clear previous_hwnd after use (regardless of restore path)
+            if let Some(state) = app.try_state::<AppState>() {
+                if let Ok(mut prev) = state.previous_hwnd.lock() {
+                    *prev = None;
+                }
+            }
+        }
+    }
 
     // Update visibility state
     if let Some(state) = app.try_state::<AppState>() {

@@ -47,6 +47,18 @@ static DESTRUCTIVE_PATTERNS: Lazy<RegexSet> = Lazy::new(|| {
         r"\bformat\s+[A-Za-z]:",
         r">\s*/dev/sd[a-z]",
         r">\s*/dev/disk[0-9]",
+        // Windows-specific destructive commands
+        r"(?i)\bdel\s+/s\b",
+        r"(?i)\brd\s+/s\b",
+        r"(?i)\brmdir\s+/s\b",
+        r"(?i)\bformat\s+[A-Za-z]:\b",
+        r"(?i)\bRemove-Item\s+.*-Recurse\s+.*-Force\b",
+        r"(?i)\bRemove-Item\s+.*-Force\s+.*-Recurse\b",
+        r"(?i)\bReg\s+Delete\b",
+        r"(?i)\bbcdedit\b",
+        r"(?i)\bdiskpart\b",
+        r"(?i)\btaskkill\s+/f\b",
+        r"(?i)\bStop-Process\s+.*-Force\b",
     ])
     .expect("DESTRUCTIVE_PATTERNS regex set failed to compile")
 });

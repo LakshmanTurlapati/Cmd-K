@@ -10,8 +10,11 @@
 //! - proc_listchildpids(ppid, buf, size)            -> child PIDs for process tree walk
 
 /// Known shell binary names. Used to distinguish shells from other processes.
+/// Includes both Unix names (for macOS) and Windows names (stripped of .exe by get_process_name).
 const KNOWN_SHELLS: &[&str] = &[
     "bash", "zsh", "fish", "sh", "dash", "tcsh", "csh", "ksh", "nu", "elvish", "ion", "xonsh",
+    // Windows shell names (after stripping .exe)
+    "powershell", "pwsh", "cmd",
 ];
 
 /// Process names indicating a terminal multiplexer that requires deeper process tree walking.
@@ -199,8 +202,131 @@ fn get_process_cwd_lsof(pid: i32) -> Option<String> {
     None
 }
 
-/// Non-macOS stub.
-#[cfg(not(target_os = "macos"))]
+/// Windows: get CWD of a process via NtQueryInformationProcess → PEB → ProcessParameters.
+///
+/// This reads the remote process's PEB (Process Environment Block) to extract the
+/// CurrentDirectory path from RTL_USER_PROCESS_PARAMETERS. Requires PROCESS_QUERY_INFORMATION
+/// and PROCESS_VM_READ access. Returns None for elevated processes (Access Denied) or on error.
+#[cfg(target_os = "windows")]
+fn get_process_cwd(pid: i32) -> Option<String> {
+    get_process_cwd_windows(pid as u32)
+}
+
+#[cfg(target_os = "windows")]
+fn get_process_cwd_windows(pid: u32) -> Option<String> {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ,
+    };
+
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, pid);
+        if handle.is_null() {
+            eprintln!("[process] get_process_cwd_windows: OpenProcess failed for pid {} (access denied?)", pid);
+            return None;
+        }
+
+        let result = read_cwd_from_peb(handle);
+        CloseHandle(handle);
+        result
+    }
+}
+
+/// Read CWD from a process handle by walking PEB → ProcessParameters → CurrentDirectory.
+#[cfg(target_os = "windows")]
+unsafe fn read_cwd_from_peb(handle: windows_sys::Win32::Foundation::HANDLE) -> Option<String> {
+    use std::mem::size_of;
+    use windows_sys::Wdk::System::Threading::NtQueryInformationProcess;
+
+    // PROCESS_BASIC_INFORMATION layout for 64-bit
+    #[repr(C)]
+    struct ProcessBasicInformation {
+        _reserved1: usize,
+        peb_base_address: usize,
+        _reserved2: [usize; 2],
+        unique_process_id: usize,
+        _reserved3: usize,
+    }
+
+    let mut pbi = std::mem::zeroed::<ProcessBasicInformation>();
+    let mut return_length: u32 = 0;
+    let status = NtQueryInformationProcess(
+        handle,
+        0, // ProcessBasicInformation
+        &mut pbi as *mut _ as *mut _,
+        size_of::<ProcessBasicInformation>() as u32,
+        &mut return_length,
+    );
+
+    if status != 0 {
+        eprintln!("[process] NtQueryInformationProcess failed: 0x{:08x}", status);
+        return None;
+    }
+
+    if pbi.peb_base_address == 0 {
+        return None;
+    }
+
+    // Read ProcessParameters pointer from PEB (offset 0x20 on 64-bit)
+    let params_ptr_addr = pbi.peb_base_address + 0x20;
+    let mut params_ptr: usize = 0;
+    let ok = read_process_memory(handle, params_ptr_addr, &mut params_ptr as *mut _ as *mut u8, size_of::<usize>());
+    if !ok || params_ptr == 0 {
+        return None;
+    }
+
+    // RTL_USER_PROCESS_PARAMETERS: CurrentDirectory.DosPath is a UNICODE_STRING at offset 0x38
+    // UNICODE_STRING layout: u16 Length, u16 MaxLength, padding, u64 Buffer pointer
+    let cwd_unicode_string_addr = params_ptr + 0x38;
+    let mut length: u16 = 0;
+    let ok = read_process_memory(handle, cwd_unicode_string_addr, &mut length as *mut _ as *mut u8, size_of::<u16>());
+    if !ok || length == 0 {
+        return None;
+    }
+
+    let mut buffer_ptr: usize = 0;
+    let buffer_ptr_addr = cwd_unicode_string_addr + 8; // skip Length (2), MaxLength (2), padding (4)
+    let ok = read_process_memory(handle, buffer_ptr_addr, &mut buffer_ptr as *mut _ as *mut u8, size_of::<usize>());
+    if !ok || buffer_ptr == 0 {
+        return None;
+    }
+
+    // Read the actual CWD string (UTF-16)
+    let char_count = (length as usize) / 2;
+    let mut buf = vec![0u16; char_count];
+    let ok = read_process_memory(handle, buffer_ptr, buf.as_mut_ptr() as *mut u8, length as usize);
+    if !ok {
+        return None;
+    }
+
+    let cwd = String::from_utf16_lossy(&buf);
+    // Strip trailing backslash (e.g., "C:\Users\foo\" → "C:\Users\foo")
+    let cwd = cwd.trim_end_matches('\\').to_string();
+    if cwd.is_empty() {
+        None
+    } else {
+        eprintln!("[process] CWD for pid via PEB: {}", &cwd);
+        Some(cwd)
+    }
+}
+
+/// Helper: ReadProcessMemory wrapper.
+#[cfg(target_os = "windows")]
+unsafe fn read_process_memory(handle: windows_sys::Win32::Foundation::HANDLE, address: usize, buffer: *mut u8, size: usize) -> bool {
+    use windows_sys::Win32::System::Diagnostics::Debug::ReadProcessMemory;
+    let mut bytes_read: usize = 0;
+    let ok = ReadProcessMemory(
+        handle,
+        address as *const _,
+        buffer as *mut _,
+        size,
+        &mut bytes_read,
+    );
+    ok != 0 && bytes_read == size
+}
+
+/// Non-macOS, non-Windows stub.
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn get_process_cwd(_pid: i32) -> Option<String> {
     None
 }
@@ -226,8 +352,15 @@ fn get_process_name(pid: i32) -> Option<String> {
         .map(|s| s.to_string())
 }
 
-/// Non-macOS stub.
-#[cfg(not(target_os = "macos"))]
+/// Windows: get process name via QueryFullProcessImageNameW.
+#[cfg(target_os = "windows")]
+fn get_process_name(pid: i32) -> Option<String> {
+    super::detect_windows::get_exe_name_for_pid(pid as u32)
+        .map(|exe| exe.trim_end_matches(".exe").trim_end_matches(".EXE").to_string())
+}
+
+/// Non-macOS, non-Windows stub.
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn get_process_name(_pid: i32) -> Option<String> {
     None
 }
@@ -305,8 +438,50 @@ fn get_child_pids_sysctl(ppid: i32) -> Vec<i32> {
     }
 }
 
-/// Non-macOS stub.
-#[cfg(not(target_os = "macos"))]
+/// Windows: get child PIDs via CreateToolhelp32Snapshot.
+#[cfg(target_os = "windows")]
+fn get_child_pids(pid: i32) -> Vec<i32> {
+    get_child_pids_windows(pid as u32)
+        .into_iter()
+        .map(|p| p as i32)
+        .collect()
+}
+
+#[cfg(target_os = "windows")]
+fn get_child_pids_windows(ppid: u32) -> Vec<u32> {
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
+    };
+
+    unsafe {
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if snapshot == INVALID_HANDLE_VALUE {
+            return Vec::new();
+        }
+
+        let mut entry: PROCESSENTRY32W = std::mem::zeroed();
+        entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+
+        let mut children = Vec::new();
+        if Process32FirstW(snapshot, &mut entry) != 0 {
+            loop {
+                if entry.th32ParentProcessID == ppid && entry.th32ProcessID != ppid {
+                    children.push(entry.th32ProcessID);
+                }
+                if Process32NextW(snapshot, &mut entry) == 0 {
+                    break;
+                }
+            }
+        }
+        CloseHandle(snapshot);
+        children
+    }
+}
+
+/// Non-macOS, non-Windows stub.
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn get_child_pids(_pid: i32) -> Vec<i32> {
     Vec::new()
 }
@@ -548,7 +723,87 @@ fn is_sub_shell_of_any(pid: i32, ancestor_pids: &[i32], parent_map: &std::collec
     false
 }
 
-#[cfg(not(target_os = "macos"))]
+/// Windows: find shell processes that are descendants of the given app PID.
+///
+/// Uses CreateToolhelp32Snapshot to build a full process tree and walk ancestors.
+#[cfg(target_os = "windows")]
+fn find_shell_by_ancestry(app_pid: i32, _focused_cwd: Option<&str>) -> Option<i32> {
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
+    };
+
+    unsafe {
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if snapshot == INVALID_HANDLE_VALUE {
+            return None;
+        }
+
+        // Build parent map and collect shell candidates
+        let mut parent_map: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
+        let mut shell_candidates: Vec<(u32, String)> = Vec::new();
+
+        let mut entry: PROCESSENTRY32W = std::mem::zeroed();
+        entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+
+        if Process32FirstW(snapshot, &mut entry) != 0 {
+            loop {
+                parent_map.insert(entry.th32ProcessID, entry.th32ParentProcessID);
+
+                // Get exe name from the entry
+                let name_len = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
+                let name = String::from_utf16_lossy(&entry.szExeFile[..name_len]);
+
+                if super::detect_windows::is_known_shell_exe(&name) {
+                    shell_candidates.push((entry.th32ProcessID, name));
+                }
+
+                if Process32NextW(snapshot, &mut entry) == 0 {
+                    break;
+                }
+            }
+        }
+        CloseHandle(snapshot);
+
+        let app_pid_u32 = app_pid as u32;
+
+        // Check which shells are descendants of app_pid
+        let mut descendant_shells: Vec<(u32, String)> = Vec::new();
+        for (pid, name) in &shell_candidates {
+            let mut current = *pid;
+            let mut is_desc = false;
+            for _ in 0..20 {
+                match parent_map.get(&current) {
+                    Some(&ppid) if ppid == app_pid_u32 => {
+                        is_desc = true;
+                        break;
+                    }
+                    Some(&ppid) if ppid <= 1 || ppid == current => break,
+                    Some(&ppid) => current = ppid,
+                    None => break,
+                }
+            }
+            if is_desc {
+                eprintln!("[process] Windows shell pid {} ({}) is a descendant of {}", pid, name, app_pid);
+                descendant_shells.push((*pid, name.clone()));
+            }
+        }
+
+        if descendant_shells.is_empty() {
+            eprintln!("[process] no shell found as descendant of {} on Windows", app_pid);
+            return None;
+        }
+
+        // Pick the most recently spawned (highest PID) shell
+        descendant_shells.iter()
+            .max_by_key(|(pid, _)| *pid)
+            .map(|(pid, _)| *pid as i32)
+    }
+}
+
+/// Non-macOS, non-Windows stub.
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn find_shell_by_ancestry(_app_pid: i32, _focused_cwd: Option<&str>) -> Option<i32> {
     None
 }

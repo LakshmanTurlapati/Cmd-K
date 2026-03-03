@@ -2,6 +2,7 @@ import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Store } from "@tauri-apps/plugin-store";
 import { useOverlayStore } from "@/store";
+import { isWindows, displayModifier } from "@/utils/platform";
 import { HotkeyRecorder } from "./HotkeyRecorder";
 
 interface Preset {
@@ -10,13 +11,23 @@ interface Preset {
   note?: string;
 }
 
-const PRESETS: Preset[] = [
-  { label: "Cmd + K", shortcut: "Super+KeyK", note: "default" },
-  { label: "Cmd + Shift + K", shortcut: "Super+Shift+KeyK" },
-  { label: "Ctrl + Space", shortcut: "Control+Space" },
-  { label: "Option + Space", shortcut: "Alt+Space" },
-  { label: "Cmd + Shift + Space", shortcut: "Super+Shift+Space" },
-];
+const WIN = isWindows();
+
+const PRESETS: Preset[] = WIN
+  ? [
+      { label: "Ctrl + K", shortcut: "Control+KeyK", note: "default" },
+      { label: "Ctrl + Shift + K", shortcut: "Control+Shift+KeyK" },
+      { label: "Ctrl + Space", shortcut: "Control+Space" },
+      { label: "Alt + Space", shortcut: "Alt+Space" },
+      { label: "Ctrl + Shift + Space", shortcut: "Control+Shift+Space" },
+    ]
+  : [
+      { label: "Cmd + K", shortcut: "Super+KeyK", note: "default" },
+      { label: "Cmd + Shift + K", shortcut: "Super+Shift+KeyK" },
+      { label: "Ctrl + Space", shortcut: "Control+Space" },
+      { label: "Option + Space", shortcut: "Alt+Space" },
+      { label: "Cmd + Shift + Space", shortcut: "Super+Shift+Space" },
+    ];
 
 type Status = "idle" | "applying" | "success" | { error: string };
 
@@ -77,9 +88,9 @@ export function HotkeyConfig() {
     return shortcut
       .split("+")
       .map((part) => {
-        if (part === "Super") return "Cmd";
+        if (part === "Super") return displayModifier("Super");
         if (part === "Control") return "Ctrl";
-        if (part === "Alt") return "Option";
+        if (part === "Alt") return displayModifier("Alt");
         if (part.startsWith("Key")) return part.slice(3);
         if (part.startsWith("Digit")) return part.slice(5);
         return part;

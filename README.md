@@ -10,10 +10,10 @@
 
 *AI-powered terminal commands, one keystroke away.*
 
-Press Cmd+K from anywhere on your Mac. Type what you want. Get a working command. That's it.
+Press a hotkey from anywhere on your desktop. Type what you want. Get a working command. That's it.
 
 ![macOS](https://img.shields.io/badge/macOS-555555?style=for-the-badge&logo=apple&logoColor=white)
-![Windows](https://img.shields.io/badge/Windows-Coming_Soon-555555?style=for-the-badge&logo=windows&logoColor=white)
+![Windows](https://img.shields.io/badge/Windows-555555?style=for-the-badge&logo=windows&logoColor=white)
 ![Linux](https://img.shields.io/badge/Linux-Coming_Soon-555555?style=for-the-badge&logo=linux&logoColor=white)
 [![Website](https://img.shields.io/badge/Website-cmd--k.site-555555?style=for-the-badge&logo=safari&logoColor=white)](https://www.cmd-k.site)
 
@@ -42,7 +42,7 @@ Shell plugins need dotfile wiring. Copilot needs a subscription and an IDE. Chat
 
 ## The Solution
 
-CMD+K is a **native macOS overlay**. Press Cmd+K from any application, type plain English, and get a working terminal command -- streamed in real-time. It reads your terminal context (current directory, recent output, shell type) via the Accessibility API and process introspection. No plugins. No rc files. No IDE. No browser tab.
+CMD+K is a **native desktop overlay**. Press a hotkey from any application, type plain English, and get a working terminal command -- streamed in real-time. It reads your terminal context (current directory, recent output, shell type) via platform accessibility APIs and process introspection. No plugins. No rc files. No IDE. No browser tab.
 
 And when the generated command would `rm -rf` your home directory or `DROP` your production database, CMD+K tells you before you run it.
 
@@ -52,13 +52,13 @@ And when the generated command would `rm -rf` your home directory or `DROP` your
 
 | Feature | Description |
 |---|---|
-| **System-Wide Overlay** | Floating NSPanel overlay triggered by a global hotkey from any application. No dock icon, no window clutter -- just a translucent command bar that appears and disappears. |
+| **System-Wide Overlay** | Floating overlay triggered by a global hotkey from any application. No dock icon, no window clutter -- just a translucent command bar that appears and disappears. |
 | **Natural Language Commands** | Describe what you want in plain English. xAI Grok models stream a working terminal command back token-by-token. |
-| **Zero-Config Context Detection** | Reads your current working directory, shell type, and recent terminal output via macOS Accessibility API and libproc. No shell plugins, no rc file edits. |
+| **Zero-Config Context Detection** | Reads your current working directory, shell type, and recent terminal output via platform accessibility APIs and process introspection. No shell plugins, no rc file edits. |
 | **Multi-Terminal Support** | Detects and reads context from Terminal.app, iTerm2, Alacritty, kitty, and WezTerm. Recognizes shells inside VS Code and Cursor. |
 | **Browser DevTools Support** | Detects open DevTools consoles in Chrome, Safari, Firefox, Arc, Edge, and Brave. Switches to a conversational assistant mode for web debugging. |
 | **Destructive Command Safety** | 50+ regex patterns flag dangerous commands (rm -rf, DROP TABLE, git push --force, etc.) with a red badge and an AI-generated plain-English explanation of the risk. |
-| **Secure API Key Storage** | Your xAI API key lives in the macOS Keychain. It never touches a plaintext config file and never leaves the Rust backend. |
+| **Secure API Key Storage** | Your xAI API key lives in your system's secure credential store. It never touches a plaintext config file and never leaves the Rust backend. |
 | **Smart Onboarding** | A 4-step wizard handles Accessibility permissions, API key validation, and model selection on first launch. No manual setup required. |
 | **Configurable Hotkey** | Change the trigger shortcut to any key combination. Preset suggestions and a custom key recorder are built in. |
 | **Lightweight Native App** | Built with Tauri 2 and Rust. Runs as a menu bar utility with minimal memory footprint. No Electron. No bundled Chromium. |
@@ -67,12 +67,12 @@ And when the generated command would `rm -rf` your home directory or `DROP` your
 
 ## How It Works
 
-1. **Press the hotkey** -- Cmd+K (default) from any application. The overlay appears centered on your active screen.
+1. **Press the hotkey** -- Cmd+K on macOS, Ctrl+K on Windows (default) from any application. The overlay appears centered on your active screen.
 2. **Type your intent** -- Describe what you want in natural language. "Find all PDFs modified this week" or "Kill whatever is hogging port 3000."
-3. **Context is gathered** -- CMD+K captures the foreground app's PID, resolves the active terminal's working directory, shell type, and recent visible output via Accessibility API.
+3. **Context is gathered** -- CMD+K captures the foreground app's PID, resolves the active terminal's working directory, shell type, and recent visible output via platform accessibility APIs.
 4. **AI generates the command** -- Your query plus context is sent to xAI. The response streams token-by-token into the results area with shell syntax highlighting.
 5. **Safety check runs** -- Once generation completes, the command is scanned against 50+ destructive patterns. Matches trigger a red badge with an AI-powered risk explanation.
-6. **Copy or auto-paste** -- Click the result to copy to clipboard, or let CMD+K paste directly into Terminal.app or iTerm2 via AppleScript.
+6. **Copy or auto-paste** -- Click the result to copy to clipboard, or let CMD+K paste directly into your terminal.
 7. **Dismiss** -- Press Escape. The overlay vanishes. Focus returns to your previous application.
 
 ---
@@ -161,7 +161,7 @@ graph TB
 
 ### Prerequisites
 
-- macOS 13+ (Ventura or later)
+- macOS 13+ (Ventura or later) or Windows 10+
 - [Rust](https://rustup.rs/) (latest stable)
 - [Node.js](https://nodejs.org/) 18+
 - [pnpm](https://pnpm.io/)
@@ -186,7 +186,7 @@ pnpm tauri dev
 On first launch, the onboarding wizard will walk you through:
 
 1. **Accessibility Permission** -- CMD+K needs this to read terminal context. The wizard links you to System Settings.
-2. **API Key** -- Enter your xAI API key. It's validated against the xAI API and stored in your macOS Keychain.
+2. **API Key** -- Enter your xAI API key. It's validated against the xAI API and stored securely in your system credential store.
 3. **Model Selection** -- Choose your preferred Grok model (grok-3 recommended).
 
 ### Build for Production
@@ -195,7 +195,7 @@ On first launch, the onboarding wizard will walk you through:
 pnpm tauri build
 ```
 
-The `.dmg` installer will be in `src-tauri/target/release/bundle/dmg/`.
+The installer will be in `src-tauri/target/release/bundle/` (`.dmg` on macOS, `.msi` on Windows).
 
 ---
 
@@ -275,9 +275,9 @@ cmd-k/
 
 | Setting | Location | Description |
 |---|---|---|
-| **API Key** | macOS Keychain (`com.lakshmanturlapati.cmd-k`) | xAI API key. Never stored in plaintext. Never sent to the frontend. |
+| **API Key** | System credential store (macOS Keychain / Windows Credential Manager) | xAI API key. Never stored in plaintext. Never sent to the frontend. |
 | **Model** | Tauri Store (`settings.json`) | Grok model selection: `grok-3` (default), `grok-3-mini`, `grok-4`, `grok-4-fast` |
-| **Hotkey** | Tauri Store (`settings.json`) | Global trigger shortcut. Default: `Cmd+K`. Supports any modifier+key combination. |
+| **Hotkey** | Tauri Store (`settings.json`) | Global trigger shortcut. Default: `Cmd+K` (macOS) / `Ctrl+K` (Windows). Supports any modifier+key combination. |
 | **Destructive Detection** | Settings > Preferences | Toggle safety pattern scanning on/off. Default: enabled. |
 | **Auto-Paste** | Settings > Preferences | Auto-paste generated commands to active terminal. Default: enabled. |
 
@@ -316,6 +316,6 @@ cmd-k/
 
 Built by [Lakshman Turlapati](https://github.com/LakshmanTurlapati)
 
-If CMD+K saved you a trip to Stack Overflow, consider giving it a star.
+If CMD+K saved you from copy-pasting from ChatGPT, consider giving it a star.
 
 </div>

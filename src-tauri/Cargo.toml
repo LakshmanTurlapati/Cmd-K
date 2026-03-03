@@ -1,7 +1,7 @@
 [package]
 name = "cmd-k"
-version = "0.1.1"
-description = "CMD+K - AI-powered terminal command overlay for macOS"
+version = "0.2.1"
+description = "CMD+K - AI-powered terminal command overlay"
 authors = ["CMD+K"]
 edition = "2021"
 
@@ -22,16 +22,34 @@ tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-positioner = "2"
 tauri-plugin-store = "2"
-tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2.1" }
-window-vibrancy = "0.5"
+window-vibrancy = "0.7"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-keyring = { version = "3", features = ["apple-native"] }
 tauri-plugin-http = { version = "2", features = ["stream"] }
 eventsource-stream = "0.2"
 futures-util = "0.3"
 tokio = { version = "1", features = ["time"] }
-accessibility-sys = "0.2"
-core-foundation-sys = "0.8"
 regex = "1"
 once_cell = "1"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2.1" }
+accessibility-sys = "0.2"
+core-foundation-sys = "0.8"
+keyring = { version = "3", features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Foundation",
+    "Win32_System_Threading",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_Security",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Wdk_System_Threading",
+] }
+raw-window-handle = "0.6"
+keyring = { version = "3", features = ["windows-native"] }
+arboard = "3"
+uiautomation = "0.24"

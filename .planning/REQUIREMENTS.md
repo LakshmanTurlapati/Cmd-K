@@ -1,0 +1,134 @@
+# Requirements: CMD+K v0.2.1 Windows Support
+
+**Defined:** 2026-03-01
+**Core Value:** The overlay must appear on top of the active application and feel instant -- same experience on Windows as macOS
+
+## v0.2.1 Requirements
+
+Requirements for Windows platform port. Each maps to roadmap phases.
+
+### Windows Overlay (WOVL)
+
+- [x] **WOVL-01**: Overlay window appears with Acrylic (Win10) or Mica (Win11) frosted glass vibrancy
+- [x] **WOVL-02**: Overlay floats above all windows with always-on-top and skip-taskbar behavior
+- [x] **WOVL-03**: Overlay does not appear in Alt+Tab or taskbar (WS_EX_TOOLWINDOW)
+- [x] **WOVL-04**: Previous window HWND captured before overlay shows for focus restoration
+- [x] **WOVL-05**: Focus returns to previous terminal window on overlay dismiss (SetForegroundWindow)
+- [x] **WOVL-06**: Ctrl+Shift+K default hotkey triggers overlay system-wide (configurable)
+- [x] **WOVL-07**: Escape dismisses overlay without executing
+
+### Windows Terminal Context (WCTX)
+
+- [x] **WCTX-01**: Shell PID detected via process tree walking for Windows Terminal, PowerShell, CMD, Git Bash
+- [x] **WCTX-02**: Current working directory read from shell process via NtQueryInformationProcess PEB traversal
+- [x] **WCTX-03**: Shell type detected (powershell.exe, pwsh.exe, cmd.exe, bash.exe)
+- [x] **WCTX-04**: Window key computed as exe_name:shell_pid for per-window history
+- [x] **WCTX-05**: Known terminal exe list identifies Windows Terminal, PowerShell, CMD, Git Bash, Hyper, Alacritty, WezTerm
+- [x] **WCTX-06**: CWD falls back gracefully to None for elevated/inaccessible processes
+
+### Windows Paste (WPST)
+
+- [x] **WPST-01**: Command written to clipboard via cross-platform API (replaces pbcopy)
+- [x] **WPST-02**: Terminal activated via SetForegroundWindow before paste
+- [x] **WPST-03**: Ctrl+V keystroke sent via SendInput to paste command into terminal
+- [x] **WPST-04**: Elevated terminal detected with user warning instead of silent failure
+- [x] **WPST-05**: Enter keystroke sent via SendInput for command confirmation
+
+### Windows Output Reading (WOUT)
+
+- [x] **WOUT-01**: Terminal text read via Windows UI Automation for Windows Terminal
+- [x] **WOUT-02**: Terminal text read via UIA for PowerShell and CMD (conhost)
+- [x] **WOUT-03**: Graceful None returned for terminals without UIA support (mintty, GPU terminals)
+
+### Windows Polish (WPLH)
+
+- [x] **WPLH-01**: Onboarding skips accessibility permission step on Windows (no equivalent needed)
+- [x] **WPLH-02**: AI system prompt identifies platform as Windows for context-appropriate command generation
+- [x] **WPLH-03**: Destructive command patterns include Windows-specific commands (Remove-Item -Recurse, rd /s, bcdedit, format, Reg Delete)
+- [x] **WPLH-04**: System tray shows context menu on right-click (Windows convention)
+- [x] **WPLH-05**: No macOS-specific permission API is called on Windows (permissions.rs returns true)
+- [x] **WPLH-06**: Keyboard shortcuts displayed as Ctrl (not Cmd) in UI on Windows
+
+### Windows Build & Distribution (WBLD)
+
+- [x] **WBLD-01**: Cargo.toml platform-gates macOS-only deps and adds Windows-only deps
+- [x] **WBLD-02**: Project compiles on both macOS and Windows without regressions
+- [x] **WBLD-03**: NSIS installer produces signed .exe setup with per-user install (no admin)
+- [x] **WBLD-04**: WebView2 runtime bootstrapper embedded in installer
+- [x] **WBLD-05**: ICO format tray icon included for Windows
+- [ ] **WBLD-06**: End-to-end testing verified on Windows Terminal, PowerShell, CMD, Git Bash
+
+## Deferred Requirements
+
+### WSL Support
+
+- **DWSL-01**: WSL shell CWD resolves to Windows path (VM PID namespace boundary)
+- **DWSL-02**: WSL terminal context provides Linux distro information
+
+### Advanced Features
+
+- **DADV-01**: Auto-start on login via tauri-plugin-autostart
+- **DADV-02**: MSI installer for enterprise Group Policy deployment
+- **DADV-03**: Clipboard save/restore around paste to prevent clobber
+- **DADV-04**: Git Bash (mintty) output reading
+- **DADV-05**: UIAccess manifest for cross-integrity SendInput to elevated terminals
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| WSL CWD detection | WSL2 runs in VM with separate PID namespace -- cannot read Linux process CWD from Windows |
+| ConPTY output injection | Invasive, antivirus will flag, fragile |
+| Running CMD+K as Administrator | Security anti-pattern, triggers UAC, breaks auto-start |
+| PowerShell profile auto-modification | Violates zero-setup constraint |
+| Custom DWM composition | Massive complexity for marginal visual improvement |
+| Linux support | Deferred to future milestone |
+| MSIX containerized package | Restricts filesystem access needed for process inspection |
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| WOVL-01 | Phase 11 | Complete |
+| WOVL-02 | Phase 11 | Complete |
+| WOVL-03 | Phase 11 | Complete |
+| WOVL-04 | Phase 11 | Complete |
+| WOVL-05 | Phase 11 | Complete |
+| WOVL-06 | Phase 11 | Complete |
+| WOVL-07 | Phase 11 | Complete |
+| WCTX-01 | Phase 12 | Complete |
+| WCTX-02 | Phase 12 | Complete |
+| WCTX-03 | Phase 12 | Complete |
+| WCTX-04 | Phase 12 | Complete |
+| WCTX-05 | Phase 12 | Complete |
+| WCTX-06 | Phase 12 | Complete |
+| WPST-01 | Phase 13 | Complete |
+| WPST-02 | Phase 13 | Complete |
+| WPST-03 | Phase 13 | Complete |
+| WPST-04 | Phase 13 | Complete |
+| WPST-05 | Phase 13 | Complete |
+| WOUT-01 | Phase 14 | Complete |
+| WOUT-02 | Phase 14 | Complete |
+| WOUT-03 | Phase 14 | Complete |
+| WPLH-01 | Phase 15 | Complete |
+| WPLH-02 | Phase 15 | Complete |
+| WPLH-03 | Phase 15 | Complete |
+| WPLH-04 | Phase 15 | Complete |
+| WPLH-05 | Phase 15 | Complete |
+| WPLH-06 | Phase 15 | Complete |
+| WBLD-01 | Phase 11 | Complete |
+| WBLD-02 | Phase 11 | Complete |
+| WBLD-03 | Phase 16 | Complete |
+| WBLD-04 | Phase 16 | Complete |
+| WBLD-05 | Phase 16 | Complete |
+| WBLD-06 | Phase 16 | Human Needed |
+
+**Coverage:**
+- v0.2.1 requirements: 33 total
+- Code complete: 32
+- Human verification needed: 1 (WBLD-06 — E2E testing)
+- Unmapped: 0
+
+---
+*Requirements defined: 2026-03-01*
+*Last updated: 2026-03-03 -- 32/33 requirements code-verified; WBLD-06 awaits Windows hardware E2E testing*
