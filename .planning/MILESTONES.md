@@ -1,5 +1,38 @@
 # Milestones
 
+## v0.2.1 Windows Support (Shipped: 2026-03-03)
+
+**Phases completed:** 7 phases (11-16, 01-merge), 6 GSD plans + 5 windows-branch phases
+**Timeline:** 2026-03-01 to 2026-03-03 (3 days)
+**Git range:** 30 commits (48 files changed, 4,734 insertions)
+**Codebase:** 5,879 LOC Rust + 3,262 LOC TypeScript
+
+**Key accomplishments:**
+1. Windows overlay with Acrylic frosted glass vibrancy, WS_EX_TOOLWINDOW (hidden from Alt+Tab/taskbar), HWND capture and AttachThreadInput focus restoration
+2. Windows terminal context: process tree walking via CreateToolhelp32Snapshot, CWD via NtQueryInformationProcess PEB traversal, shell type detection for PowerShell/CMD/Git Bash
+3. Clipboard paste via arboard + Ctrl+V SendInput keystroke injection, with elevated terminal detection and user warnings
+4. Windows UI Automation terminal text reader with TextPattern + tree walker fallback, graceful None for unsupported terminals
+5. Platform polish: Windows-specific AI prompts, 10 Windows destructive patterns (Remove-Item, rd /s, bcdedit, etc.), onboarding skip, Ctrl key labels, tray conventions
+6. NSIS installer with per-user install, embedded WebView2 bootstrapper, ICO tray icon
+7. Windows branch merged into main with cross-platform build scripts (build:mac, build:windows)
+
+**Delivered:** Full Windows port of CMD+K — hotkey overlay, terminal context, AI command generation, and paste, all via native Win32 APIs with zero shell configuration.
+
+### Known Gaps (deferred to v0.2.2)
+
+- **WBLD-06**: E2E testing on Windows Terminal, PowerShell, CMD, Git Bash (requires Windows hardware)
+- **WOVL-06 spec mismatch**: Default hotkey is Ctrl+K in code but Ctrl+Shift+K in spec — needs alignment
+- **Latent race**: confirm_terminal_command and hide_overlay are concurrent IPC calls — previous_hwnd may clear before paste reads it
+- **UIA conditional**: Terminal output reading skipped if shell type and CWD both fail (elevated terminals)
+- All 17 UAT test cases pending Windows hardware verification
+
+**Archives:**
+- milestones/v0.2.1-ROADMAP.md
+- milestones/v0.2.1-REQUIREMENTS.md
+- milestones/v0.2.1-MILESTONE-AUDIT.md
+
+---
+
 ## v0.1.0 MVP (Shipped: 2026-02-28)
 
 **Phases completed:** 8 phases, 21 plans
