@@ -628,6 +628,7 @@
   color: white;
   min-height: 24px;
   font-family: var(--font-sans);
+  position: relative;
 }
 
 .demo-overlay-input .placeholder {
@@ -679,6 +680,263 @@
   border: 1px solid rgba(239,68,68,0.3);
   margin-left: auto;
   transition: opacity 200ms ease;
+}
+
+/* -- Settings Panel Mockup -- */
+.demo-settings-panel {
+  display: none;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  animation: result-expand 180ms ease-out forwards;
+}
+
+.demo-settings-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.demo-settings-back {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.4);
+  cursor: default;
+  font-size: 14px;
+  padding: 0;
+  margin-right: 8px;
+  line-height: 1;
+}
+
+.demo-settings-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+}
+
+.demo-settings-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 12px;
+}
+
+.demo-settings-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: rgba(255,255,255,0.4);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 6px 10px;
+  cursor: default;
+  transition: color 150ms, border-color 150ms;
+}
+
+.demo-settings-tab.active {
+  color: white;
+  border-bottom-color: rgba(255,255,255,0.7);
+}
+
+.demo-settings-content {
+  flex: 1;
+  min-height: 0;
+}
+
+.demo-settings-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255,255,255,0.4);
+  margin-bottom: 6px;
+}
+
+.demo-settings-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.demo-settings-input {
+  flex: 1;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  color: rgba(255,255,255,0.6);
+  font-size: 12px;
+  padding: 7px 10px;
+  font-family: var(--font-mono);
+  outline: none;
+  cursor: default;
+}
+
+.demo-settings-check {
+  display: flex;
+  align-items: center;
+}
+
+.demo-settings-remove {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.3);
+  font-size: 11px;
+  padding: 0;
+  cursor: default;
+}
+
+.demo-model-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: rgba(255,255,255,0.7);
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+
+.demo-model-option.active {
+  background: rgba(255,255,255,0.15);
+  color: white;
+}
+
+.demo-model-badge {
+  font-size: 10px;
+  color: rgba(255,255,255,0.3);
+}
+
+.demo-settings-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+
+.demo-settings-logo {
+  height: 20px;
+  opacity: 0.25;
+}
+
+.demo-settings-version {
+  font-size: 9px;
+  color: rgba(255,255,255,0.25);
+}
+
+.demo-settings-links {
+  display: flex;
+  gap: 4px;
+  font-size: 9px;
+  color: rgba(255,255,255,0.3);
+}
+
+.demo-settings-sep {
+  color: rgba(255,255,255,0.15);
+}
+
+/* Ghost text prediction (matches CommandInput.tsx text-white/20) */
+.demo-overlay-ghost {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-size: 14px;
+  color: rgba(255,255,255,0.2);
+  font-family: var(--font-sans);
+  min-height: 24px;
+}
+
+/* Hotkey preset styles (Preferences tab) */
+.demo-hotkey-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.demo-hotkey-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: white;
+}
+
+.demo-hotkey-current {
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+}
+
+.demo-hotkey-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.demo-hotkey-option {
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.7);
+  background: transparent;
+}
+
+.demo-hotkey-option.active {
+  background: rgba(255,255,255,0.15);
+  color: white;
+}
+
+.demo-hotkey-note {
+  color: rgba(255,255,255,0.3);
+  font-size: 10px;
+  margin-left: 4px;
+}
+
+/* Toggle switch styles (Advanced tab -- matches AdvancedTab.tsx w-8 h-4) */
+.demo-toggle-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.demo-toggle-label {
+  font-size: 12px;
+  color: rgba(255,255,255,0.7);
+}
+
+.demo-toggle {
+  width: 32px;
+  height: 16px;
+  border-radius: 9999px;
+  background: rgba(255,255,255,0.1);
+  position: relative;
+  flex-shrink: 0;
+}
+
+.demo-toggle.on.red {
+  background: rgba(239,68,68,0.6);
+}
+
+.demo-toggle.on.blue {
+  background: rgba(59,130,246,0.6);
+}
+
+.demo-toggle-knob {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: white;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+}
+
+.demo-toggle.on .demo-toggle-knob {
+  left: auto;
+  right: 2px;
 }
 
 /* Light theme -- overlay stays dark */

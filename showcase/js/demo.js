@@ -357,6 +357,8 @@
     var ctxBadge = document.getElementById('demo-ctx-badge');
     var destructiveBadge = document.getElementById('demo-destructive-badge');
     var terminalBody = document.getElementById('demo-terminal-body');
+    var settingsPanel = document.getElementById('demo-settings-panel');
+    var settingsContent = document.getElementById('demo-settings-content');
 
     if (!overlay || !overlayInput || !overlayResultEl || !terminalBody) return;
 
@@ -402,6 +404,11 @@
         ],
         terminalOutput: [],
         isDestructive: true,
+        contextBadge: 'zsh'
+      },
+      {
+        query: '/settings',
+        isSettings: true,
         contextBadge: 'zsh'
       }
     ];
@@ -516,6 +523,68 @@
       return div.innerHTML;
     }
 
+    // Ghost text prediction helpers
+    function showGhostText(text) {
+      var ghost = overlay.querySelector('.demo-overlay-ghost');
+      if (!ghost) {
+        ghost = document.createElement('div');
+        ghost.className = 'demo-overlay-ghost';
+        overlayInput.appendChild(ghost);
+      }
+      ghost.textContent = text;
+      ghost.style.display = '';
+    }
+
+    function hideGhostText() {
+      var ghost = overlay.querySelector('.demo-overlay-ghost');
+      if (ghost) ghost.style.display = 'none';
+    }
+
+    // Type full text with ghost text prediction hint shown partway through
+    function typeTextWithPrediction(element, text, prediction, speed, token) {
+      return new Promise(function (resolve, reject) {
+        var i = 0;
+        var ghostShown = false;
+        var ghostTrigger = 2; // show ghost after typing 2 chars
+        function step() {
+          if (token && token.cancelled) { reject('cancelled'); return; }
+          if (i <= text.length) {
+            element.innerHTML =
+              escapeHtml(text.substring(0, i)) +
+              '<span class="demo-cursor"></span>';
+
+            // Show ghost text once we've typed enough chars
+            if (i >= ghostTrigger && !ghostShown) {
+              showGhostText(prediction);
+              ghostShown = true;
+            }
+
+            // Hide ghost text once fully typed
+            if (i === text.length && ghostShown) {
+              hideGhostText();
+            }
+
+            var nextDelay = speed;
+            if (i < text.length) {
+              var ch = text[i];
+              if (ch === ' ') {
+                nextDelay = speed + 15 + Math.random() * 25;
+              } else if (Math.random() < 0.08) {
+                nextDelay = speed + 40 + Math.random() * 60;
+              } else {
+                nextDelay = speed + Math.random() * 18;
+              }
+            }
+            i++;
+            setTimeout(step, nextDelay);
+          } else {
+            resolve();
+          }
+        }
+        step();
+      });
+    }
+
     function fadeInOverlay() {
       overlay.style.opacity = '';
       overlay.style.pointerEvents = '';
@@ -559,6 +628,38 @@
       overlayResultEl.style.animation = 'result-expand 180ms ease-out forwards';
     }
 
+    function showSettingsPanel() {
+      if (settingsPanel) settingsPanel.style.display = 'flex';
+    }
+
+    function hideSettingsPanel() {
+      if (!settingsPanel) return;
+      settingsPanel.style.display = 'none';
+      // Reset tabs to Account
+      var tabs = settingsPanel.querySelectorAll('.demo-settings-tab');
+      tabs.forEach(function (t) { t.classList.remove('active'); });
+      if (tabs[0]) tabs[0].classList.add('active');
+      // Reset content visibility
+      if (settingsContent) {
+        var panes = settingsContent.querySelectorAll('.demo-settings-tab-content');
+        panes.forEach(function (p) { p.style.display = 'none'; });
+        var accountPane = settingsContent.querySelector('[data-content="account"]');
+        if (accountPane) accountPane.style.display = '';
+      }
+    }
+
+    function switchSettingsTab(tabName) {
+      if (!settingsPanel || !settingsContent) return;
+      var tabs = settingsPanel.querySelectorAll('.demo-settings-tab');
+      tabs.forEach(function (t) {
+        t.classList.toggle('active', t.getAttribute('data-tab') === tabName);
+      });
+      var panes = settingsContent.querySelectorAll('.demo-settings-tab-content');
+      panes.forEach(function (p) {
+        p.style.display = p.getAttribute('data-content') === tabName ? '' : 'none';
+      });
+    }
+
     function resetOverlay() {
       overlayInput.innerHTML = '';
       overlayResultEl.innerHTML = '';
@@ -568,6 +669,8 @@
       overlay.style.pointerEvents = 'none';
       overlay.classList.remove('entering', 'exiting');
       collapseResultSection();
+      hideSettingsPanel();
+      hideGhostText();
     }
 
     function resetTerminal() {
@@ -588,7 +691,35 @@
       await fadeInOverlay();
       await delay(200, token);
 
-      // 4. Type query in overlay input (50% faster: 30ms base, natural variance)
+      // 4. Type query — use prediction for /settings, normal for others
+      if (scenario.isSettings) {
+        await typeTextWithPrediction(overlayInput, '/settings', '/settings', 30, token);
+        await delay(400, token);
+        // Show settings panel, cycle all 4 tabs
+        overlayInput.style.display = 'none';
+        collapseResultSection();
+        var footer = overlay.querySelector('.demo-overlay-footer');
+        if (footer) footer.style.display = 'none';
+        showSettingsPanel();
+        // Account tab (already active)
+        await delay(2400, token);
+        // Model tab
+        switchSettingsTab('model');
+        await delay(2400, token);
+        // Preferences tab
+        switchSettingsTab('preferences');
+        await delay(2400, token);
+        // Advanced tab
+        switchSettingsTab('advanced');
+        await delay(2400, token);
+        // Restore and dismiss
+        overlayInput.style.display = '';
+        if (footer) footer.style.display = '';
+        await fadeOutOverlay();
+        await delay(1000, token);
+        return;
+      }
+
       await typeText(overlayInput, scenario.query, 30, token);
       await delay(400, token);
 

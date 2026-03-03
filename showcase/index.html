@@ -296,6 +296,78 @@
               <span class="demo-overlay-badge-ctx" id="demo-ctx-badge"></span>
               <span class="demo-overlay-badge-destructive" id="demo-destructive-badge" style="opacity:0;">Destructive</span>
             </div>
+
+            <!-- Settings Panel Mockup (hidden, shown by /settings scenario) -->
+            <div class="demo-settings-panel" id="demo-settings-panel">
+              <div class="demo-settings-header">
+                <button class="demo-settings-back">&#8592;</button>
+                <span class="demo-settings-title">Settings</span>
+              </div>
+              <div class="demo-settings-tabs">
+                <button class="demo-settings-tab active" data-tab="account">Account</button>
+                <button class="demo-settings-tab" data-tab="model">Model</button>
+                <button class="demo-settings-tab" data-tab="preferences">Preferences</button>
+                <button class="demo-settings-tab" data-tab="advanced">Advanced</button>
+              </div>
+              <div class="demo-settings-content" id="demo-settings-content">
+                <!-- Account tab (default) -->
+                <div class="demo-settings-tab-content" data-content="account">
+                  <label class="demo-settings-label">API KEY</label>
+                  <div class="demo-settings-input-row">
+                    <input type="text" class="demo-settings-input" value="****...a1b2" readonly>
+                    <span class="demo-settings-check">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </span>
+                  </div>
+                  <button class="demo-settings-remove">Remove key</button>
+                </div>
+                <!-- Model tab (hidden until animation) -->
+                <div class="demo-settings-tab-content" data-content="model" style="display:none;">
+                  <div class="demo-model-option">grok-3 <span class="demo-model-badge">Balanced</span></div>
+                  <div class="demo-model-option">grok-3-mini <span class="demo-model-badge">Fast</span></div>
+                  <div class="demo-model-option">grok-4 <span class="demo-model-badge">Most capable</span></div>
+                  <div class="demo-model-option">grok-4-fast</div>
+                  <div class="demo-model-option active">grok-4-fast-non-reasoning <span class="demo-model-badge">Recommended</span></div>
+                </div>
+                <!-- Preferences tab -->
+                <div class="demo-settings-tab-content" data-content="preferences" style="display:none;">
+                  <label class="demo-settings-label">Keyboard Shortcut</label>
+                  <div class="demo-hotkey-header">
+                    <span class="demo-hotkey-title">Change Hotkey</span>
+                    <span class="demo-hotkey-current">Current: Cmd + K</span>
+                  </div>
+                  <label class="demo-settings-label" style="margin-top:8px">Presets</label>
+                  <div class="demo-hotkey-list">
+                    <div class="demo-hotkey-option active">&#8984; + K <span class="demo-hotkey-note">default</span></div>
+                    <div class="demo-hotkey-option">&#8984; + Shift + K</div>
+                    <div class="demo-hotkey-option">Ctrl + Space</div>
+                    <div class="demo-hotkey-option">&#8997; + Space</div>
+                  </div>
+                </div>
+                <!-- Advanced tab -->
+                <div class="demo-settings-tab-content" data-content="advanced" style="display:none;">
+                  <label class="demo-settings-label">Safety</label>
+                  <div class="demo-toggle-row">
+                    <span class="demo-toggle-label">Destructive command warnings</span>
+                    <div class="demo-toggle on red"><div class="demo-toggle-knob"></div></div>
+                  </div>
+                  <label class="demo-settings-label" style="margin-top:10px">Terminal</label>
+                  <div class="demo-toggle-row">
+                    <span class="demo-toggle-label">Auto-paste to terminal</span>
+                    <div class="demo-toggle on blue"><div class="demo-toggle-knob"></div></div>
+                  </div>
+                </div>
+              </div>
+              <div class="demo-settings-footer">
+                <img src="assets/K-white.png" alt="CMD+K" class="demo-settings-logo">
+                <span class="demo-settings-version">v0.2.1</span>
+                <div class="demo-settings-links">
+                  <span>About</span>
+                  <span class="demo-settings-sep">|</span>
+                  <span>Privacy</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
