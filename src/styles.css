@@ -158,5 +158,6 @@ body,
   }
   body {
     @apply bg-background text-foreground;
+    background: transparent !important;
   }
 }
