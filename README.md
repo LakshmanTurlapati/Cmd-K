@@ -316,6 +316,6 @@ cmd-k/
 
 Built by [Lakshman Turlapati](https://github.com/LakshmanTurlapati)
 
-If CMD+K saved you a trip to Stack Overflow, consider giving it a star.
+If CMD+K saved you from copy-pasting from ChatGPT, consider giving it a star.
 
 </div>
