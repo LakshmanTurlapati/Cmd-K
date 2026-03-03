@@ -123,7 +123,6 @@ pub fn run() {
                 use window_vibrancy::apply_acrylic;
 
                 // Apply Acrylic blur -- closest to macOS NSVisualEffectView behind-window blur
-                // per locked decision in CONTEXT.md.
                 // RGBA: (18, 18, 18, 125) matches macOS HudWindow darkness
                 apply_acrylic(&window, Some((18, 18, 18, 125)))
                     .expect("Acrylic vibrancy requires Windows 10 1903+");
@@ -166,7 +165,7 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             let default_hotkey = "Super+K";
             #[cfg(not(target_os = "macos"))]
-            let default_hotkey = "Ctrl+Shift+K";
+            let default_hotkey = "Ctrl+K";
 
             let app_handle = app.handle().clone();
             if let Err(e) = register_hotkey(app_handle, default_hotkey.to_string()) {
