@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "CMD+K",
-  "version": "0.1.1",
+  "version": "0.2.1",
   "identifier": "com.lakshmanturlapati.cmd-k",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -45,6 +45,14 @@
     "macOS": {
       "entitlements": "entitlements.plist",
       "signingIdentity": "Developer ID Application: VENKAT LUKSSHMAN TURLAPATI (36L722DZ7X)"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      },
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      }
     }
   }
 }
