@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-01)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** v0.2.1 Windows Support -- All phases code complete, pending Windows hardware E2E testing
+**Current focus:** Phase 1 -- Merge Windows branch, resolve conflicts, ensure platform-independent builds
 
 ## Current Position
 
-Phase: 16 of 16 (Build, Distribution, and Integration Testing)
-Plan: code complete (phases 12-16 implemented outside GSD planning)
-Status: Milestone audit passed (human_needed for E2E)
-Last activity: 2026-03-03 -- Milestone audit: 32/33 requirements code-verified
+Phase: 01 (Merge Windows branch)
+Current Plan: 1 of 2 complete
+Status: Executing Phase 01 plans
+Last activity: 2026-03-03 -- Completed 01-01 (merge + version alignment)
 
-Progress: [============================== ] 97%
+Progress: [===============                ] 50% (1/2 plans in Phase 01)
 
 ## Performance Metrics
 
@@ -38,6 +38,12 @@ Progress: [============================== ] 97%
 | 11    | 02   | 2min     | 2     | 3     |
 | 11    | 03   | 2min     | 2     | 2     |
 | 11    | 04   | 1min     | 1     | 1     |
+
+**Phase 01 (Merge Windows branch):**
+
+| Phase | Plan | Duration | Tasks | Files |
+|-------|------|----------|-------|-------|
+| 01    | 01   | 2min     | 2     | 3     |
 
 ## Accumulated Context
 
@@ -65,6 +71,9 @@ v0.2.1 decisions:
 - AttachThreadInput + SetForegroundWindow with AllowSetForegroundWindow fallback for focus restoration (11-03)
 - IsWindow validation before focus restoration to handle stale HWNDs gracefully (11-03)
 - Move HWND capture block to before get_frontmost_pid() call for correct scope independence on Windows (11-04)
+- Took windows branch showcase/index.html as base, updated macOS button href to specific DMG link (01-01)
+- Resolved ROADMAP.md conflict by keeping both windows phase history and main Phase 1 section (01-01)
+- No version changes needed post-merge -- all 3 files already at v0.2.1 from windows branch (01-01)
 
 ### Pending Todos
 
@@ -80,6 +89,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-03 (Phase 1 context gathered)
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-merge-windows-branch-resolve-conflicts-and-ensure-platform-independent-builds/01-CONTEXT.md
+Last session: 2026-03-03 (Completed 01-01-PLAN.md)
+Stopped at: Completed 01-01-PLAN.md
+Resume file: .planning/phases/01-merge-windows-branch-resolve-conflicts-and-ensure-platform-independent-builds/01-02-PLAN.md

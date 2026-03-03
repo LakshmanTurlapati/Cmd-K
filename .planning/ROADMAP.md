@@ -169,5 +169,5 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Merge windows branch, resolve showcase conflict, align versions to v0.2.1
+- [x] 01-01-PLAN.md — Merge windows branch, resolve showcase conflict, align versions to v0.2.1
 - [ ] 01-02-PLAN.md — Add build scripts, verify macOS build, delete windows branch
