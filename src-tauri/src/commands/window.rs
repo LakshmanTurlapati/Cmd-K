@@ -94,12 +94,13 @@ pub fn hide_overlay(app: AppHandle) -> Result<(), String> {
             // If our overlay is still the foreground window, this is an Escape/hotkey dismiss
             // and we should restore focus. If another window is foreground, the user clicked
             // outside and that window should keep focus.
-            our_hwnd != 0 && current_fg == our_hwnd
+            our_hwnd != 0 && current_fg == our_hwnd as windows_sys::Win32::Foundation::HWND
         };
 
         window.hide().map_err(|e| e.to_string())?;
 
-        // Windows: restore focus to previously captured window if appropriate
+        // Windows: restore focus to previously captured window if appropriate,
+        // then clear previous_hwnd (we own the full lifecycle: read → restore → clear).
         #[cfg(target_os = "windows")]
         {
             if should_restore_focus {
@@ -115,6 +116,12 @@ pub fn hide_overlay(app: AppHandle) -> Result<(), String> {
                 }
             } else {
                 eprintln!("[hide_overlay] not restoring focus -- user clicked outside");
+            }
+            // Clear previous_hwnd after use (regardless of restore path)
+            if let Some(state) = app.try_state::<AppState>() {
+                if let Ok(mut prev) = state.previous_hwnd.lock() {
+                    *prev = None;
+                }
             }
         }
     }

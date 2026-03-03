@@ -65,10 +65,10 @@ fn get_frontmost_pid() -> Option<i32> {
 fn get_foreground_hwnd() -> Option<isize> {
     use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
     let hwnd = unsafe { GetForegroundWindow() };
-    if hwnd == 0 {
+    if hwnd.is_null() {
         None
     } else {
-        Some(hwnd)
+        Some(hwnd as isize)
     }
 }
 
@@ -87,17 +87,20 @@ fn get_foreground_hwnd() -> Option<isize> {
 /// Returns true if focus was successfully restored.
 #[cfg(target_os = "windows")]
 pub fn restore_focus(target_hwnd: isize) -> bool {
-    use windows_sys::Win32::System::Threading::GetCurrentThreadId;
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
     use windows_sys::Win32::UI::WindowsAndMessaging::*;
+
+    let hwnd = target_hwnd as HWND;
 
     unsafe {
         // Validate the HWND is still a valid window (might have been closed)
-        if IsWindow(target_hwnd) == 0 {
+        if IsWindow(hwnd) == 0 {
             eprintln!("[focus] target HWND {} is no longer valid", target_hwnd);
             return false;
         }
 
-        let target_thread = GetWindowThreadProcessId(target_hwnd, std::ptr::null_mut());
+        let target_thread = GetWindowThreadProcessId(hwnd, std::ptr::null_mut());
         let our_thread = GetCurrentThreadId();
 
         // Attach our thread's input queue to the target's thread
@@ -107,7 +110,7 @@ pub fn restore_focus(target_hwnd: isize) -> bool {
             false
         };
 
-        let result = SetForegroundWindow(target_hwnd);
+        let result = SetForegroundWindow(hwnd);
 
         // Always detach if we attached
         if attached {
@@ -128,9 +131,9 @@ pub fn restore_focus(target_hwnd: isize) -> bool {
             // Fallback: AllowSetForegroundWindow then retry
             // This handles edge cases where AttachThreadInput alone is insufficient
             let mut target_pid: u32 = 0;
-            GetWindowThreadProcessId(target_hwnd, &mut target_pid);
+            GetWindowThreadProcessId(hwnd, &mut target_pid);
             AllowSetForegroundWindow(target_pid);
-            let retry = SetForegroundWindow(target_hwnd);
+            let retry = SetForegroundWindow(hwnd);
             eprintln!(
                 "[focus] Fallback SetForegroundWindow result: {}",
                 retry != 0
@@ -174,6 +177,38 @@ fn compute_window_key(pid: i32, focused_cwd: Option<String>) -> String {
     };
 
     eprintln!("[hotkey] computed window_key: {}", &key);
+    key
+}
+
+/// Windows-specific window key computation from HWND.
+///
+/// Derives PID from HWND via GetWindowThreadProcessId, then resolves exe name
+/// and walks process tree to find shell child. Key format: "exe_name:shell_pid".
+#[cfg(target_os = "windows")]
+fn compute_window_key_windows(hwnd: isize) -> String {
+    use crate::terminal::detect_windows;
+
+    let pid = detect_windows::get_pid_from_hwnd(hwnd);
+    let exe_name = detect_windows::get_exe_name(hwnd);
+    let exe_str = exe_name.as_deref().unwrap_or("unknown");
+
+    let is_terminal = detect_windows::is_known_terminal_exe(exe_str);
+    let is_ide = detect_windows::is_ide_with_terminal_exe(exe_str);
+
+    let key = if let Some(pid) = pid {
+        if is_terminal || is_ide {
+            match terminal::process::find_shell_pid(pid as i32, None) {
+                Some(shell_pid) => format!("{}:{}", exe_str, shell_pid),
+                None => format!("{}:{}", exe_str, pid),
+            }
+        } else {
+            format!("{}:{}", exe_str, pid)
+        }
+    } else {
+        format!("{}:{}", exe_str, hwnd)
+    };
+
+    eprintln!("[hotkey] computed Windows window_key: {}", &key);
     key
 }
 
@@ -239,8 +274,7 @@ pub fn register_hotkey(app: AppHandle, shortcut_str: String) -> Result<(), Strin
                 // Only capture PID when about to show (not when hiding)
                 if !is_currently_visible {
                     // Windows: capture HWND of foreground window BEFORE overlay steals focus.
-                    // This MUST be outside the PID-gated block because get_frontmost_pid()
-                    // returns None on Windows -- the HWND capture is independent of macOS PID.
+                    // Also derive PID from HWND and compute window key for per-tab history.
                     #[cfg(target_os = "windows")]
                     {
                         let hwnd = get_foreground_hwnd();
@@ -253,20 +287,44 @@ pub fn register_hotkey(app: AppHandle, shortcut_str: String) -> Result<(), Strin
                                 *prev = hwnd;
                             }
                         }
-                    }
 
-                    let pid = get_frontmost_pid();
-                    eprintln!("[hotkey] overlay hidden, capturing frontmost PID: {:?}", pid);
-                    if let Some(pid) = pid {
-                        if let Some(state) = app_handle.try_state::<AppState>() {
-                            if let Ok(mut prev) = state.previous_app_pid.lock() {
-                                *prev = Some(pid);
+                        // Derive PID from HWND and store as previous_app_pid
+                        if let Some(hwnd_val) = hwnd {
+                            let win_pid = crate::terminal::detect_windows::get_pid_from_hwnd(hwnd_val);
+                            if let Some(pid) = win_pid {
+                                eprintln!("[hotkey] Windows: derived PID {} from HWND {}", pid, hwnd_val);
+                                if let Some(state) = app_handle.try_state::<AppState>() {
+                                    if let Ok(mut prev) = state.previous_app_pid.lock() {
+                                        *prev = Some(pid as i32);
+                                    }
+                                }
+                            }
+
+                            // Compute window key from HWND
+                            let window_key = compute_window_key_windows(hwnd_val);
+                            if let Some(state) = app_handle.try_state::<AppState>() {
+                                if let Ok(mut wk) = state.current_window_key.lock() {
+                                    *wk = Some(window_key);
+                                }
                             }
                         }
+                    }
 
-                        // Pre-capture AX text BEFORE toggle_overlay steals focus.
-                        #[cfg(target_os = "macos")]
-                        {
+                    // macOS: capture PID via NSWorkspace, pre-capture AX text and CWD,
+                    // compute window key from bundle_id + shell_pid.
+                    // (Windows already captured PID + window key from HWND above.)
+                    #[cfg(target_os = "macos")]
+                    {
+                        let pid = get_frontmost_pid();
+                        eprintln!("[hotkey] overlay hidden, capturing frontmost PID: {:?}", pid);
+                        if let Some(pid) = pid {
+                            if let Some(state) = app_handle.try_state::<AppState>() {
+                                if let Ok(mut prev) = state.previous_app_pid.lock() {
+                                    *prev = Some(pid);
+                                }
+                            }
+
+                            // Pre-capture AX text BEFORE toggle_overlay steals focus.
                             let pre_text = ax_reader::read_focused_text_fast(pid);
                             if let Some(ref text) = pre_text {
                                 eprintln!(
@@ -280,54 +338,33 @@ pub fn register_hotkey(app: AppHandle, shortcut_str: String) -> Result<(), Strin
                                     *pt = pre_text;
                                 }
                             }
-                        }
-                        // Non-macOS: skip AX pre-capture (not available)
-                        #[cfg(not(target_os = "macos"))]
-                        {
+
+                            // Pre-capture focused terminal tab CWD for IDEs
+                            let bundle_id = terminal::detect::get_bundle_id(pid);
+                            let bundle_str = bundle_id.as_deref().unwrap_or("unknown");
+
+                            let focused_cwd = if terminal::detect::is_ide_with_terminal(bundle_str) {
+                                let cwd = ax_reader::get_focused_terminal_cwd(pid);
+                                eprintln!("[hotkey] IDE focused tab CWD: {:?}", &cwd);
+                                cwd
+                            } else {
+                                None
+                            };
+
                             if let Some(state) = app_handle.try_state::<AppState>() {
-                                if let Ok(mut pt) = state.pre_captured_text.lock() {
-                                    *pt = None;
+                                if let Ok(mut fc) = state.pre_captured_focused_cwd.lock() {
+                                    *fc = focused_cwd.clone();
+                                }
+                            }
+
+                            // Compute window key from bundle_id + shell_pid
+                            let window_key = compute_window_key(pid, focused_cwd);
+                            if let Some(state) = app_handle.try_state::<AppState>() {
+                                if let Ok(mut wk) = state.current_window_key.lock() {
+                                    *wk = Some(window_key);
                                 }
                             }
                         }
-
-                        // Pre-capture focused terminal tab CWD for IDEs with
-                        // multiple terminal tabs. This MUST happen BEFORE
-                        // toggle_overlay() because after the overlay steals focus,
-                        // AXFocusedUIElement will point to the overlay, not the
-                        // IDE's terminal tab.
-                        let bundle_id = terminal::detect::get_bundle_id(pid);
-                        let bundle_str = bundle_id.as_deref().unwrap_or("unknown");
-
-                        #[cfg(target_os = "macos")]
-                        let focused_cwd = if terminal::detect::is_ide_with_terminal(bundle_str) {
-                            let cwd = ax_reader::get_focused_terminal_cwd(pid);
-                            eprintln!("[hotkey] IDE focused tab CWD: {:?}", &cwd);
-                            cwd
-                        } else {
-                            None
-                        };
-                        // Non-macOS: no AX-based CWD capture
-                        #[cfg(not(target_os = "macos"))]
-                        let focused_cwd: Option<String> = None;
-
-                        if let Some(state) = app_handle.try_state::<AppState>() {
-                            if let Ok(mut fc) = state.pre_captured_focused_cwd.lock() {
-                                *fc = focused_cwd.clone();
-                            }
-                        }
-
-                        // Compute window key synchronously BEFORE toggle_overlay.
-                        // This captures the shell PID while the terminal is still frontmost.
-                        // Pass the focused CWD so find_shell_pid can match the
-                        // correct tab's shell in multi-tab IDE scenarios.
-                        let window_key = compute_window_key(pid, focused_cwd);
-                        if let Some(state) = app_handle.try_state::<AppState>() {
-                            if let Ok(mut wk) = state.current_window_key.lock() {
-                                *wk = Some(window_key);
-                            }
-                        }
-
                     }
                 } else {
                     eprintln!("[hotkey] overlay visible, hiding (no PID capture)");
@@ -337,15 +374,9 @@ pub fn register_hotkey(app: AppHandle, shortcut_str: String) -> Result<(), Strin
                             *fc = None;
                         }
                     }
-                    // Windows: clear previous HWND on hide
-                    #[cfg(target_os = "windows")]
-                    {
-                        if let Some(state) = app_handle.try_state::<AppState>() {
-                            if let Ok(mut prev) = state.previous_hwnd.lock() {
-                                *prev = None;
-                            }
-                        }
-                    }
+                    // Windows: do NOT clear previous_hwnd here.
+                    // hide_overlay() in window.rs reads previous_hwnd for focus
+                    // restoration and owns the full lifecycle (read then clear).
                 }
 
                 toggle_overlay(&app_handle);

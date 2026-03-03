@@ -142,14 +142,15 @@ pub fn run() {
 
                 if let Ok(handle) = window.window_handle() {
                     if let RawWindowHandle::Win32(win32) = handle.as_raw() {
-                        let hwnd = win32.hwnd.get() as isize;
+                        let hwnd_isize = win32.hwnd.get() as isize;
+                        let hwnd = hwnd_isize as windows_sys::Win32::Foundation::HWND;
                         unsafe {
                             let ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
                             let new_style = (ex_style | WS_EX_TOOLWINDOW as isize)
                                 & !(WS_EX_APPWINDOW as isize);
                             SetWindowLongPtrW(hwnd, GWL_EXSTYLE, new_style);
                         }
-                        eprintln!("[setup] WS_EX_TOOLWINDOW applied (hwnd={})", hwnd);
+                        eprintln!("[setup] WS_EX_TOOLWINDOW applied (hwnd={})", hwnd_isize);
                     }
                 }
             }
@@ -159,7 +160,7 @@ pub fn run() {
 
             // Register default hotkey -- platform-specific:
             // macOS: Super+K (Cmd+K)
-            // Windows: Ctrl+Shift+K (Ctrl+K conflicts with too many apps per CONTEXT.md)
+            // Windows: Ctrl+K
             // If registration fails (hotkey conflict), the error is logged but app continues
             // The user can change the hotkey via "Change Hotkey..." in the tray menu
             #[cfg(target_os = "macos")]
