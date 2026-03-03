@@ -90,9 +90,14 @@ pub fn run() {
                     .to_panel::<OverlayPanel>()
                     .expect("Failed to convert window to NSPanel");
 
-                // Set panel level above the menu bar so it floats over fullscreen apps
-                // Status level (25) = NSMainMenuWindowLevel + 1
-                panel.set_level(PanelLevel::Status.value());
+                // Set panel level to Floating (3) — above normal app windows but below
+                // system UI (permission dialogs, Notification Center, Spotlight).
+                // Floating (3) > Normal (0), so the overlay stays above all standard apps.
+                // System overlays use higher levels (ModalPanel=8, MainMenu=24, Status=25)
+                // and will correctly render above this panel.
+                // Combined with full_screen_auxiliary() collection behavior, the overlay
+                // still appears above fullscreen apps.
+                panel.set_level(PanelLevel::Floating.value());
 
                 // Allow the panel to appear alongside fullscreen apps (Raycast-style)
                 panel.set_collection_behavior(
