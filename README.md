@@ -13,7 +13,7 @@
 Press a hotkey from anywhere on your desktop. Type what you want. Get a working command. That's it.
 
 ![macOS](https://img.shields.io/badge/macOS-555555?style=for-the-badge&logo=apple&logoColor=white)
-![Windows](https://img.shields.io/badge/Windows-Coming_Soon-555555?style=for-the-badge&logo=windows&logoColor=white)
+![Windows](https://img.shields.io/badge/Windows-555555?style=for-the-badge&logo=windows&logoColor=white)
 ![Linux](https://img.shields.io/badge/Linux-Coming_Soon-555555?style=for-the-badge&logo=linux&logoColor=white)
 [![Website](https://img.shields.io/badge/Website-cmd--k.site-555555?style=for-the-badge&logo=safari&logoColor=white)](https://www.cmd-k.site)
 
