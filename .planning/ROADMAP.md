@@ -45,3 +45,14 @@
 | 8. Window Identification & History Storage | v0.1.1 | 3/3 | Complete | 2026-03-01 |
 | 9. Arrow Key History Navigation | v0.1.1 | 1/1 | Complete | 2026-03-01 |
 | 10. AI Follow-up Context Per Window | v0.1.1 | 2/2 | Complete | 2026-03-01 |
+
+### Phase 1: Merge Windows branch — resolve conflicts and ensure platform-independent builds
+
+**Goal:** Merge the `windows` branch (30 commits, 58 files) into `main`, resolve conflicts, align versions to v0.2.1, add platform-specific build scripts, and verify macOS compilation
+**Requirements**: TBD
+**Depends on:** Phase 0
+**Plans:** 2 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Merge windows branch, resolve showcase conflict, align versions to v0.2.1
+- [ ] 01-02-PLAN.md — Add build scripts, verify macOS build, delete windows branch
