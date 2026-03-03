@@ -3,7 +3,11 @@ use tauri::{AppHandle, Manager};
 #[cfg(target_os = "macos")]
 use tauri_nspanel::ManagerExt;
 
+#[cfg(target_os = "windows")]
+use crate::commands::hotkey::restore_focus;
+
 use crate::state::AppState;
+#[cfg(target_os = "macos")]
 use crate::terminal::detect::get_bundle_id;
 
 // ---------------------------------------------------------------------------
@@ -135,9 +139,24 @@ fn write_to_clipboard(command: &str) {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+/// Write command to system clipboard on Windows via arboard.
+#[cfg(target_os = "windows")]
+fn write_to_clipboard(command: &str) {
+    match arboard::Clipboard::new() {
+        Ok(mut clipboard) => {
+            match clipboard.set_text(command) {
+                Ok(()) => eprintln!("[paste] clipboard written via arboard"),
+                Err(e) => eprintln!("[paste] arboard set_text failed (non-fatal): {}", e),
+            }
+        }
+        Err(e) => eprintln!("[paste] arboard Clipboard::new failed (non-fatal): {}", e),
+    }
+}
+
+/// Non-macOS, non-Windows stub.
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn write_to_clipboard(_command: &str) {
-    // TODO(Phase 13): Implement Windows clipboard write via win32 API or arboard crate
+    // Stub for other platforms
 }
 
 /// Paste `command` into the terminal that was frontmost before the overlay opened.
@@ -150,46 +169,50 @@ fn write_to_clipboard(_command: &str) {
 /// Returns `Ok(())` on success, `Err(message)` if any step fails.
 #[tauri::command]
 pub fn paste_to_terminal(app: AppHandle, command: String) -> Result<(), String> {
-    let state = app
-        .try_state::<AppState>()
-        .ok_or_else(|| "AppState not found".to_string())?;
-
-    let pid = {
-        let guard = state
-            .previous_app_pid
-            .lock()
-            .map_err(|_| "previous_app_pid mutex poisoned".to_string())?;
-        (*guard).ok_or_else(|| "no previous app PID recorded".to_string())?
-    };
-
-    let bundle_id = get_bundle_id(pid)
-        .ok_or_else(|| format!("could not resolve bundle ID for pid {}", pid))?;
-
-    eprintln!(
-        "[paste] paste_to_terminal called: pid={}, bundle_id={}, command={:?}",
-        pid, bundle_id, command
-    );
-
-    // Write command to system clipboard
-    write_to_clipboard(&command);
-
-    // Resign key window on the overlay panel before pasting (macOS only).
-    #[cfg(target_os = "macos")]
-    if let Ok(panel) = app.get_webview_panel("main") {
-        panel.resign_key_window();
-        eprintln!("[paste] overlay panel resigned key window");
+    // Windows: early path — does not need bundle_id (uses HWND-based approach)
+    #[cfg(target_os = "windows")]
+    {
+        eprintln!("[paste] paste_to_terminal called (Windows): command={:?}", command);
+        paste_to_terminal_windows(&app, &command)?;
     }
 
-    // macOS: paste via osascript + CGEventPost
+    // macOS: needs PID and bundle_id for osascript
     #[cfg(target_os = "macos")]
     {
+        let state = app
+            .try_state::<AppState>()
+            .ok_or_else(|| "AppState not found".to_string())?;
+
+        let pid = {
+            let guard = state
+                .previous_app_pid
+                .lock()
+                .map_err(|_| "previous_app_pid mutex poisoned".to_string())?;
+            (*guard).ok_or_else(|| "no previous app PID recorded".to_string())?
+        };
+
+        let bundle_id = get_bundle_id(pid)
+            .ok_or_else(|| format!("could not resolve bundle ID for pid {}", pid))?;
+
+        eprintln!(
+            "[paste] paste_to_terminal called: pid={}, bundle_id={}, command={:?}",
+            pid, bundle_id, command
+        );
+
+        write_to_clipboard(&command);
+
+        if let Ok(panel) = app.get_webview_panel("main") {
+            panel.resign_key_window();
+            eprintln!("[paste] overlay panel resigned key window");
+        }
+
         paste_to_terminal_macos(&app, &bundle_id, &command, pid)?;
     }
 
-    // Non-macOS: paste not yet implemented
-    #[cfg(not(target_os = "macos"))]
+    // Other platforms: not yet implemented
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
-        let _ = (pid, &bundle_id, &command);
+        let _ = &command;
         return Err("paste not yet implemented for this platform".to_string());
     }
 
@@ -211,8 +234,8 @@ pub fn paste_to_terminal(app: AppHandle, command: String) -> Result<(), String> 
     }
 
     eprintln!(
-        "[paste] paste succeeded | bundle={} | pid={} | chars={}",
-        bundle_id, pid, command.len()
+        "[paste] paste succeeded | chars={}",
+        command.len()
     );
     Ok(())
 }
@@ -395,6 +418,162 @@ end tell"#
     Ok(())
 }
 
+/// Windows: paste command into the terminal via clipboard + Ctrl+V.
+///
+/// 1. Write command to clipboard via arboard
+/// 2. Read previous_hwnd from AppState
+/// 3. Check if target process is elevated (elevated → warn user)
+/// 4. Restore focus to terminal via SetForegroundWindow
+/// 5. Wait 100ms for window activation settle
+/// 6. SendInput: Ctrl down → V down → V up → Ctrl up
+#[cfg(target_os = "windows")]
+fn paste_to_terminal_windows(app: &AppHandle, command: &str) -> Result<(), String> {
+    let state = app
+        .try_state::<AppState>()
+        .ok_or_else(|| "AppState not found".to_string())?;
+
+    // Get the HWND we captured before showing the overlay
+    let prev_hwnd = {
+        let guard = state
+            .previous_hwnd
+            .lock()
+            .map_err(|_| "previous_hwnd mutex poisoned".to_string())?;
+        (*guard).ok_or_else(|| "no previous HWND recorded".to_string())?
+    };
+
+    // Check if target process is elevated
+    let target_pid = crate::terminal::detect_windows::get_pid_from_hwnd(prev_hwnd);
+    if let Some(pid) = target_pid {
+        if is_elevated_process(pid) {
+            return Err(
+                "Terminal is running as Administrator — paste may fail. Please paste manually (Ctrl+V)."
+                    .to_string(),
+            );
+        }
+    }
+
+    // Write command to clipboard
+    write_to_clipboard(command);
+
+    // Restore focus to the terminal
+    let restored = restore_focus(prev_hwnd);
+    eprintln!("[paste] Windows focus restored to HWND {}: {}", prev_hwnd, restored);
+
+    // Wait for window activation to settle
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    // Send Ctrl+V via SendInput
+    send_ctrl_v()?;
+
+    eprintln!("[paste] Windows paste succeeded | hwnd={} | chars={}", prev_hwnd, command.len());
+    Ok(())
+}
+
+/// Check if a process is running with elevated (Administrator) privileges.
+#[cfg(target_os = "windows")]
+fn is_elevated_process(pid: u32) -> bool {
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows_sys::Win32::Security::{
+        GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY,
+    };
+    use windows_sys::Win32::System::Threading::OpenProcessToken;
+    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+
+    unsafe {
+        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if process.is_null() {
+            return false; // Can't open process, assume non-elevated
+        }
+
+        let mut token: HANDLE = std::ptr::null_mut();
+        let ok = OpenProcessToken(process, TOKEN_QUERY, &mut token);
+        CloseHandle(process);
+        if ok == 0 || token.is_null() {
+            return false;
+        }
+
+        let mut elevation: TOKEN_ELEVATION = std::mem::zeroed();
+        let mut return_length: u32 = 0;
+        let ok = GetTokenInformation(
+            token,
+            TokenElevation,
+            &mut elevation as *mut _ as *mut _,
+            std::mem::size_of::<TOKEN_ELEVATION>() as u32,
+            &mut return_length,
+        );
+        CloseHandle(token);
+        if ok == 0 {
+            return false;
+        }
+
+        elevation.TokenIsElevated != 0
+    }
+}
+
+/// Helper: build an INPUT struct for a keyboard event.
+#[cfg(target_os = "windows")]
+fn make_keyboard_input(vk: u16, flags: u32) -> windows_sys::Win32::UI::Input::KeyboardAndMouse::INPUT {
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT};
+    INPUT {
+        r#type: INPUT_KEYBOARD,
+        Anonymous: INPUT_0 {
+            ki: KEYBDINPUT {
+                wVk: vk,
+                wScan: 0,
+                dwFlags: flags,
+                time: 0,
+                dwExtraInfo: 0,
+            },
+        },
+    }
+}
+
+/// Send Ctrl+V keystroke via SendInput (Windows).
+#[cfg(target_os = "windows")]
+fn send_ctrl_v() -> Result<(), String> {
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+        SendInput, INPUT, KEYEVENTF_KEYUP, VK_CONTROL, VK_V,
+    };
+
+    unsafe {
+        let inputs: [INPUT; 4] = [
+            make_keyboard_input(VK_CONTROL, 0),
+            make_keyboard_input(VK_V, 0),
+            make_keyboard_input(VK_V, KEYEVENTF_KEYUP),
+            make_keyboard_input(VK_CONTROL, KEYEVENTF_KEYUP),
+        ];
+
+        let sent = SendInput(4, inputs.as_ptr(), std::mem::size_of::<INPUT>() as i32);
+        if sent != 4 {
+            return Err(format!("SendInput Ctrl+V failed: only {} of 4 inputs sent", sent));
+        }
+        eprintln!("[paste] SendInput Ctrl+V succeeded");
+        Ok(())
+    }
+}
+
+/// Send Enter/Return keystroke via SendInput (Windows).
+#[cfg(target_os = "windows")]
+fn send_return() -> Result<(), String> {
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+        SendInput, INPUT, KEYEVENTF_KEYUP, VK_RETURN,
+    };
+
+    unsafe {
+        let inputs: [INPUT; 2] = [
+            make_keyboard_input(VK_RETURN, 0),
+            make_keyboard_input(VK_RETURN, KEYEVENTF_KEYUP),
+        ];
+
+        let sent = SendInput(2, inputs.as_ptr(), std::mem::size_of::<INPUT>() as i32);
+        if sent != 2 {
+            return Err(format!("SendInput Return failed: only {} of 2 inputs sent", sent));
+        }
+        eprintln!("[paste] SendInput Return succeeded");
+        Ok(())
+    }
+}
+
 /// Send a Return keystroke to the terminal that was frontmost before the overlay
 /// opened, executing whatever command is currently on the shell input line.
 ///
@@ -402,43 +581,73 @@ end tell"#
 /// - All others: activates terminal, then CGEventPost Return
 #[tauri::command]
 pub fn confirm_terminal_command(app: AppHandle) -> Result<(), String> {
-    let state = app
-        .try_state::<AppState>()
-        .ok_or_else(|| "AppState not found".to_string())?;
-
-    let pid = {
-        let guard = state
-            .previous_app_pid
-            .lock()
-            .map_err(|_| "previous_app_pid mutex poisoned".to_string())?;
-        (*guard).ok_or_else(|| "no previous app PID recorded".to_string())?
-    };
-
-    let bundle_id = get_bundle_id(pid)
-        .ok_or_else(|| format!("could not resolve bundle ID for pid {}", pid))?;
-
-    eprintln!("[paste] confirm_terminal_command: pid={}, bundle_id={}", pid, bundle_id);
-
-    // Resign key window so the terminal receives the keystroke (macOS only)
-    #[cfg(target_os = "macos")]
-    if let Ok(panel) = app.get_webview_panel("main") {
-        panel.resign_key_window();
+    // Windows: early path — does not need bundle_id
+    #[cfg(target_os = "windows")]
+    {
+        eprintln!("[paste] confirm_terminal_command called (Windows)");
+        confirm_command_windows(&app)?;
     }
 
-    // macOS: confirm via osascript + CGEventPost
+    // macOS: needs PID and bundle_id for osascript
     #[cfg(target_os = "macos")]
     {
+        let state = app
+            .try_state::<AppState>()
+            .ok_or_else(|| "AppState not found".to_string())?;
+
+        let pid = {
+            let guard = state
+                .previous_app_pid
+                .lock()
+                .map_err(|_| "previous_app_pid mutex poisoned".to_string())?;
+            (*guard).ok_or_else(|| "no previous app PID recorded".to_string())?
+        };
+
+        let bundle_id = get_bundle_id(pid)
+            .ok_or_else(|| format!("could not resolve bundle ID for pid {}", pid))?;
+
+        eprintln!("[paste] confirm_terminal_command: pid={}, bundle_id={}", pid, bundle_id);
+
+        if let Ok(panel) = app.get_webview_panel("main") {
+            panel.resign_key_window();
+        }
+
         confirm_terminal_command_macos(&bundle_id, pid)?;
     }
 
-    // Non-macOS: confirm not yet implemented
-    #[cfg(not(target_os = "macos"))]
+    // Other platforms: not yet implemented
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
-        let _ = (pid, &bundle_id);
         return Err("confirm not yet implemented for this platform".to_string());
     }
 
     #[allow(unreachable_code)]
+    Ok(())
+}
+
+/// Windows-specific confirm implementation: restore focus + SendInput Return.
+#[cfg(target_os = "windows")]
+fn confirm_command_windows(app: &AppHandle) -> Result<(), String> {
+    let state = app
+        .try_state::<AppState>()
+        .ok_or_else(|| "AppState not found".to_string())?;
+
+    let prev_hwnd = {
+        let guard = state
+            .previous_hwnd
+            .lock()
+            .map_err(|_| "previous_hwnd mutex poisoned".to_string())?;
+        (*guard).ok_or_else(|| "no previous HWND recorded".to_string())?
+    };
+
+    // Restore focus to terminal
+    restore_focus(prev_hwnd);
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    // Send Return keystroke
+    send_return()?;
+
+    eprintln!("[paste] Windows confirm succeeded | hwnd={}", prev_hwnd);
     Ok(())
 }
 
