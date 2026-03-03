@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-01)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** v0.2.1 Windows Support -- Phase 11 complete (with gap closure), ready for Phase 12
+**Current focus:** v0.2.1 Windows Support -- All phases code complete, pending Windows hardware E2E testing
 
 ## Current Position
 
-Phase: 11 of 16 (Build Infrastructure and Overlay Foundation)
-Plan: 4 of 4
-Status: Phase 11 complete
-Last activity: 2026-03-02 -- Completed 11-04-PLAN.md (Windows HWND capture dead code fix)
+Phase: 16 of 16 (Build, Distribution, and Integration Testing)
+Plan: code complete (phases 12-16 implemented outside GSD planning)
+Status: Milestone audit passed (human_needed for E2E)
+Last activity: 2026-03-03 -- Milestone audit: 32/33 requirements code-verified
 
-Progress: [=====                         ] 17%
+Progress: [============================== ] 97%
 
 ## Performance Metrics
 
@@ -46,7 +46,7 @@ Progress: [=====                         ] 17%
 All prior decisions archived in PROJECT.md Key Decisions table.
 
 v0.2.1 decisions:
-- Default hotkey: Ctrl+Shift+K on Windows (not Ctrl+K -- too many conflicts)
+- Default hotkey: Ctrl+K on Windows (matches macOS Cmd+K simplicity)
 - Acrylic for Win10, Mica for Win11 vibrancy
 - WS_EX_TOOLWINDOW to hide from Alt+Tab
 - Phases 12 and 13 can be developed in parallel (architecturally independent)
@@ -76,6 +76,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-02 (Phase 11 Plan 04 execution)
-Stopped at: Completed 11-04-PLAN.md -- Phase 11 gap closure complete, all 9 truths verified
+Last session: 2026-03-03 (Milestone audit)
+Stopped at: v0.2.1 milestone audit complete -- 32/33 requirements code-verified, WBLD-06 (E2E) awaits Windows hardware
 Resume file: None
