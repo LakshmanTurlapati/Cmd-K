@@ -1,11 +1,11 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.2.2
-milestone_name: Overlay UX Fixes (macOS)
-status: executing
-last_updated: "2026-03-03"
+milestone: v0.1
+milestone_name: milestone
+status: unknown
+last_updated: "2026-03-03T14:08:18.346Z"
 progress:
-  total_phases: 2
+  total_phases: 1
   completed_phases: 1
   total_plans: 1
   completed_plans: 1

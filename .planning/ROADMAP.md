@@ -100,5 +100,5 @@ Phases execute in numeric order: 17 then 18.
 | 15. Platform Polish and Safety | v0.2.1 | code complete | Complete | 2026-03-02 |
 | 16. Build, Distribution, and Integration Testing | v0.2.1 | code complete | Complete | 2026-03-02 |
 | 01. Merge Windows branch | v0.2.1 | 2/2 | Complete | 2026-03-03 |
-| 17. Overlay Z-Order | v0.2.2 | 1/1 | Complete | 2026-03-03 |
+| 17. Overlay Z-Order | v0.2.2 | Complete    | 2026-03-03 | 2026-03-03 |
 | 18. Draggable Overlay Positioning | v0.2.2 | 0/TBD | Not started | - |
