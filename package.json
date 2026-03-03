@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "build:mac": "./scripts/build-dmg.sh",
+    "build:windows": "./scripts/build-windows.sh"
   },
   "dependencies": {
     "@radix-ui/react-tooltip": "^1.2.8",
