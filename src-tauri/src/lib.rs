@@ -12,7 +12,7 @@ use commands::{
     safety::{check_destructive, get_destructive_explanation},
     terminal::{get_app_context, get_terminal_context},
     tray::setup_tray,
-    window::{hide_overlay, show_overlay},
+    window::{hide_overlay, show_overlay, set_overlay_position},
     xai::validate_and_fetch_models,
 };
 use state::AppState;
@@ -211,6 +211,7 @@ pub fn run() {
             get_window_history,
             add_history_entry,
             clear_all_history,
+            set_overlay_position,
         ])
         .run(tauri::generate_context!())
         .expect("error while running CMD+K application");

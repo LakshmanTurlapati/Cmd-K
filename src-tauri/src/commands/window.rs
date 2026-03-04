@@ -151,9 +151,22 @@ pub fn toggle_overlay(app: &AppHandle) {
     }
 }
 
+/// Save the overlay's dragged position (logical coordinates) into AppState.
+/// Called by the frontend after a drag ends. Position is session-scoped only —
+/// it resets to None on app relaunch since AppState::default() initializes it to None.
+#[tauri::command]
+pub fn set_overlay_position(app: AppHandle, x: f64, y: f64) -> Result<(), String> {
+    if let Some(state) = app.try_state::<AppState>() {
+        if let Ok(mut pos) = state.last_position.lock() {
+            *pos = Some((x, y));
+        }
+    }
+    Ok(())
+}
+
 /// Compute and set the overlay window position:
-/// - Centered horizontally on the current monitor
-/// - 25% down from the top of the current monitor
+/// - If a dragged position exists (session-scoped), use that
+/// - Otherwise, center horizontally on the current monitor, 25% down from top
 ///
 /// Converts physical pixel dimensions to logical (point) coordinates using
 /// `scale_factor()` to handle Retina displays correctly.
@@ -161,6 +174,18 @@ fn position_overlay(app: &AppHandle) -> Result<(), String> {
     let window = app
         .get_webview_window("main")
         .ok_or_else(|| "Window 'main' not found".to_string())?;
+
+    // Check for saved drag position (session-scoped)
+    if let Some(state) = app.try_state::<AppState>() {
+        if let Ok(pos) = state.last_position.lock() {
+            if let Some((x, y)) = *pos {
+                window
+                    .set_position(LogicalPosition::new(x, y))
+                    .map_err(|e| e.to_string())?;
+                return Ok(());
+            }
+        }
+    }
 
     // Use current_monitor() for multi-monitor support (user works on current display)
     let monitor = window

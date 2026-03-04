@@ -91,6 +91,10 @@ pub struct AppState {
     /// Used by focus restoration on overlay dismiss.
     /// HWND is a pointer-sized integer (isize) on Windows.
     pub previous_hwnd: Mutex<Option<isize>>,
+    /// Last dragged overlay position (logical coordinates).
+    /// Session-scoped only — resets to None on app launch (Default impl).
+    /// When None, position_overlay() uses the default centered position.
+    pub last_position: Mutex<Option<(f64, f64)>>,
 }
 
 impl Default for AppState {
@@ -105,6 +109,7 @@ impl Default for AppState {
             pre_captured_focused_cwd: Mutex::new(None),
             history: Mutex::new(HashMap::new()),
             previous_hwnd: Mutex::new(None),
+            last_position: Mutex::new(None),
         }
     }
 }
