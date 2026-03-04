@@ -24,12 +24,12 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Destructive Command Coverage
 
-- [ ] **SAFE-01**: macOS-specific destructive commands (csrutil, dscl, nvram, security, tmutil, spctl, launchctl, diskutil, srm, pfctl) are detected
-- [ ] **SAFE-02**: Linux-specific destructive commands (systemctl, iptables, nft, userdel, groupdel, parted, gdisk, wipefs, lvm, cryptsetup, crontab, modprobe, swapoff, truncate) are detected
-- [ ] **SAFE-03**: Container/orchestration destructive commands (docker prune/rm/volume/network, kubectl delete, helm uninstall) are detected
-- [ ] **SAFE-04**: Package manager uninstall commands (apt, brew, pip, npm, cargo, choco, pacman, dnf, snap) are detected
-- [ ] **SAFE-05**: Config file overwrites via redirect (> ~/.bashrc, > /etc/hosts, > ~/.ssh/config, > /etc/passwd, etc.) are detected
-- [ ] **SAFE-06**: All patterns are organized with clear comment section headers and existing patterns are preserved/consolidated
+- [x] **SAFE-01**: macOS-specific destructive commands (csrutil, dscl, nvram, security, tmutil, spctl, launchctl, diskutil, srm, pfctl) are detected
+- [x] **SAFE-02**: Linux-specific destructive commands (systemctl, iptables, nft, userdel, groupdel, parted, gdisk, wipefs, lvm, cryptsetup, crontab, modprobe, swapoff, truncate) are detected
+- [x] **SAFE-03**: Container/orchestration destructive commands (docker prune/rm/volume/network, kubectl delete, helm uninstall) are detected
+- [x] **SAFE-04**: Package manager uninstall commands (apt, brew, pip, npm, cargo, choco, pacman, dnf, snap) are detected
+- [x] **SAFE-05**: Config file overwrites via redirect (> ~/.bashrc, > /etc/hosts, > ~/.ssh/config, > /etc/passwd, etc.) are detected
+- [x] **SAFE-06**: All patterns are organized with clear comment section headers and existing patterns are preserved/consolidated
 
 ## Future Requirements
 
