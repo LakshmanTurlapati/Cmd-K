@@ -8,23 +8,27 @@ const ACCOUNT: &str = "xai_api_key";
 
 /// Regex patterns for destructive command detection.
 /// Uses word boundaries (\b) to avoid false positives on substrings.
+/// Organized by platform/category with section headers.
 static DESTRUCTIVE_PATTERNS: Lazy<RegexSet> = Lazy::new(|| {
     RegexSet::new([
-        // File destruction
+        // === File/Directory Destruction ===
         r"\brm\s+-[^-]*r[^-]*f",   // rm -rf, rm -fr, rm -rdf, etc.
         r"\brm\s+-[^-]*f[^-]*r",   // rm -fr variants
         r"\brm\s+-r\b",            // rm -r (recursive without force)
-        r"\bshred\b",
-        r"\bunlink\b",
-        r"\brmdir\b",
-        // Git force operations
+        r"\bshred\b",              // overwrite file contents
+        r"\bunlink\b",             // remove file link
+        r"\brmdir\b",             // remove directory
+        r"\bsrm\b",               // secure remove (macOS)
+
+        // === Git Force Operations ===
         r"\bgit\s+push\s+.*--force\b",
         r"\bgit\s+push\s+.*-f\b",
         r"\bgit\s+reset\s+--hard\b",
         r"\bgit\s+clean\s+.*-f\b",
         r"\bgit\s+branch\s+.*-D\b",
         r"\bgit\s+rebase\s+.*--force\b",
-        // Database mutations
+
+        // === Database Mutations ===
         r"(?i)\bDROP\s+TABLE\b",
         r"(?i)\bDROP\s+DATABASE\b",
         r"(?i)\bDROP\s+SCHEMA\b",
@@ -33,7 +37,8 @@ static DESTRUCTIVE_PATTERNS: Lazy<RegexSet> = Lazy::new(|| {
         // DELETE FROM without WHERE (ends at semicolon or end-of-string)
         r"(?i)\bDELETE\s+FROM\s+\S+\s*;",
         r"(?i)\bDELETE\s+FROM\s+\S+\s*$",
-        // System / permission / disk operations
+
+        // === System / Permission / Disk (Cross-platform) ===
         r"\bsudo\s+rm\b",
         r"\bchmod\s+777\b",
         r"\bmkfs\b",
@@ -47,11 +52,47 @@ static DESTRUCTIVE_PATTERNS: Lazy<RegexSet> = Lazy::new(|| {
         r"\bformat\s+[A-Za-z]:",
         r">\s*/dev/sd[a-z]",
         r">\s*/dev/disk[0-9]",
-        // Windows-specific destructive commands
+
+        // === macOS-Specific ===
+        r"\bcsrutil\s+disable\b",                      // disable System Integrity Protection
+        r"\bdscl\s+.*\s+delete\b",                     // directory service delete users/groups
+        r"\bnvram\s+delete\b",                          // delete firmware variable
+        r"\bsecurity\s+delete-keychain\b",              // delete keychain
+        r"\btmutil\s+disable\b",                        // disable Time Machine
+        r"\bspctl\s+--master-disable\b",                // disable Gatekeeper
+        r"\blaunchctl\s+remove\b",                      // remove launch daemon/agent
+        r"\bdiskutil\s+(eraseDisk|partitionDisk|eraseVolume)\b", // disk destruction ops
+        r"\bpfctl\s+.*flush\b",                         // flush packet filter rules
+
+        // === Linux-Specific ===
+        r"\bsystemctl\s+(disable|mask)\b",              // disable/mask services
+        r"\biptables\s+-F\b",                           // flush all firewall rules
+        r"\bnft\s+flush\s+ruleset\b",                   // flush nftables rules
+        r"\buserdel\b",                                  // delete user account
+        r"\bgroupdel\b",                                 // delete group
+        r"\bparted\s+.*\brm\b",                         // remove partition
+        r"\bgdisk\b",                                    // GPT disk partitioner
+        r"\bwipefs\b",                                   // wipe filesystem signatures
+        r"\blvremove\b",                                 // LVM logical volume remove
+        r"\bvgremove\b",                                 // LVM volume group remove
+        r"\bpvremove\b",                                 // LVM physical volume remove
+        r"\bcryptsetup\s+luksErase\b",                  // erase LUKS encryption header
+        r"\bcrontab\s+-r\b",                             // remove all cron jobs
+        r"\bmodprobe\s+-r\b",                            // remove kernel module
+        r"\bswapoff\s+-a\b",                             // disable all swap
+        r"\btruncate\s+-s\s*0\b",                       // truncate file to zero bytes
+
+        // === Windows-Specific ===
+        // CMD file/system commands
         r"(?i)\bdel\s+/s\b",
         r"(?i)\brd\s+/s\b",
         r"(?i)\brmdir\s+/s\b",
         r"(?i)\bformat\s+[A-Za-z]:\b",
+        r"(?i)\berase\s+/[sf]\b",
+        r"(?i)\bdel\s+/f\b",
+        r"(?i)\bcipher\s+/w\b",
+        r"(?i)\bshutdown\s+/[srp]\b",
+        // PowerShell destructive commands
         r"(?i)\bRemove-Item\s+.*-Recurse\s+.*-Force\b",
         r"(?i)\bRemove-Item\s+.*-Force\s+.*-Recurse\b",
         r"(?i)\bReg\s+Delete\b",
@@ -59,11 +100,6 @@ static DESTRUCTIVE_PATTERNS: Lazy<RegexSet> = Lazy::new(|| {
         r"(?i)\bdiskpart\b",
         r"(?i)\btaskkill\s+/f\b",
         r"(?i)\bStop-Process\s+.*-Force\b",
-        // CMD file/system commands
-        r"(?i)\berase\s+/[sf]\b",
-        r"(?i)\bdel\s+/f\b",
-        r"(?i)\bcipher\s+/w\b",
-        r"(?i)\bshutdown\s+/[srp]\b",
         // Recovery inhibition (MITRE ATT&CK T1490)
         r"(?i)\bvssadmin\s+.*delete\s+shadows\b",
         r"(?i)\bvssadmin\s+.*resize\s+shadowstorage\b",
@@ -116,6 +152,47 @@ static DESTRUCTIVE_PATTERNS: Lazy<RegexSet> = Lazy::new(|| {
         r"(?i)\bwsl(\.exe)?\s+--unregister\b",
         // Boot / system integrity
         r"(?i)\bbootrec\s+\/(rebuildbcd|fixmbr|fixboot)\b",
+
+        // === Containers / Orchestration ===
+        r"\bdocker\s+system\s+prune\b",                // docker system prune (with or without -a)
+        r"\bdocker\s+rm\s+.*-f\b",                     // docker force remove container
+        r"\bdocker\s+volume\s+rm\b",                    // docker volume remove
+        r"\bdocker\s+network\s+rm\b",                   // docker network remove
+        r"\bdocker\s+image\s+rm\b",                     // docker image remove
+        r"\bdocker\s+rmi\b",                             // docker remove image shorthand
+        r"\bdocker\s+container\s+prune\b",              // docker prune stopped containers
+        r"\bdocker\s+volume\s+prune\b",                 // docker prune unused volumes
+        r"\bkubectl\s+delete\b",                         // kubectl delete any resource
+        r"\bhelm\s+uninstall\b",                         // helm chart uninstall
+        r"\bpodman\s+system\s+prune\b",                 // podman system prune
+        r"\bpodman\s+rm\s+.*-f\b",                      // podman force remove
+        r"\bdocker-compose\s+down\s+.*-v\b",             // docker-compose remove volumes
+        r"\bterraform\s+destroy\b",                       // terraform infrastructure destroy
+        r"\bvagrant\s+destroy\b",                          // vagrant VM destroy
+
+        // === Package Managers ===
+        r"\bapt\s+(purge|autoremove)\b",                // Debian/Ubuntu package removal
+        r"\bapt-get\s+(purge|autoremove)\b",            // apt-get variants
+        r"\bbrew\s+uninstall\b",                         // Homebrew uninstall
+        r"\bbrew\s+remove\b",                            // Homebrew remove alias
+        r"\bpip\s+uninstall\b",                          // Python pip uninstall
+        r"\bpip3\s+uninstall\b",                         // Python pip3 uninstall
+        r"\bnpm\s+uninstall\s+(-g|--global)\b",         // npm global uninstall
+        r"\bcargo\s+uninstall\b",                        // Rust cargo uninstall
+        r"(?i)\bchoco\s+uninstall\b",                   // Chocolatey uninstall
+        r"\bpacman\s+-R",                                // Arch Linux pacman remove (-R, -Rs, -Rns)
+        r"\bdnf\s+remove\b",                             // Fedora/RHEL remove
+        r"\byum\s+remove\b",                             // CentOS/RHEL yum remove
+        r"\bsnap\s+remove\b",                            // Snap package remove
+        r"\bzypper\s+remove\b",                          // openSUSE remove
+        r"\bgem\s+uninstall\b",                          // Ruby gem uninstall
+
+        // === Config File Overwrites ===
+        r">\s*~/\.(bashrc|bash_profile|zshrc|profile|zprofile)",  // shell config overwrite
+        r">\s*/etc/(hosts|passwd|shadow|fstab|sudoers)",          // system config overwrite
+        r">\s*~/\.ssh/(config|authorized_keys|known_hosts)",      // SSH config overwrite
+        r">\s*/etc/(resolv\.conf|hostname|network)",              // network config overwrite
+        r">\s*~/\.(gitconfig|npmrc|vimrc)",                       // tool config overwrite
     ])
     .expect("DESTRUCTIVE_PATTERNS regex set failed to compile")
 });
