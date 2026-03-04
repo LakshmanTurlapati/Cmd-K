@@ -37,10 +37,10 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### CI/CD Release Pipeline
 
-- [ ] **CICD-01**: Single `release.yml` workflow triggered by `v*` tag push builds macOS and Windows artifacts
-- [ ] **CICD-02**: macOS build produces signed, notarized, stapled universal DMG using parameterized `build-dmg.sh`
-- [ ] **CICD-03**: Windows build produces unsigned NSIS installer with conditional signing block for future enablement
-- [ ] **CICD-04**: GitHub Release auto-published with both platform artifacts and SHA256 checksums
+- [x] **CICD-01**: Single `release.yml` workflow triggered by `v*` tag push builds macOS and Windows artifacts
+- [x] **CICD-02**: macOS build produces signed, notarized, stapled universal DMG using parameterized `build-dmg.sh`
+- [x] **CICD-03**: Windows build produces unsigned NSIS installer with conditional signing block for future enablement
+- [x] **CICD-04**: GitHub Release auto-published with both platform artifacts and SHA256 checksums
 - [x] **CICD-05**: Apple signing credentials (p12 certificate, notarization secrets) migrated from local keychain to GitHub Secrets with step-by-step documentation
 - [x] **CICD-06**: `build-dmg.sh` parameterized via environment variables -- version derived from tag, keychain profile configurable for CI
 
