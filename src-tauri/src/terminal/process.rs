@@ -743,6 +743,7 @@ fn find_shell_by_ancestry(app_pid: i32, _focused_cwd: Option<&str>) -> Option<i3
         // Build parent map and collect shell candidates
         let mut parent_map: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
         let mut shell_candidates: Vec<(u32, String)> = Vec::new();
+        let mut openconsole_pids: Vec<u32> = Vec::new();
 
         let mut entry: PROCESSENTRY32W = std::mem::zeroed();
         entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
@@ -755,6 +756,9 @@ fn find_shell_by_ancestry(app_pid: i32, _focused_cwd: Option<&str>) -> Option<i3
                 let name_len = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
                 let name = String::from_utf16_lossy(&entry.szExeFile[..name_len]);
 
+                if name.eq_ignore_ascii_case("OpenConsole.exe") {
+                    openconsole_pids.push(entry.th32ProcessID);
+                }
                 if super::detect_windows::is_known_shell_exe(&name) {
                     shell_candidates.push((entry.th32ProcessID, name));
                 }
@@ -792,6 +796,32 @@ fn find_shell_by_ancestry(app_pid: i32, _focused_cwd: Option<&str>) -> Option<i3
 
         if descendant_shells.is_empty() {
             eprintln!("[process] no shell found as descendant of {} on Windows", app_pid);
+
+            // Fallback for Windows Terminal: shells are children of OpenConsole.exe
+            // which is NOT a descendant of WindowsTerminal.exe in the process tree
+            // (ConPTY architecture). Search for shells parented by OpenConsole.exe.
+            eprintln!("[process] ConPTY fallback: {} OpenConsole PIDs found, {} shell candidates", openconsole_pids.len(), shell_candidates.len());
+            for (pid, name) in &shell_candidates {
+                let ppid = parent_map.get(pid).copied();
+                eprintln!("[process]   shell candidate: pid={} name={} ppid={:?}", pid, name, ppid);
+            }
+            if !openconsole_pids.is_empty() {
+                let mut conpty_shells: Vec<(u32, String)> = Vec::new();
+                for (pid, name) in &shell_candidates {
+                    if let Some(&ppid) = parent_map.get(pid) {
+                        if openconsole_pids.contains(&ppid) {
+                            eprintln!("[process] ConPTY shell: pid {} ({}) is child of OpenConsole.exe {}", pid, name, ppid);
+                            conpty_shells.push((*pid, name.clone()));
+                        }
+                    }
+                }
+                if !conpty_shells.is_empty() {
+                    return conpty_shells.iter()
+                        .max_by_key(|(pid, _)| *pid)
+                        .map(|(pid, _)| *pid as i32);
+                }
+            }
+
             return None;
         }
 
