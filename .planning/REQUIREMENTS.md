@@ -14,9 +14,9 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Overlay Positioning
 
-- [ ] **OPOS-01**: User can drag the overlay to reposition it on screen
-- [ ] **OPOS-02**: Overlay reopens at the last dragged position within the same app session
-- [ ] **OPOS-03**: Overlay position resets to default on app relaunch
+- [x] **OPOS-01**: User can drag the overlay to reposition it on screen
+- [x] **OPOS-02**: Overlay reopens at the last dragged position within the same app session
+- [x] **OPOS-03**: Overlay position resets to default on app relaunch
 
 ## Future Requirements
 
@@ -39,9 +39,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | ZORD-01 | Phase 17 | Complete |
 | ZORD-02 | Phase 17 | Complete |
-| OPOS-01 | Phase 18 | Pending |
-| OPOS-02 | Phase 18 | Pending |
-| OPOS-03 | Phase 18 | Pending |
+| OPOS-01 | Phase 18 | Complete |
+| OPOS-02 | Phase 18 | Complete |
+| OPOS-03 | Phase 18 | Complete |
 
 **Coverage:**
 - v0.2.2 requirements: 5 total

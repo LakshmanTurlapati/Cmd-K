@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-03T14:08:18.346Z"
+last_updated: "2026-03-03T01:33:40Z"
 progress:
   total_phases: 1
   completed_phases: 1
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Phase 17 -- Overlay Z-Order
+**Current focus:** Phase 18 -- Draggable Overlay Positioning (COMPLETE)
 
 ## Current Position
 
 Phase: 18 of 18 (Draggable Overlay Positioning)
-Plan: -- (not yet planned)
-Status: Phase 17 complete, ready to plan Phase 18
-Last activity: 2026-03-03 -- Completed Phase 17 (Overlay Z-Order)
+Plan: 1 of 1 (Complete)
+Status: Phase 18 complete, milestone v0.2.2 complete
+Last activity: 2026-03-03 -- Completed Phase 18 (Draggable Overlay Positioning)
 
-Progress: [#####░░░░░] 50%
+Progress: [##########] 100%
 
 ## Performance Metrics
 
@@ -49,12 +49,21 @@ Progress: [#####░░░░░] 50%
 - Timeline: 3 days (2026-03-01 to 2026-03-03)
 - Git: 30 commits, 48 files changed, 4,734 insertions
 
+**v0.2.2 Summary:**
+- Total phases: 2 (17-18)
+- Total plans: 2
+- Timeline: 1 day (2026-03-03)
+- Phase 18 Plan 01: 12 min, 3 tasks, 5 files
+
 ## Accumulated Context
 
 ### Decisions
 
 All prior decisions archived in PROJECT.md Key Decisions table.
 - [Phase 17]: Used PanelLevel::Floating (3) instead of ModalPanel (8) -- standard macOS level for utility panels
+- [Phase 18]: In-memory Mutex<Option<(f64, f64)>> for drag position -- no disk persistence, resets on relaunch
+- [Phase 18]: Screen coordinates (screenX/Y) for drag deltas -- window moves during drag making clientX/Y unreliable
+- [Phase 18]: 2px dead zone before persisting position -- prevents accidental position changes from clicks
 
 ### Pending Todos
 
@@ -67,6 +76,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-03 (Phase 17 completed)
-Stopped at: Completed 17-01-PLAN.md -- Phase 17 done, ready to plan Phase 18
-Resume file: .planning/phases/17-overlay-z-order/17-01-SUMMARY.md
+Last session: 2026-03-03 (Phase 18 completed)
+Stopped at: Completed 18-01-PLAN.md -- Phase 18 done, milestone v0.2.2 complete
+Resume file: .planning/phases/18-draggable-overlay-positioning/18-01-SUMMARY.md

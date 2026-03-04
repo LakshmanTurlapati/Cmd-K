@@ -5,7 +5,7 @@
 - v0.1.0 MVP -- Phases 1-7.1 (shipped 2026-02-28) | [Archive](milestones/v1.0-ROADMAP.md)
 - v0.1.1 Command History & Follow-ups -- Phases 8-10 (shipped 2026-03-01) | [Archive](milestones/v0.1.1-ROADMAP.md)
 - v0.2.1 Windows Support -- Phases 11-16, 01-merge (shipped 2026-03-03) | [Archive](milestones/v0.2.1-ROADMAP.md)
-- v0.2.2 Overlay UX Fixes (macOS) -- Phases 17-18 (in progress)
+- v0.2.2 Overlay UX Fixes (macOS) -- Phases 17-18 (shipped 2026-03-03)
 
 ## Phases
 
@@ -45,10 +45,10 @@
 
 </details>
 
-### v0.2.2 Overlay UX Fixes (macOS) -- In Progress
+### v0.2.2 Overlay UX Fixes (macOS) -- SHIPPED 2026-03-03
 
 - [x] **Phase 17: Overlay Z-Order** - System dialogs and OS overlays appear above the CMD+K panel (completed 2026-03-03)
-- [ ] **Phase 18: Draggable Overlay Positioning** - User can drag the overlay and it remembers position within the session
+- [x] **Phase 18: Draggable Overlay Positioning** - User can drag the overlay and it remembers position within the session (completed 2026-03-03)
 
 ## Phase Details
 
@@ -75,7 +75,7 @@ Plans:
   3. After quitting and relaunching the app, the overlay appears at the default position (not the previously dragged position)
 **Plans**: 1 plan
 Plans:
-- [ ] 18-01-PLAN.md — Add drag-to-reposition with in-memory position persistence and useDrag hook
+- [x] 18-01-PLAN.md — Add drag-to-reposition with in-memory position persistence and useDrag hook
 
 ## Progress
 
@@ -103,4 +103,4 @@ Phases execute in numeric order: 17 then 18.
 | 16. Build, Distribution, and Integration Testing | v0.2.1 | code complete | Complete | 2026-03-02 |
 | 01. Merge Windows branch | v0.2.1 | 2/2 | Complete | 2026-03-03 |
 | 17. Overlay Z-Order | v0.2.2 | Complete    | 2026-03-03 | 2026-03-03 |
-| 18. Draggable Overlay Positioning | v0.2.2 | 0/1 | Planned | - |
+| 18. Draggable Overlay Positioning | v0.2.2 | 1/1 | Complete | 2026-03-03 |
