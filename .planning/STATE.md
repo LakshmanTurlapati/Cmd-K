@@ -79,6 +79,7 @@ None.
 ### Roadmap Evolution
 
 - Phase 19 added: Enhance destructive commands list to be more exhaustive across Windows, Linux, and macOS
+- Phase 20 added: Add GitHub Actions CI/CD for Windows and macOS builds on release tag with notarization credential management
 
 ### Blockers/Concerns
 
