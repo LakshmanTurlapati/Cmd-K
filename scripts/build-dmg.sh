@@ -20,10 +20,10 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 APP_NAME="CMD+K"
 IDENTIFIER="com.lakshmanturlapati.cmd-k"
-VERSION="0.2.2"
+VERSION="${VERSION:-$(grep '"version"' "$PROJECT_ROOT/src-tauri/tauri.conf.json" | head -1 | sed 's/.*: *"\(.*\)".*/\1/')}"
 TARGET="universal-apple-darwin"
-SIGNING_IDENTITY="Developer ID Application: VENKAT LUKSSHMAN TURLAPATI (36L722DZ7X)"
-KEYCHAIN_PROFILE="CMD-K-NOTARIZE"
+SIGNING_IDENTITY="${SIGNING_IDENTITY:-"Developer ID Application: VENKAT LUKSSHMAN TURLAPATI (36L722DZ7X)"}"
+KEYCHAIN_PROFILE="${KEYCHAIN_PROFILE:-CMD-K-NOTARIZE}"
 
 APP_BUNDLE="$PROJECT_ROOT/src-tauri/target/$TARGET/release/bundle/macos/$APP_NAME.app"
 ENTITLEMENTS="$PROJECT_ROOT/src-tauri/entitlements.plist"
@@ -273,35 +273,37 @@ hdiutil create \
 
 rm -rf "$STAGING_DIR"
 
-# Step 2: Mount the read-write DMG and style it with a background image
-# First detach any stale mounts of this volume name
-for vol in /Volumes/${APP_NAME}*; do
-  [ -d "$vol" ] && hdiutil detach "$vol" -force 2>/dev/null || true
-done
-sleep 1
+# Step 2: Style the DMG with a background image (local builds only)
+if [ "${CI:-}" != "true" ]; then
+  # Mount the read-write DMG for Finder window styling
+  # First detach any stale mounts of this volume name
+  for vol in /Volumes/${APP_NAME}*; do
+    [ -d "$vol" ] && hdiutil detach "$vol" -force 2>/dev/null || true
+  done
+  sleep 1
 
-MOUNT_OUTPUT=$(hdiutil attach "$RW_DMG_PATH" -readwrite -noverify -noautoopen)
-MOUNT_POINT=$(echo "$MOUNT_OUTPUT" | grep -o '/Volumes/.*' | head -1)
-VOL_NAME=$(basename "$MOUNT_POINT")
-echo "  Mounted DMG at: $MOUNT_POINT (volume: $VOL_NAME)"
+  MOUNT_OUTPUT=$(hdiutil attach "$RW_DMG_PATH" -readwrite -noverify -noautoopen)
+  MOUNT_POINT=$(echo "$MOUNT_OUTPUT" | grep -o '/Volumes/.*' | head -1)
+  VOL_NAME=$(basename "$MOUNT_POINT")
+  echo "  Mounted DMG at: $MOUNT_POINT (volume: $VOL_NAME)"
 
-# Copy background image into a hidden folder on the DMG volume
-mkdir -p "$MOUNT_POINT/.background"
-BG_IMG="$PROJECT_ROOT/scripts/dmg-background.png"
-if [ ! -f "$BG_IMG" ]; then
-  echo "  Generating white background image..."
-  python3 -c "
+  # Copy background image into a hidden folder on the DMG volume
+  mkdir -p "$MOUNT_POINT/.background"
+  BG_IMG="$PROJECT_ROOT/scripts/dmg-background.png"
+  if [ ! -f "$BG_IMG" ]; then
+    echo "  Generating white background image..."
+    python3 -c "
 from PIL import Image
 img = Image.new('RGB', (540, 300), color=(255, 255, 255))
 img.save('$BG_IMG')
 "
-fi
-cp "$BG_IMG" "$MOUNT_POINT/.background/background.png"
+  fi
+  cp "$BG_IMG" "$MOUNT_POINT/.background/background.png"
 
-# Give Finder time to register the volume
-sleep 2
+  # Give Finder time to register the volume
+  sleep 2
 
-osascript <<APPLESCRIPT
+  osascript <<APPLESCRIPT
 tell application "Finder"
     tell disk "$VOL_NAME"
         open
@@ -325,11 +327,16 @@ tell application "Finder"
 end tell
 APPLESCRIPT
 
-echo "  DMG window styled."
+  echo "  DMG window styled."
 
-# Step 3: Unmount, then convert to compressed read-only DMG
-hdiutil detach "$MOUNT_POINT" -quiet
-sleep 1
+  # Unmount the styled DMG
+  hdiutil detach "$MOUNT_POINT" -quiet
+  sleep 1
+else
+  echo "  Skipping DMG window styling (CI environment)"
+fi
+
+# Step 3: Convert to compressed read-only DMG
 
 hdiutil convert "$RW_DMG_PATH" \
   -format UDZO \
@@ -365,9 +372,19 @@ echo "  DMG signed and verified."
 echo "[8/10] Submitting DMG to Apple notarization service..."
 echo "  This may take several minutes. Waiting for result..."
 
-NOTARIZE_OUTPUT=$(xcrun notarytool submit "$DMG_PATH" \
-  --keychain-profile "$KEYCHAIN_PROFILE" \
-  --wait 2>&1) || true
+if [ -n "${APPLE_ID:-}" ]; then
+  # CI path: use explicit credentials
+  NOTARIZE_OUTPUT=$(xcrun notarytool submit "$DMG_PATH" \
+    --apple-id "$APPLE_ID" \
+    --team-id "$APPLE_TEAM_ID" \
+    --password "$APPLE_APP_PASSWORD" \
+    --wait 2>&1) || true
+else
+  # Local path: use stored keychain profile
+  NOTARIZE_OUTPUT=$(xcrun notarytool submit "$DMG_PATH" \
+    --keychain-profile "$KEYCHAIN_PROFILE" \
+    --wait 2>&1) || true
+fi
 
 echo "$NOTARIZE_OUTPUT"
 
@@ -381,8 +398,15 @@ else
   echo "ERROR: Notarization failed!" >&2
   if [ -n "$SUBMISSION_ID" ]; then
     echo "  Fetching notarization log for submission: $SUBMISSION_ID" >&2
-    xcrun notarytool log "$SUBMISSION_ID" \
-      --keychain-profile "$KEYCHAIN_PROFILE" 2>&1 || true
+    if [ -n "${APPLE_ID:-}" ]; then
+      xcrun notarytool log "$SUBMISSION_ID" \
+        --apple-id "$APPLE_ID" \
+        --team-id "$APPLE_TEAM_ID" \
+        --password "$APPLE_APP_PASSWORD" 2>&1 || true
+    else
+      xcrun notarytool log "$SUBMISSION_ID" \
+        --keychain-profile "$KEYCHAIN_PROFILE" 2>&1 || true
+    fi
   fi
   exit 1
 fi
