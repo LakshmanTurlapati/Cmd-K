@@ -2,7 +2,7 @@
   "name": "cmd-k",
   "displayName": "CMD + K",
   "description": "AI-powered terminal command generation with CMD+K - supports OpenAI, Anthropic, and xAI",
-  "version": "0.2.0",
+  "version": "0.2.4",
   "publisher": "lakshman-turlapati",
   "author": "Lakshman Turlapati",
   "icon": "icons/icon.png",

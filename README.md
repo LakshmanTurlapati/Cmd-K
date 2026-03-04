@@ -315,6 +315,8 @@ cmd-k/
 
 ## Configuration
 
+Type `/settings` into the overlay to configure these options.
+
 | Setting | Location | Description |
 |---|---|---|
 | **API Key** | System credential store (macOS Keychain / Windows Credential Manager) | xAI API key. Never stored in plaintext. Never sent to the frontend. |
@@ -330,6 +332,7 @@ cmd-k/
 - [x] **v0.1.0** -- macOS native app: overlay, hotkey, context detection, AI streaming, safety layer, terminal pasting
 - [x] **v0.1.1** -- Command history, arrow-key navigation, per-window AI follow-up context
 - [x] **v0.2.1** -- Windows support: Win32 overlay, UIA reader, SendInput paste, NSIS installer, cross-platform builds
+- [x] **v0.2.4** -- Multi-provider support, VS Code extension, showcase website, privacy policy
 - [ ] **Next** -- Linux support, CI/CD, additional terminal integrations
 
 ---
