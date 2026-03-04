@@ -114,3 +114,14 @@ Phases execute in numeric order: 17 then 18.
 
 Plans:
 - [ ] 19-01-PLAN.md -- Add exhaustive cross-platform destructive patterns and verify with inline tests
+
+### Phase 20: Add GitHub Actions CI/CD for Windows and macOS builds on release tag with notarization credential management
+
+**Goal:** Automated CI/CD pipeline that builds signed+notarized macOS DMG and unsigned Windows NSIS installer on `v*` tag push, with Apple credential migration from local keychain to GitHub Secrets and auto-published GitHub Releases with SHA256 checksums
+**Requirements**: CICD-01, CICD-02, CICD-03, CICD-04, CICD-05, CICD-06
+**Depends on:** Phase 19
+**Plans:** 2 plans
+
+Plans:
+- [ ] 20-01-PLAN.md -- Parameterize build-dmg.sh for CI + credential migration guide
+- [ ] 20-02-PLAN.md -- Create release.yml workflow with macOS/Windows builds and GitHub Release publishing
