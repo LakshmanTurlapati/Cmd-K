@@ -20,7 +20,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 APP_NAME="CMD+K"
 IDENTIFIER="com.lakshmanturlapati.cmd-k"
-VERSION="0.2.1"
+VERSION="0.2.2"
 TARGET="universal-apple-darwin"
 SIGNING_IDENTITY="Developer ID Application: VENKAT LUKSSHMAN TURLAPATI (36L722DZ7X)"
 KEYCHAIN_PROFILE="CMD-K-NOTARIZE"
