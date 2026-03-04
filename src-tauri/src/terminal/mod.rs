@@ -120,7 +120,14 @@ pub fn detect_full_with_hwnd(
                         let uia_text = uia_reader::read_terminal_text_windows(hwnd)
                             .map(|text| filter::filter_sensitive(&text));
                         if let Some(ref text) = uia_text {
-                            eprintln!("[detect_full_with_hwnd] UIA text: {} bytes", text.len());
+                            eprintln!("[detect_full_with_hwnd] UIA text: {} bytes, content: {:?}", text.len(), &text[..text.len().min(500)]);
+                            // Infer shell type from visible text when process tree detection failed
+                            // (e.g. Windows Terminal ConPTY where shells aren't WT descendants)
+                            if terminal.cwd.is_none() {
+                                let shell = infer_shell_from_text(text);
+                                eprintln!("[detect_full_with_hwnd] inferred shell from UIA text: {}", shell);
+                                terminal.shell_type = Some(shell.to_string());
+                            }
                         }
                         terminal.visible_output = uia_text;
                     }
@@ -399,6 +406,17 @@ fn detect_app_context_windows(previous_app_pid: i32, _pre_captured_text: Option<
             visible_output: None, // UIA reading done separately via get_terminal_output command
             running_process: proc_info.running_process,
         })
+    } else if _is_terminal {
+        // Known terminal (e.g. WindowsTerminal.exe) but no shell found in process tree.
+        // Windows Terminal uses ConPTY where shell processes are not descendants of WT.
+        // Default to "powershell" to ensure terminal mode is used.
+        eprintln!("[detect_app_context_windows] known terminal {} but no shell in process tree, defaulting to powershell", exe_str);
+        Some(TerminalContext {
+            shell_type: Some("powershell".to_string()),
+            cwd: None,
+            visible_output: None,
+            running_process: None,
+        })
     } else {
         None
     };
@@ -410,4 +428,25 @@ fn detect_app_context_windows(previous_app_pid: i32, _pre_captured_text: Option<
         console_last_line: None,
         visible_text: None,
     })
+}
+
+/// Infer shell type from visible terminal text.
+/// "PS C:\>" or "PS>" patterns → powershell, "C:\>" without PS → cmd, "$" prompt → bash.
+fn infer_shell_from_text(text: &str) -> &'static str {
+    // Check last few lines for prompt patterns
+    for line in text.lines().rev().take(10) {
+        let trimmed = line.trim();
+        if trimmed.starts_with("PS ") || trimmed.starts_with("PS>") {
+            return "powershell";
+        }
+        // CMD prompt: "C:\path>" without leading "PS "
+        if trimmed.len() >= 3 && trimmed.chars().nth(1) == Some(':') && trimmed.contains('>') && !trimmed.starts_with("PS") {
+            return "cmd";
+        }
+        // Bash/zsh prompt
+        if trimmed.ends_with('$') || trimmed.contains("$ ") {
+            return "bash";
+        }
+    }
+    "powershell" // default fallback
 }
