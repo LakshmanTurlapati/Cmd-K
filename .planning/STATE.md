@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Phase 19 -- Enhance Destructive Commands List (COMPLETE)
+**Current focus:** Phase 20 -- CI/CD Release Pipeline
 
 ## Current Position
 
-Phase: 19 of 19 (Enhance Destructive Commands List)
-Plan: 1 of 1 (Complete)
-Status: Phase 19 complete
-Last activity: 2026-03-04 -- Completed Phase 19 Plan 01 (Exhaustive Destructive Command Patterns)
+Phase: 20 of 20 (CI/CD Release Pipeline)
+Plan: 1 of 2 (Complete)
+Status: Phase 20 Plan 01 complete, Plan 02 pending
+Last activity: 2026-03-04 -- Completed Phase 20 Plan 01 (Parameterize Build Script and Secrets Guide)
 
-Progress: [##########] 100%
+Progress: [#####-----] 50%
 
 ## Performance Metrics
 
@@ -59,6 +59,9 @@ Progress: [##########] 100%
 - Phase 19 Plan 01: 3 min, 1 task, 1 file
 - Expanded DESTRUCTIVE_PATTERNS from ~80 to 150 patterns
 
+**Phase 20 Summary:**
+- Phase 20 Plan 01: 2 min, 2 tasks, 2 files
+
 ## Accumulated Context
 
 ### Decisions
@@ -71,6 +74,9 @@ All prior decisions archived in PROJECT.md Key Decisions table.
 - [Phase 19]: Used // === Section === format for organizing destructive pattern categories
 - [Phase 19]: No test suite -- manual verification per user decision
 - [Phase 19]: Added terraform/vagrant/docker-compose patterns beyond plan spec for IaC coverage
+- [Phase 20]: grep+sed for version extraction from tauri.conf.json (no jq dependency)
+- [Phase 20]: APPLE_ID env var presence determines CI vs local notarization path
+- [Phase 20]: CI env var check skips DMG Finder window styling (AppleScript requires display)
 
 ### Pending Todos
 
@@ -88,6 +94,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-04 (Phase 19 Plan 01 executed)
-Stopped at: Completed 19-01-PLAN.md
-Resume file: .planning/phases/19-enhance-destructive-commands-list-to-be-more-exhaustive-across-windows-linux-and-macos/19-01-SUMMARY.md
+Last session: 2026-03-04 (Phase 20 Plan 01 executed)
+Stopped at: Completed 20-01-PLAN.md
+Resume file: .planning/phases/20-add-github-actions-ci-cd-for-windows-and-macos-builds-on-release-tag-with-notarization-credential-management/20-01-SUMMARY.md

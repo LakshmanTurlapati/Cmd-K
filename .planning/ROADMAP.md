@@ -120,7 +120,7 @@ Plans:
 **Goal:** Automated CI/CD pipeline that builds signed+notarized macOS DMG and unsigned Windows NSIS installer on `v*` tag push, with Apple credential migration from local keychain to GitHub Secrets and auto-published GitHub Releases with SHA256 checksums
 **Requirements**: CICD-01, CICD-02, CICD-03, CICD-04, CICD-05, CICD-06
 **Depends on:** Phase 19
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 - [ ] 20-01-PLAN.md -- Parameterize build-dmg.sh for CI + credential migration guide
