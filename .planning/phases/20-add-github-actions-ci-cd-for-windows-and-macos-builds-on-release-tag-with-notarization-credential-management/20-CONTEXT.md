@@ -77,7 +77,7 @@ Create a GitHub Actions CI/CD pipeline that builds signed+notarized macOS DMG an
 <specifics>
 ## Specific Ideas
 
-- User specifically wants careful credential migration: keychain profile → GitHub Secrets
+- **Priority: Secrets first** — User wants credential migration (keychain → GitHub Secrets) done as the first step, before writing any workflow YAML. Get secrets wired up so the workflow can be tested immediately.
 - Include documentation for the p12 export process (Keychain Access → Export → base64)
 - The existing `docs/windows-ci-build.md` has a ready-to-use workflow template for Windows — leverage it
 - Version mismatch in build-dmg.sh (0.2.2) vs package.json (0.2.4) should be fixed as part of parameterization
