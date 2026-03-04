@@ -28,7 +28,7 @@ Press a hotkey from anywhere on your desktop. Type what you want. Get a working 
 
 <div align="center">
 
-[Website](https://www.cmd-k.site) · [Features](#features) · [How It Works](#how-it-works) · [Architecture](#architecture) · [Tech Stack](#tech-stack) · [Quick Start](#quick-start) · [Project Structure](#project-structure) · [Contributing](#contributing)
+[Website](https://www.cmd-k.site) · [Download](#download) · [Features](#features) · [How It Works](#how-it-works) · [Architecture](#architecture) · [Tech Stack](#tech-stack) · [Quick Start](#quick-start) · [Project Structure](#project-structure) · [Contributing](#contributing)
 
 </div>
 
@@ -172,6 +172,12 @@ graph TB
 
 ![xAI](https://img.shields.io/badge/xAI_Grok-555555?style=flat-square&logo=x&logoColor=white)
 ![SSE Streaming](https://img.shields.io/badge/SSE_Streaming-FF6600?style=flat-square&logo=lightning&logoColor=white)
+
+---
+
+## Download
+
+Grab the latest release from the [Releases page](https://github.com/LakshmanTurlapati/Cmd-K/releases). All builds are compiled and signed automatically via GitHub Actions -- nothing touches a local machine. macOS binaries are notarized through Apple, so Gatekeeper won't complain. You can audit every step in the [workflow source](.github/workflows/).
 
 ---
 
@@ -324,16 +330,6 @@ Type `/settings` into the overlay to configure these options.
 | **Hotkey** | Tauri Store (`settings.json`) | Global trigger shortcut. Default: `Cmd+K` (macOS) / `Ctrl+K` (Windows). Supports any modifier+key combination. |
 | **Destructive Detection** | Settings > Preferences | Toggle safety pattern scanning on/off. Default: enabled. |
 | **Auto-Paste** | Settings > Preferences | Auto-paste generated commands to active terminal. Default: enabled. |
-
----
-
-## Roadmap
-
-- [x] **v0.1.0** -- macOS native app: overlay, hotkey, context detection, AI streaming, safety layer, terminal pasting
-- [x] **v0.1.1** -- Command history, arrow-key navigation, per-window AI follow-up context
-- [x] **v0.2.1** -- Windows support: Win32 overlay, UIA reader, SendInput paste, NSIS installer, cross-platform builds
-- [x] **v0.2.4** -- Multi-provider support, VS Code extension, showcase website, privacy policy
-- [ ] **Next** -- Linux support, CI/CD, additional terminal integrations
 
 ---
 
