@@ -69,6 +69,10 @@ All prior decisions archived in PROJECT.md Key Decisions table.
 
 None.
 
+### Roadmap Evolution
+
+- Phase 19 added: Enhance destructive commands list to be more exhaustive across Windows, Linux, and macOS
+
 ### Blockers/Concerns
 
 - ~~NSPanel Status window level blocks system overlays~~ -- RESOLVED in Phase 17 (lowered to Floating)
@@ -76,6 +80,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-03 (Phase 18 completed)
-Stopped at: Completed 18-01-PLAN.md -- Phase 18 done, milestone v0.2.2 complete
-Resume file: .planning/phases/18-draggable-overlay-positioning/18-01-SUMMARY.md
+Last session: 2026-03-04 (Phase 19 context gathered)
+Stopped at: Phase 19 context gathered
+Resume file: .planning/phases/19-enhance-destructive-commands-list-to-be-more-exhaustive-across-windows-linux-and-macos/19-CONTEXT.md
