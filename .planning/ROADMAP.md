@@ -73,7 +73,9 @@ Plans:
   1. User can click and drag the overlay to move it to a different position on screen
   2. After dismissing and re-invoking the overlay (Cmd+K), it appears at the last dragged position rather than the default center
   3. After quitting and relaunching the app, the overlay appears at the default position (not the previously dragged position)
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 18-01-PLAN.md — Add drag-to-reposition with in-memory position persistence and useDrag hook
 
 ## Progress
 
@@ -101,4 +103,4 @@ Phases execute in numeric order: 17 then 18.
 | 16. Build, Distribution, and Integration Testing | v0.2.1 | code complete | Complete | 2026-03-02 |
 | 01. Merge Windows branch | v0.2.1 | 2/2 | Complete | 2026-03-03 |
 | 17. Overlay Z-Order | v0.2.2 | Complete    | 2026-03-03 | 2026-03-03 |
-| 18. Draggable Overlay Positioning | v0.2.2 | 0/TBD | Not started | - |
+| 18. Draggable Overlay Positioning | v0.2.2 | 0/1 | Planned | - |
