@@ -8,8 +8,8 @@ How to migrate Apple signing credentials from your local keychain to GitHub Secr
 |--------|-------------|--------|
 | `APPLE_CERTIFICATE_BASE64` | Base64-encoded .p12 Developer ID certificate | Keychain Access export (Section 2) |
 | `APPLE_CERTIFICATE_PASSWORD` | Password for the .p12 file | Set during export (Section 2, step 6) |
-| `APPLE_ID` | Apple ID email for notarization | `lakshmantvnm@gmail.com` |
-| `APPLE_TEAM_ID` | Apple Developer Team ID | `36L722DZ7X` |
+| `APPLE_ID` | Apple ID email for notarization | `<your-apple-id@example.com>` |
+| `APPLE_TEAM_ID` | Apple Developer Team ID | `<Your Team ID>` |
 | `APPLE_APP_PASSWORD` | App-specific password for notarization | appleid.apple.com (Section 3) |
 
 ## 2. Export Developer ID Certificate (.p12)
@@ -17,7 +17,7 @@ How to migrate Apple signing credentials from your local keychain to GitHub Secr
 1. Open **Keychain Access** (Applications > Utilities > Keychain Access)
 2. In the sidebar, select the **login** keychain
 3. Set the category filter to **My Certificates**
-4. Find **"Developer ID Application: VENKAT LUKSSHMAN TURLAPATI (36L722DZ7X)"**
+4. Find **"Developer ID Application: <Your Name> (<Your Team ID>)"**
 5. Right-click the certificate and select **Export "Developer ID Application..."**
 6. Choose **.p12** format, save the file (e.g., `certificate.p12`), and set a strong password when prompted
 7. Base64-encode the exported file:
@@ -51,8 +51,8 @@ How to migrate Apple signing credentials from your local keychain to GitHub Secr
    |------|-------|
    | `APPLE_CERTIFICATE_BASE64` | The base64 string from Section 2, step 7 |
    | `APPLE_CERTIFICATE_PASSWORD` | The password you set in Section 2, step 6 |
-   | `APPLE_ID` | `lakshmantvnm@gmail.com` |
-   | `APPLE_TEAM_ID` | `36L722DZ7X` |
+   | `APPLE_ID` | `<your-apple-id@example.com>` |
+   | `APPLE_TEAM_ID` | `<Your Team ID>` |
    | `APPLE_APP_PASSWORD` | The app-specific password from Section 3 |
 
 ## 5. Windows Signing (Future)
@@ -85,4 +85,4 @@ After adding all secrets:
 If the workflow fails at the notarization step, double-check that:
 - `APPLE_CERTIFICATE_BASE64` was encoded correctly (no line breaks in the secret value)
 - `APPLE_APP_PASSWORD` is an app-specific password, not your Apple ID password
-- `APPLE_TEAM_ID` matches exactly: `36L722DZ7X`
+- `APPLE_TEAM_ID` matches exactly: `<Your Team ID>`
