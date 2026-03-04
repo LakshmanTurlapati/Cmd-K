@@ -104,3 +104,13 @@ Phases execute in numeric order: 17 then 18.
 | 01. Merge Windows branch | v0.2.1 | 2/2 | Complete | 2026-03-03 |
 | 17. Overlay Z-Order | v0.2.2 | Complete    | 2026-03-03 | 2026-03-03 |
 | 18. Draggable Overlay Positioning | v0.2.2 | 1/1 | Complete | 2026-03-03 |
+
+### Phase 19: Enhance destructive commands list to be more exhaustive across Windows, Linux, and macOS
+
+**Goal:** Expand the destructive command regex pattern set from ~80 to 150+ patterns covering macOS, Linux, Windows, containers, package managers, and config file overwrites -- all organized with clear section headers
+**Requirements**: SAFE-01, SAFE-02, SAFE-03, SAFE-04, SAFE-05, SAFE-06
+**Depends on:** Phase 18
+**Plans:** 1 plan
+
+Plans:
+- [ ] 19-01-PLAN.md -- Add exhaustive cross-platform destructive patterns and verify with inline tests
