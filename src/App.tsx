@@ -5,6 +5,7 @@ import { Store } from "@tauri-apps/plugin-store";
 import { useOverlayStore, XaiModelWithMeta } from "@/store";
 import { useKeyboard } from "@/hooks/useKeyboard";
 import { useWindowAutoSize } from "@/hooks/useWindowAutoSize";
+import { useDrag } from "@/hooks/useDrag";
 import { Overlay } from "@/components/Overlay";
 
 function App() {
@@ -25,6 +26,9 @@ function App() {
 
   // Dynamically resize the Tauri window to match panel content
   useWindowAutoSize(panelRef);
+
+  // Enable drag-to-reposition on the overlay panel
+  useDrag(panelRef);
 
   // On startup: load persisted hotkey from store and re-register it
   useEffect(() => {
@@ -229,7 +233,7 @@ function App() {
       style={{ background: "transparent" }}
       onMouseDown={handleMouseDown}
     >
-      <div ref={panelRef} className="select-text">
+      <div ref={panelRef} className="select-text cursor-grab active:cursor-grabbing">
         <Overlay onSubmit={handleSubmit} />
       </div>
     </div>
