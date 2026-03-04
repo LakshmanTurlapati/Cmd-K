@@ -59,6 +59,63 @@ static DESTRUCTIVE_PATTERNS: Lazy<RegexSet> = Lazy::new(|| {
         r"(?i)\bdiskpart\b",
         r"(?i)\btaskkill\s+/f\b",
         r"(?i)\bStop-Process\s+.*-Force\b",
+        // CMD file/system commands
+        r"(?i)\berase\s+/[sf]\b",
+        r"(?i)\bdel\s+/f\b",
+        r"(?i)\bcipher\s+/w\b",
+        r"(?i)\bshutdown\s+/[srp]\b",
+        // Recovery inhibition (MITRE ATT&CK T1490)
+        r"(?i)\bvssadmin\s+.*delete\s+shadows\b",
+        r"(?i)\bvssadmin\s+.*resize\s+shadowstorage\b",
+        r"(?i)\bwmic\s+shadowcopy\s+delete\b",
+        r"(?i)\bwbadmin\s+delete\b",
+        // Service manipulation (permanent changes only)
+        r"(?i)\bsc\s+delete\b",
+        r"(?i)\bsc\s+config\s+.*disabled\b",
+        r"(?i)\bSet-Service\s+.*Disabled\b",
+        // Network destruction
+        r"(?i)\bnetsh\s+advfirewall\s+reset\b",
+        r"(?i)\bnetsh\s+advfirewall\s+.*state\s+off\b",
+        r"(?i)\bnetsh\s+int\s+ip\s+reset\b",
+        r"(?i)\bnetsh\s+winsock\s+reset\b",
+        r"(?i)\bDisable-NetAdapter\b",
+        // User / permission manipulation
+        r"(?i)\bnet\s+user\s+.*\/delete\b",
+        r"(?i)\bnet\s+user\s+.*\/active:no\b",
+        r"(?i)\bnet\s+localgroup\s+.*\/delete\b",
+        r"(?i)\bicacls\s+.*\/(grant|deny|remove)\b",
+        r"(?i)\btakeown\s+.*\/f\b",
+        r"(?i)\bRemove-LocalUser\b",
+        // Disk / partition / volume
+        r"(?i)\bFormat-Volume\b",
+        r"(?i)\bClear-Disk\b",
+        r"(?i)\bRemove-Partition\b",
+        r"(?i)\bInitialize-Disk\b",
+        r"(?i)\bmanage-bde\s+-(lock|off)\b",
+        // Registry manipulation
+        r"(?i)\breg\s+import\b",
+        r"(?i)\breg\s+restore\b",
+        r"(?i)\bregedit\s+.*\/s\b",
+        // PowerShell dangerous patterns
+        r"(?i)\bInvoke-Expression\b",
+        r"(?i)\bIEX\s",
+        r"(?i)\bSet-ExecutionPolicy\s+(Bypass|Unrestricted)\b",
+        r"(?i)\bClear-Content\b",
+        r"(?i)\bClear-EventLog\b",
+        r"(?i)\bwevtutil\s+cl\b",
+        r"(?i)\bRemove-Computer\b",
+        r"(?i)\bRestart-Computer\s+.*-Force\b",
+        r"(?i)\bStop-Computer\s+.*-Force\b",
+        // WMIC destructive commands
+        r"(?i)\bwmic\s+process\s+.*\b(delete|call\s+terminate)\b",
+        r"(?i)\bwmic\s+product\s+.*call\s+uninstall\b",
+        r"(?i)\bwmic\s+os\s+.*call\s+(shutdown|reboot)\b",
+        // WSL pass-through
+        r"(?i)\bwsl(\.exe)?\s+.*\brm\s+-[^-]*r",
+        r"(?i)\bwsl(\.exe)?\s+.*\b(dd\s+if=|mkfs|shred)\b",
+        r"(?i)\bwsl(\.exe)?\s+--unregister\b",
+        // Boot / system integrity
+        r"(?i)\bbootrec\s+\/(rebuildbcd|fixmbr|fixboot)\b",
     ])
     .expect("DESTRUCTIVE_PATTERNS regex set failed to compile")
 });
