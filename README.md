@@ -17,6 +17,7 @@ Press a hotkey from anywhere on your desktop. Type what you want. Get a working 
 ![Linux](https://img.shields.io/badge/Linux-Coming_Soon-555555?style=for-the-badge&logo=linux&logoColor=white)
 [![Website](https://img.shields.io/badge/Website-cmd--k.site-555555?style=for-the-badge&logo=safari&logoColor=white)](https://www.cmd-k.site)
 
+[![Downloads](https://img.shields.io/github/downloads/LakshmanTurlapati/Cmd-K/total?style=for-the-badge&logo=github&logoColor=white&color=555555)](https://github.com/LakshmanTurlapati/Cmd-K/releases)
 [![Stars](https://img.shields.io/github/stars/LakshmanTurlapati/Cmd-K?style=for-the-badge&logo=github&logoColor=white&color=555555)](https://github.com/LakshmanTurlapati/Cmd-K/stargazers)
 [![Forks](https://img.shields.io/github/forks/LakshmanTurlapati/Cmd-K?style=for-the-badge&logo=github&logoColor=white&color=555555)](https://github.com/LakshmanTurlapati/Cmd-K/network/members)
 [![Issues](https://img.shields.io/github/issues/LakshmanTurlapati/Cmd-K?style=for-the-badge&logo=github&logoColor=white&color=555555)](https://github.com/LakshmanTurlapati/Cmd-K/issues)
