@@ -1,5 +1,28 @@
 # Milestones
 
+## v0.2.4 Overlay UX, Safety & CI/CD (Shipped: 2026-03-04)
+
+**Phases completed:** 4 phases (17-20), 5 plans
+**Timeline:** 2026-03-03 to 2026-03-04 (2 days)
+**Git range:** 30 commits (41 files changed, 3,528 insertions)
+**Codebase:** 6,121 LOC Rust
+
+**Key accomplishments:**
+1. NSPanel window level lowered from Status (25) to Floating (3) -- system dialogs, Notification Center, and Spotlight render above the CMD+K overlay while it still floats above normal app windows
+2. Drag-to-reposition overlay via useDrag React hook with session-scoped in-memory position persistence (Mutex<Option<(f64, f64)>>), 2px dead zone, and screen-coordinate delta tracking
+3. Destructive command pattern library expanded from ~80 to 150 regex patterns across 10 sections: macOS, Linux, Windows, containers/orchestration, package managers, and config file overwrites
+4. Windows Terminal shell type detection fix -- ConPTY fallback correctly identifies PowerShell, cmd.exe, and WSL sessions
+5. Automated CI/CD pipeline via GitHub Actions: 3-job architecture (build-macos, build-windows, release) triggered on v* tag push, with signed+notarized macOS DMG and Windows NSIS installer, auto-published GitHub Release with SHA256 checksums
+6. Parameterized build-dmg.sh with env var fallbacks for CI/local compatibility, plus comprehensive secrets setup guide
+
+**Delivered:** Overlay UX polish (z-order fix, draggable positioning), comprehensive cross-platform destructive command safety, and fully automated CI/CD release pipeline.
+
+**Archives:**
+- milestones/v0.2.4-ROADMAP.md
+- milestones/v0.2.4-REQUIREMENTS.md
+
+---
+
 ## v0.2.1 Windows Support (Shipped: 2026-03-03)
 
 **Phases completed:** 7 phases (11-16, 01-merge), 6 GSD plans + 5 windows-branch phases

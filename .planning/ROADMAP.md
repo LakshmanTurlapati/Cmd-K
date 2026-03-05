@@ -5,7 +5,7 @@
 - v0.1.0 MVP -- Phases 1-7.1 (shipped 2026-02-28) | [Archive](milestones/v1.0-ROADMAP.md)
 - v0.1.1 Command History & Follow-ups -- Phases 8-10 (shipped 2026-03-01) | [Archive](milestones/v0.1.1-ROADMAP.md)
 - v0.2.1 Windows Support -- Phases 11-16, 01-merge (shipped 2026-03-03) | [Archive](milestones/v0.2.1-ROADMAP.md)
-- v0.2.2 Overlay UX Fixes (macOS) -- Phases 17-18 (shipped 2026-03-03)
+- v0.2.4 Overlay UX, Safety & CI/CD -- Phases 17-20 (shipped 2026-03-04) | [Archive](milestones/v0.2.4-ROADMAP.md)
 
 ## Phases
 
@@ -45,42 +45,17 @@
 
 </details>
 
-### v0.2.2 Overlay UX Fixes (macOS) -- SHIPPED 2026-03-03
+<details>
+<summary>v0.2.4 Overlay UX, Safety & CI/CD (Phases 17-20) -- SHIPPED 2026-03-04</summary>
 
-- [x] **Phase 17: Overlay Z-Order** - System dialogs and OS overlays appear above the CMD+K panel (completed 2026-03-03)
-- [x] **Phase 18: Draggable Overlay Positioning** - User can drag the overlay and it remembers position within the session (completed 2026-03-03)
+- [x] Phase 17: Overlay Z-Order (1/1 plan) -- completed 2026-03-03
+- [x] Phase 18: Draggable Overlay Positioning (1/1 plan) -- completed 2026-03-03
+- [x] Phase 19: Exhaustive Destructive Command Patterns (1/1 plan) -- completed 2026-03-04
+- [x] Phase 20: GitHub Actions CI/CD Pipeline (2/2 plans) -- completed 2026-03-04
 
-## Phase Details
-
-### Phase 17: Overlay Z-Order
-**Goal**: System UI elements (permission dialogs, Notification Center, Spotlight) can appear above the CMD+K overlay while the overlay still floats above normal application windows
-**Depends on**: Nothing (first phase of v0.2.2)
-**Requirements**: ZORD-01, ZORD-02
-**Success Criteria** (what must be TRUE):
-  1. When an Accessibility permission dialog appears while the overlay is open, the dialog is visible and interactable above the overlay
-  2. Notification Center, Spotlight, and other system overlays render above the CMD+K overlay when invoked
-  3. The overlay still floats above all normal application windows (the existing behavior that matters most is preserved)
-  4. Fullscreen app behavior is not regressed -- the overlay still appears on top of fullscreen apps
-**Plans**: 1 plan
-Plans:
-- [x] 17-01-PLAN.md — Lower NSPanel level from Status to Floating, verify z-order with system UI
-
-### Phase 18: Draggable Overlay Positioning
-**Goal**: User can reposition the overlay by dragging it, and the overlay reopens at the last dragged position until the app is relaunched
-**Depends on**: Phase 17 (z-order changes may affect window properties that dragging interacts with)
-**Requirements**: OPOS-01, OPOS-02, OPOS-03
-**Success Criteria** (what must be TRUE):
-  1. User can click and drag the overlay to move it to a different position on screen
-  2. After dismissing and re-invoking the overlay (Cmd+K), it appears at the last dragged position rather than the default center
-  3. After quitting and relaunching the app, the overlay appears at the default position (not the previously dragged position)
-**Plans**: 1 plan
-Plans:
-- [x] 18-01-PLAN.md — Add drag-to-reposition with in-memory position persistence and useDrag hook
+</details>
 
 ## Progress
-
-**Execution Order:**
-Phases execute in numeric order: 17 then 18.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -102,26 +77,7 @@ Phases execute in numeric order: 17 then 18.
 | 15. Platform Polish and Safety | v0.2.1 | code complete | Complete | 2026-03-02 |
 | 16. Build, Distribution, and Integration Testing | v0.2.1 | code complete | Complete | 2026-03-02 |
 | 01. Merge Windows branch | v0.2.1 | 2/2 | Complete | 2026-03-03 |
-| 17. Overlay Z-Order | v0.2.2 | Complete    | 2026-03-03 | 2026-03-03 |
-| 18. Draggable Overlay Positioning | v0.2.2 | 1/1 | Complete | 2026-03-03 |
-
-### Phase 19: Enhance destructive commands list to be more exhaustive across Windows, Linux, and macOS
-
-**Goal:** Expand the destructive command regex pattern set from ~80 to 150+ patterns covering macOS, Linux, Windows, containers, package managers, and config file overwrites -- all organized with clear section headers
-**Requirements**: SAFE-01, SAFE-02, SAFE-03, SAFE-04, SAFE-05, SAFE-06
-**Depends on:** Phase 18
-**Plans:** 1/1 plans complete
-
-Plans:
-- [ ] 19-01-PLAN.md -- Add exhaustive cross-platform destructive patterns and verify with inline tests
-
-### Phase 20: Add GitHub Actions CI/CD for Windows and macOS builds on release tag with notarization credential management
-
-**Goal:** Automated CI/CD pipeline that builds signed+notarized macOS DMG and unsigned Windows NSIS installer on `v*` tag push, with Apple credential migration from local keychain to GitHub Secrets and auto-published GitHub Releases with SHA256 checksums
-**Requirements**: CICD-01, CICD-02, CICD-03, CICD-04, CICD-05, CICD-06
-**Depends on:** Phase 19
-**Plans:** 2/2 plans complete
-
-Plans:
-- [ ] 20-01-PLAN.md -- Parameterize build-dmg.sh for CI + credential migration guide
-- [ ] 20-02-PLAN.md -- Create release.yml workflow with macOS/Windows builds and GitHub Release publishing
+| 17. Overlay Z-Order | v0.2.4 | 1/1 | Complete | 2026-03-03 |
+| 18. Draggable Overlay Positioning | v0.2.4 | 1/1 | Complete | 2026-03-03 |
+| 19. Exhaustive Destructive Patterns | v0.2.4 | 1/1 | Complete | 2026-03-04 |
+| 20. CI/CD Pipeline | v0.2.4 | 2/2 | Complete | 2026-03-04 |
