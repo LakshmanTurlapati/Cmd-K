@@ -1,31 +1,31 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.2.4
-milestone_name: Overlay UX, Safety & CI/CD
-status: complete
-last_updated: "2026-03-04"
+milestone: v0.2.6
+milestone_name: Multi-Provider, WSL & Auto-Update
+status: defining_requirements
+last_updated: "2026-03-08"
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 5
-  completed_plans: 5
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-04)
+See: .planning/PROJECT.md (updated 2026-03-08)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Planning next milestone
+**Current focus:** Defining requirements for v0.2.6
 
 ## Current Position
 
-Milestone v0.2.4 shipped. All phases complete.
-Last activity: 2026-03-04 -- Milestone archived
-
-Progress: [##########] 100%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-08 — Milestone v0.2.6 started
 
 ## Performance Metrics
 
@@ -70,5 +70,5 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-04 (Milestone v0.2.4 archived)
-Stopped at: Milestone complete -- ready for next milestone
+Last session: 2026-03-08 (Milestone v0.2.6 started)
+Stopped at: Defining requirements

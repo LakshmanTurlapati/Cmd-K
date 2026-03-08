@@ -56,15 +56,22 @@ The overlay must appear on top of the currently active application and feel inst
 - CICD-05: Apple signing credentials migrated to GitHub Secrets -- v0.2.4
 - CICD-06: build-dmg.sh parameterized via environment variables -- v0.2.4
 
-### Active
+## Current Milestone: v0.2.6 Multi-Provider, WSL & Auto-Update
 
-(None -- planning next milestone)
+**Goal:** Add multi-provider AI support (OpenAI, Anthropic, Google, xAI, OpenRouter), WSL terminal context on Windows, and auto-updater.
+
+**Target features:**
+- Multi-provider AI: OpenAI, Anthropic, Google Gemini, xAI (Grok), OpenRouter — all equal, user picks during onboarding
+- WSL terminal support: CWD, shell type, and output reading for WSL sessions in Windows Terminal, VS Code Remote-WSL, standalone wsl.exe, and Cursor
+- Auto-updater: check on launch, prompt user, install on next launch
+
+### Active
 
 ### Out of Scope
 
 - VS Code extension -- dropped in favor of standalone overlay app
-- OpenAI provider -- deferred to future milestone
-- Anthropic provider -- deferred to future milestone
+- OpenAI provider -- v0.2.6 scope
+- Anthropic provider -- v0.2.6 scope
 - Linux support -- Windows is v0.2.1 scope, Linux deferred to future
 - Command favorites/bookmarks -- future feature (history is v0.1.1 scope)
 - Multi-step command workflows -- future feature
@@ -73,7 +80,7 @@ The overlay must appear on top of the currently active application and feel inst
 - App Store distribution -- incompatible with Accessibility API requirement
 - Auto-execution without review -- safety risk, always paste, never execute directly
 - Windows OV/EV code signing -- purchase when distribution warrants it
-- Auto-updater (tauri-plugin-updater) -- separate phase
+- Auto-updater (tauri-plugin-updater) -- v0.2.6 scope
 - Linux builds -- separate phase
 
 ## Context
@@ -83,6 +90,8 @@ Tech stack: Tauri v2 (Rust + React + TypeScript), NSPanel for overlay, xAI/Grok 
 20 phases across 4 milestones (v0.1.0, v0.1.1, v0.2.1, v0.2.4), 38 plans executed over 14 days.
 All 43 requirements satisfied across milestones. 6,121 LOC Rust.
 CI/CD pipeline produces signed macOS DMG and Windows installer on every v* tag push.
+Currently xAI-only for AI provider — architecture needs provider abstraction for multi-provider support.
+WSL terminals on Windows not yet supported — need process tree walking into WSL namespace.
 
 ## Constraints
 
@@ -121,4 +130,4 @@ CI/CD pipeline produces signed macOS DMG and Windows installer on every v* tag p
 | Conditional Windows signing | Gates on secret presence, graceful skip when unconfigured | Good -- works without certificate |
 
 ---
-*Last updated: 2026-03-04 after v0.2.4 milestone*
+*Last updated: 2026-03-08 after v0.2.6 milestone start*
