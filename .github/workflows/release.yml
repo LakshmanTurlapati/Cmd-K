@@ -83,6 +83,8 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           CI: "true"
         run: chmod +x scripts/build-dmg.sh && ./scripts/build-dmg.sh
 
@@ -95,11 +97,22 @@ jobs:
           cd release
           shasum -a 256 "CMD+K-${{ env.VERSION }}-universal.dmg" > "CMD+K-${{ env.VERSION }}-universal.dmg.sha256"
 
+      - name: Copy updater artifacts
+        run: |
+          UPDATER_DIR="src-tauri/target/universal-apple-darwin/release/bundle/macos"
+          cp "$UPDATER_DIR"/CMD+K.app.tar.gz release/ 2>/dev/null || true
+          cp "$UPDATER_DIR"/CMD+K.app.tar.gz.sig release/ 2>/dev/null || true
+          # Verify the files exist
+          ls -la release/CMD+K.app.tar.gz*
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: macos-dmg
-          path: release/CMD+K-*.dmg*
+          path: |
+            release/CMD+K-*.dmg*
+            release/CMD+K.app.tar.gz
+            release/CMD+K.app.tar.gz.sig
 
       - name: Cleanup keychain
         if: always()
@@ -138,6 +151,9 @@ jobs:
         run: pnpm install
 
       - name: Build Tauri app
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: pnpm tauri build
 
       - name: Sign Windows installer
@@ -160,8 +176,12 @@ jobs:
         shell: bash
         run: |
           NSIS_DIR="src-tauri/target/release/bundle/nsis"
-          ORIG=$(ls "$NSIS_DIR"/*.exe | head -1)
-          mv "$ORIG" "$NSIS_DIR/CMD+K-${{ env.VERSION }}-windows-x64.exe"
+          ORIG_EXE=$(ls "$NSIS_DIR"/*.exe | grep -v '.exe.sig' | head -1)
+          ORIG_SIG="${ORIG_EXE}.sig"
+          mv "$ORIG_EXE" "$NSIS_DIR/CMD+K-${{ env.VERSION }}-windows-x64.exe"
+          if [ -f "$ORIG_SIG" ]; then
+            mv "$ORIG_SIG" "$NSIS_DIR/CMD+K-${{ env.VERSION }}-windows-x64.exe.sig"
+          fi
 
       - name: Generate checksum
         shell: bash
@@ -187,6 +207,46 @@ jobs:
       - name: Extract version from tag
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
 
+      - name: Assemble latest.json
+        run: |
+          VERSION="${{ env.VERSION }}"
+          REPO_URL="https://github.com/LakshmanTurlapati/Cmd-K/releases/download/v${VERSION}"
+
+          # Read signatures
+          SIG_MACOS=""
+          if [ -f "artifacts/macos-dmg/CMD+K.app.tar.gz.sig" ]; then
+            SIG_MACOS=$(cat "artifacts/macos-dmg/CMD+K.app.tar.gz.sig")
+          fi
+
+          SIG_WINDOWS=""
+          if [ -f "artifacts/windows-installer/CMD+K-${VERSION}-windows-x64.exe.sig" ]; then
+            SIG_WINDOWS=$(cat "artifacts/windows-installer/CMD+K-${VERSION}-windows-x64.exe.sig")
+          fi
+
+          cat > artifacts/latest.json <<EOF
+          {
+            "version": "${VERSION}",
+            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "platforms": {
+              "darwin-aarch64": {
+                "signature": "${SIG_MACOS}",
+                "url": "${REPO_URL}/CMD+K.app.tar.gz"
+              },
+              "darwin-x86_64": {
+                "signature": "${SIG_MACOS}",
+                "url": "${REPO_URL}/CMD+K.app.tar.gz"
+              },
+              "windows-x86_64": {
+                "signature": "${SIG_WINDOWS}",
+                "url": "${REPO_URL}/CMD+K-${VERSION}-windows-x64.exe"
+              }
+            }
+          }
+          EOF
+
+          echo "latest.json contents:"
+          cat artifacts/latest.json
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -201,6 +261,10 @@ jobs:
             | macOS (Universal) | CMD+K-${{ env.VERSION }}-universal.dmg |
             | Windows (x64) | CMD+K-${{ env.VERSION }}-windows-x64.exe |
 
+            ### Auto-Update
+
+            Users on v0.2.6+ will receive this update automatically.
+
             ### Checksums (SHA256)
 
             See the `.sha256` files attached to this release.
@@ -208,7 +272,10 @@ jobs:
             ---
             _Edit this release to add detailed release notes._
           files: |
-            artifacts/macos-dmg/*
-            artifacts/windows-installer/*
+            artifacts/macos-dmg/CMD+K-*.dmg*
+            artifacts/macos-dmg/CMD+K.app.tar.gz
+            artifacts/macos-dmg/CMD+K.app.tar.gz.sig
+            artifacts/windows-installer/CMD+K-*.*
+            artifacts/latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
