@@ -862,6 +862,32 @@ fn find_shell_by_ancestry(app_pid: i32, _focused_cwd: Option<&str>) -> Option<i3
             return None;
         }
 
+        // For IDE terminals (VS Code, Cursor), deprioritize cmd.exe.
+        // VS Code spawns many internal cmd.exe processes for git, tasks, and extensions.
+        // User terminal tabs are typically powershell.exe, pwsh.exe, bash.exe, etc.
+        let is_ide = super::detect_windows::is_ide_with_terminal_exe(
+            &super::detect_windows::get_exe_name_for_pid(app_pid_u32).unwrap_or_default()
+        );
+        if is_ide && descendant_shells.len() > 1 {
+            let interactive: Vec<_> = descendant_shells.iter()
+                .filter(|(_, name)| {
+                    let lower = name.to_lowercase();
+                    // Keep only real interactive shells, exclude cmd.exe (VS Code internal)
+                    lower != "cmd.exe"
+                })
+                .collect();
+            if !interactive.is_empty() {
+                eprintln!("[process] IDE mode: preferring interactive shells ({} of {} descendants)",
+                    interactive.len(), descendant_shells.len());
+                for (pid, name) in &interactive {
+                    eprintln!("[process]   interactive shell: pid={} name={}", pid, name);
+                }
+                return interactive.iter()
+                    .max_by_key(|(pid, _)| *pid)
+                    .map(|(pid, _)| *pid as i32);
+            }
+        }
+
         // Pick the most recently spawned (highest PID) shell
         descendant_shells.iter()
             .max_by_key(|(pid, _)| *pid)
