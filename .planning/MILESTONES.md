@@ -1,5 +1,28 @@
 # Milestones
 
+## v0.2.6 Multi-Provider, WSL & Auto-Update (Shipped: 2026-03-09)
+
+**Phases completed:** 5 phases (21-24 + 23.1), 10 executed plans
+**Timeline:** 2026-03-09 (1 day)
+**Git range:** 25 feat commits (73 files changed, 8,920 insertions)
+**Codebase:** 7,616 LOC Rust + 3,765 LOC TypeScript
+
+**Key accomplishments:**
+1. Multi-provider AI support — OpenAI, Anthropic, Gemini, xAI, OpenRouter with per-provider streaming adapters, API key validation, and platform keychain storage
+2. Provider-aware frontend — Onboarding provider selection, settings switching with key status checkmarks, tier-grouped model lists (Fast/Balanced/Most Capable), per-provider model memory
+3. WSL terminal context — Detects WSL sessions in Windows Terminal, VS Code, Cursor, and standalone wsl.exe via process ancestry walk; reads Linux CWD, shell type, and generates Linux commands
+4. VS Code WSL detection — Multi-signal approach using window title [WSL:] patterns, UIA tree walking, CWD path style fallback, and IDE-aware shell priority deprioritizing cmd.exe
+5. Auto-updater — Background update checks (launch + 24h), tray menu state machine with text transitions, one-click download, install-on-quit via tauri-plugin-updater with Ed25519 signing
+6. CI/CD updater pipeline — Release workflow generates .sig files, assembles latest.json manifest with platform keys, uploads signed updater artifacts to GitHub Releases
+
+**Delivered:** Multi-provider AI with 5 provider options, full WSL terminal awareness on Windows, and silent auto-update with signed artifacts.
+
+**Archives:**
+- milestones/v0.2.6-ROADMAP.md
+- milestones/v0.2.6-REQUIREMENTS.md
+
+---
+
 ## v0.2.4 Overlay UX, Safety & CI/CD (Shipped: 2026-03-04)
 
 **Phases completed:** 4 phases (17-20), 5 plans
