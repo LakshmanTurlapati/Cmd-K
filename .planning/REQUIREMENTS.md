@@ -12,8 +12,8 @@ Requirements for multi-provider AI, WSL terminal context, and auto-updater.
 - [x] **PROV-01**: User can select their AI provider from OpenAI, Anthropic, Google Gemini, xAI, or OpenRouter
 - [x] **PROV-02**: User can store a separate API key per provider in the platform keychain
 - [x] **PROV-03**: Existing xAI API key is migrated automatically on upgrade from v0.2.4
-- [ ] **PROV-04**: User can validate their API key for any provider before saving
-- [ ] **PROV-05**: User can see available models for their selected provider
+- [x] **PROV-04**: User can validate their API key for any provider before saving
+- [x] **PROV-05**: User can see available models for their selected provider
 - [x] **PROV-06**: AI responses stream in real-time from all 5 providers
 - [x] **PROV-07**: Provider-specific error messages show the correct provider name and troubleshooting hints
 
@@ -82,8 +82,8 @@ Requirements for multi-provider AI, WSL terminal context, and auto-updater.
 | PROV-01 | Phase 21 | Complete |
 | PROV-02 | Phase 21 | Complete |
 | PROV-03 | Phase 21 | Complete |
-| PROV-04 | Phase 21 | Pending |
-| PROV-05 | Phase 21 | Pending |
+| PROV-04 | Phase 21 | Complete |
+| PROV-05 | Phase 21 | Complete |
 | PROV-06 | Phase 21 | Complete |
 | PROV-07 | Phase 21 | Complete |
 | PFUI-01 | Phase 22 | Pending |

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: executing
-stopped_at: Completed 21-01-PLAN.md
-last_updated: "2026-03-09T06:44:17.000Z"
-last_activity: 2026-03-09 -- Provider abstraction layer plan 01 complete
+stopped_at: Completed 21-02-PLAN.md
+last_updated: "2026-03-09T06:51:18.000Z"
+last_activity: 2026-03-09 -- Phase 21 complete (all 2 plans)
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
-  percent: 12
+  completed_plans: 2
+  percent: 25
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-08)
 
 ## Current Position
 
-Phase: 21 (first of 4 in v0.2.6) -- Provider Abstraction Layer
-Plan: 2 of 2
-Status: Executing
-Last activity: 2026-03-09 -- Plan 01 complete (Provider enum + adapters + keychain + migration)
+Phase: 21 (first of 4 in v0.2.6) -- Provider Abstraction Layer -- COMPLETE
+Plan: 2 of 2 (all complete)
+Status: Phase Complete
+Last activity: 2026-03-09 -- Phase 21 complete (all backend + frontend provider abstraction)
 
-Progress: [█░░░░░░░░░] 12%
+Progress: [██░░░░░░░░] 25%
 
 ## Performance Metrics
 
@@ -45,7 +45,7 @@ Progress: [█░░░░░░░░░] 12%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 21. Provider Abstraction | 1/2 | 4min | 4min |
+| 21. Provider Abstraction | 2/2 | 8min | 4min |
 | 22. Multi-Provider Frontend | -- | -- | -- |
 | 23. WSL Terminal Context | -- | -- | -- |
 | 24. Auto-Updater | -- | -- | -- |
@@ -59,6 +59,8 @@ All prior decisions archived in PROJECT.md Key Decisions table.
 - [21-01] Enum dispatch over trait objects for provider routing (all providers known at compile time)
 - [21-01] Three adapters cover five providers: OpenAI/xAI/OpenRouter share OpenAI-compatible SSE format
 - [21-01] v0.2.4 migration writes only provider to settings.json; xAI keychain account name unchanged
+- [21-02] Split validate_and_fetch_models into validate_api_key + fetch_models for separation of concerns
+- [21-02] Curated models with tier tags merged with API-fetched models; default provider is "xai"
 
 ### Pending Todos
 
@@ -70,6 +72,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-09T06:44:17.000Z
-Stopped at: Completed 21-01-PLAN.md
-Resume file: .planning/phases/21-provider-abstraction-layer/21-02-PLAN.md
+Last session: 2026-03-09T06:51:18.000Z
+Stopped at: Completed 21-02-PLAN.md (Phase 21 complete)
+Resume file: .planning/phases/22-multi-provider-frontend/22-01-PLAN.md

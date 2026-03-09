@@ -58,7 +58,7 @@
 
 ### v0.2.6 Multi-Provider, WSL & Auto-Update (In Progress)
 
-- [ ] **Phase 21: Provider Abstraction Layer** - Rust backend with provider enum, per-provider streaming, parameterized keychain, and v0.2.4 migration
+- [x] **Phase 21: Provider Abstraction Layer** - Rust backend with provider enum, per-provider streaming, parameterized keychain, and v0.2.4 migration (completed 2026-03-09)
 - [ ] **Phase 22: Multi-Provider Frontend** - Provider selection in onboarding and settings, model picker, OpenRouter integration
 - [ ] **Phase 23: WSL Terminal Context** - Detect WSL sessions, read CWD/shell/output, generate Linux commands, apply Linux safety patterns
 - [ ] **Phase 24: Auto-Updater** - Check on launch, tray notification, signed updates, CI/CD manifest generation
@@ -75,7 +75,7 @@
   3. Existing v0.2.4 users upgrading see their xAI API key preserved automatically with xAI as default provider
   4. User can validate any provider's API key and see a provider-specific success or error message
   5. User can generate a command and see it stream in real-time from any of the 5 providers
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 21-01-PLAN.md — Provider enum, 3 streaming adapters, parameterized keychain, v0.2.4 migration
@@ -159,7 +159,7 @@ Recommended order: 21 -> 22 -> 23 -> 24
 | 18. Draggable Overlay Positioning | v0.2.4 | 1/1 | Complete | 2026-03-03 |
 | 19. Exhaustive Destructive Patterns | v0.2.4 | 1/1 | Complete | 2026-03-04 |
 | 20. CI/CD Pipeline | v0.2.4 | 2/2 | Complete | 2026-03-04 |
-| 21. Provider Abstraction Layer | 1/2 | In Progress|  | - |
+| 21. Provider Abstraction Layer | 2/2 | Complete   | 2026-03-09 | - |
 | 22. Multi-Provider Frontend | v0.2.6 | 0/TBD | Not started | - |
 | 23. WSL Terminal Context | v0.2.6 | 0/TBD | Not started | - |
 | 24. Auto-Updater | v0.2.6 | 0/TBD | Not started | - |
