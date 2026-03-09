@@ -39,8 +39,8 @@ Requirements for multi-provider AI, WSL terminal context, and auto-updater.
 - [x] **WSLT-05**: CMD+K reads the current working directory from WSL sessions
 - [x] **WSLT-06**: CMD+K detects the shell type (bash, zsh, fish) in WSL sessions
 - [x] **WSLT-07**: CMD+K reads visible terminal output from WSL sessions
-- [ ] **WSLT-08**: AI generates Linux commands when user is in a WSL session
-- [ ] **WSLT-09**: Linux destructive command patterns are applied in WSL sessions
+- [x] **WSLT-08**: AI generates Linux commands when user is in a WSL session
+- [x] **WSLT-09**: Linux destructive command patterns are applied in WSL sessions
 - [x] **WSLT-10**: WSL distro name is shown in the context badge (e.g., "bash (WSL: Ubuntu)")
 
 ### Auto-Updater
@@ -100,8 +100,8 @@ Requirements for multi-provider AI, WSL terminal context, and auto-updater.
 | WSLT-05 | Phase 23 | Complete |
 | WSLT-06 | Phase 23 | Complete |
 | WSLT-07 | Phase 23 | Complete |
-| WSLT-08 | Phase 23 | Pending |
-| WSLT-09 | Phase 23 | Pending |
+| WSLT-08 | Phase 23 | Complete |
+| WSLT-09 | Phase 23 | Complete |
 | WSLT-10 | Phase 23 | Complete |
 | UPDT-01 | Phase 24 | Pending |
 | UPDT-02 | Phase 24 | Pending |

@@ -60,7 +60,7 @@
 
 - [x] **Phase 21: Provider Abstraction Layer** - Rust backend with provider enum, per-provider streaming, parameterized keychain, and v0.2.4 migration (completed 2026-03-09)
 - [x] **Phase 22: Multi-Provider Frontend** - Provider selection in onboarding and settings, model picker, OpenRouter integration (completed 2026-03-09)
-- [ ] **Phase 23: WSL Terminal Context** - Detect WSL sessions, read CWD/shell/output, generate Linux commands, apply Linux safety patterns
+- [x] **Phase 23: WSL Terminal Context** - Detect WSL sessions, read CWD/shell/output, generate Linux commands, apply Linux safety patterns (completed 2026-03-09)
 - [ ] **Phase 24: Auto-Updater** - Check on launch, tray notification, signed updates, CI/CD manifest generation
 
 ## Phase Details
@@ -107,7 +107,7 @@ Plans:
   3. User can read visible terminal output from WSL sessions for AI context
   4. User asking for a command in a WSL session gets a Linux command (not a Windows command)
   5. Destructive Linux command patterns (rm -rf, systemctl, etc.) are applied when the user is in a WSL session
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 23-01-PLAN.md — WSL detection in process tree, Linux CWD/shell reading, secret filtering
@@ -161,5 +161,5 @@ Recommended order: 21 -> 22 -> 23 -> 24
 | 20. CI/CD Pipeline | v0.2.4 | 2/2 | Complete | 2026-03-04 |
 | 21. Provider Abstraction Layer | 2/2 | Complete    | 2026-03-09 | - |
 | 22. Multi-Provider Frontend | v0.2.6 | Complete    | 2026-03-09 | 2026-03-09 |
-| 23. WSL Terminal Context | 1/2 | In Progress|  | - |
+| 23. WSL Terminal Context | 2/2 | Complete   | 2026-03-09 | - |
 | 24. Auto-Updater | v0.2.6 | 0/TBD | Not started | - |

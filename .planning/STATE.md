@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: executing
-stopped_at: Phase 23 plan 01 complete
-last_updated: "2026-03-09T09:59:54Z"
-last_activity: 2026-03-09 -- Phase 23 plan 01 complete (WSL detection and Linux context reading)
+stopped_at: Phase 23 complete
+last_updated: "2026-03-09T10:04:57Z"
+last_activity: 2026-03-09 -- Phase 23 plan 02 complete (AI prompt wiring and WSL badge)
 progress:
   total_phases: 4
   completed_phases: 2
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-08)
 ## Current Position
 
 Phase: 23 (third of 4 in v0.2.6) -- WSL Terminal Context
-Plan: 1 of 2 (plan 01 complete)
-Status: In Progress
-Last activity: 2026-03-09 -- Phase 23 plan 01 complete (WSL detection and Linux context reading)
+Plan: 2 of 2 (phase complete)
+Status: Phase 23 Complete
+Last activity: 2026-03-09 -- Phase 23 plan 02 complete (AI prompt wiring and WSL badge)
 
-Progress: [█████-----] 50%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -47,7 +47,7 @@ Progress: [█████-----] 50%
 |-------|-------|-------|----------|
 | 21. Provider Abstraction | 2/2 | 8min | 4min |
 | 22. Multi-Provider Frontend | 2/2 | 6min | 3min |
-| 23. WSL Terminal Context | 1/2 | 7min | 7min |
+| 23. WSL Terminal Context | 2/2 | 10min | 5min |
 | 24. Auto-Updater | -- | -- | -- |
 
 ## Accumulated Context
@@ -70,6 +70,9 @@ All prior decisions archived in PROJECT.md Key Decisions table.
 - [23-01] Separate detect_wsl_in_ancestry function with own snapshot rather than changing find_shell_by_ancestry signature
 - [23-01] UIA-inferred Linux CWD overrides wsl.exe subprocess CWD (subprocess returns home dir, not active shell CWD)
 - [23-01] Conservative secret filtering: only clearly identifiable credential formats, no broad patterns
+- [23-02] WSL prompt is Windows-only (cfg guard); default shell "bash" for WSL instead of "zsh"
+- [23-02] WSL badge at priority 0 in resolveBadge overrides shell type display
+- [23-02] No safety.rs changes -- existing DESTRUCTIVE_PATTERNS already covers Linux commands
 
 ### Pending Todos
 
@@ -81,6 +84,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-09T09:59:54Z
-Stopped at: Phase 23 plan 01 complete (WSL detection and Linux context reading)
-Resume file: .planning/phases/23-wsl-terminal-context/23-02-PLAN.md
+Last session: 2026-03-09T10:04:57Z
+Stopped at: Phase 23 complete (WSL Terminal Context)
+Resume file: .planning/phases/24-auto-updater/
