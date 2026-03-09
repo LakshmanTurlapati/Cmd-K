@@ -25,6 +25,7 @@ export interface TerminalContext {
   cwd: string | null;
   visible_output: string | null;
   running_process: string | null;
+  is_wsl: boolean;
 }
 
 export interface AppContext {
@@ -35,9 +36,14 @@ export interface AppContext {
   visible_text: string | null;
 }
 
-/** Resolve the badge text from AppContext using priority: shell > console > app name */
+/** Resolve the badge text from AppContext using priority: WSL > shell > console > app name */
 export function resolveBadge(ctx: AppContext | null): string | null {
   if (!ctx) return null;
+
+  // Priority 0: WSL indicator (overrides shell type display)
+  if (ctx.terminal?.is_wsl) {
+    return "WSL";
+  }
 
   // Priority 1: Shell type (from terminal or editor integrated terminal)
   if (ctx.terminal?.shell_type) {
