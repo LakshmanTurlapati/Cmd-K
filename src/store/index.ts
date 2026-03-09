@@ -1,6 +1,14 @@
 import { create } from "zustand";
 import { invoke, Channel } from "@tauri-apps/api/core";
 
+export const PROVIDERS = [
+  { id: "openai", name: "OpenAI" },
+  { id: "anthropic", name: "Anthropic" },
+  { id: "gemini", name: "Google Gemini" },
+  { id: "xai", name: "xAI" },
+  { id: "openrouter", name: "OpenRouter" },
+] as const;
+
 export type OverlayMode = "command" | "onboarding" | "settings";
 
 export interface ModelWithMeta {
@@ -87,6 +95,7 @@ interface OverlayState {
   apiKeyLast4: string;
   selectedModel: string | null;
   selectedProvider: string;
+  selectedModels: Record<string, string>;
   availableModels: ModelWithMeta[];
 
   // Settings panel
@@ -142,6 +151,7 @@ interface OverlayState {
   ) => void;
   setApiKeyLast4: (last4: string) => void;
   setSelectedProvider: (provider: string) => void;
+  setSelectedModels: (models: Record<string, string>) => void;
   setModels: (models: ModelWithMeta[]) => void;
   setSelectedModel: (model: string) => void;
   setSettingsTab: (tab: string) => void;
@@ -200,6 +210,7 @@ export const useOverlayStore = create<OverlayState>((set) => ({
   apiKeyLast4: "",
   selectedProvider: "xai",
   selectedModel: null,
+  selectedModels: {},
   availableModels: [],
 
   settingsTab: "account",
@@ -384,6 +395,7 @@ export const useOverlayStore = create<OverlayState>((set) => ({
   setApiKeyLast4: (last4: string) => set({ apiKeyLast4: last4 }),
 
   setSelectedProvider: (provider) => set({ selectedProvider: provider }),
+  setSelectedModels: (models) => set({ selectedModels: models }),
   setModels: (models: ModelWithMeta[]) => set({ availableModels: models }),
 
   setSelectedModel: (model: string) => set({ selectedModel: model }),
