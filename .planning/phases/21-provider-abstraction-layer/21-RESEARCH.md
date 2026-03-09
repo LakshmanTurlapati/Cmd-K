@@ -1,16 +1,16 @@
 # Phase 21: Provider Abstraction Layer - Research
 
-**Researched:** 2026-03-09
+**Researched:** 2026-03-09 (re-research)
 **Domain:** Multi-provider AI streaming APIs (Rust/Tauri backend)
 **Confidence:** HIGH
 
 ## Summary
 
-This phase refactors the existing xAI-only AI backend into a provider-agnostic abstraction supporting 5 providers: OpenAI, Anthropic, Google Gemini, xAI, and OpenRouter. The existing codebase already has a working SSE streaming pipeline (`eventsource_stream` + `futures_util::StreamExt`), keychain storage via `keyring`, and the Tauri IPC channel pattern for token streaming. The primary work is creating a provider enum, 3 streaming adapters (OpenAI-compatible, Anthropic, Gemini), parameterizing keychain storage, persisting provider/model selection, and migrating existing xAI keys.
+This phase refactors the existing xAI-only AI backend into a provider-agnostic abstraction supporting 5 providers: OpenAI, Anthropic, Google Gemini, xAI, and OpenRouter. The existing codebase has a working SSE streaming pipeline (`eventsource_stream` + `futures_util::StreamExt`), keychain storage via `keyring` v3 (platform-native on both macOS and Windows), and the Tauri IPC channel pattern (`tauri::ipc::Channel<String>`) for token streaming. The work involves creating a `Provider` enum, 3 streaming adapters (OpenAI-compatible, Anthropic, Gemini), parameterizing keychain storage per provider, persisting provider/model selection in `settings.json`, and migrating existing v0.2.4 xAI keys on first launch.
 
-All 5 providers have REST APIs with streaming support. OpenAI, xAI, and OpenRouter share the same OpenAI-compatible SSE format (data: JSON with `choices[0].delta.content`, terminated by `data: [DONE]`). Anthropic uses its own SSE event types (`content_block_delta` with `text_delta`). Google Gemini uses `streamGenerateContent?alt=sse` returning `GenerateContentResponse` chunks. No new Rust crates are needed beyond what already exists in `Cargo.toml`.
+All 5 providers have REST APIs with streaming support. OpenAI, xAI, and OpenRouter share the OpenAI-compatible SSE format (`data: JSON` with `choices[0].delta.content`, terminated by `data: [DONE]`). Anthropic uses its own event-based SSE protocol (`event: content_block_delta` with `delta.text`). Google Gemini uses `streamGenerateContent?alt=sse` returning `GenerateContentResponse` chunks with text in `candidates[0].content.parts[0].text`. No new Rust crates are needed -- the existing `Cargo.toml` dependencies cover everything.
 
-**Primary recommendation:** Build a `Provider` enum and trait-like dispatch pattern with 3 adapter functions (OpenAI-compatible, Anthropic, Gemini), parameterize keychain by provider, persist provider/model in `settings.json` via `tauri-plugin-store`, and run migration on first launch.
+**Primary recommendation:** Build a `Provider` enum with `to_api_url()`, `to_keychain_account()`, and `default_timeout()` methods, implement 3 adapter functions dispatched by provider, parameterize keychain by provider, persist provider/model in `settings.json` via `tauri-plugin-store`, and run xAI key migration on app setup.
 
 <user_constraints>
 ## User Constraints (from CONTEXT.md)
@@ -19,7 +19,7 @@ All 5 providers have REST APIs with streaming support. OpenAI, xAI, and OpenRout
 - Build a common internal message format in Rust; each provider adapter translates to/from its native API
 - Frontend stays unchanged -- always sends the same IPC shape
 - 3 streaming adapters: OpenAI-compatible (covers OpenAI, xAI, OpenRouter), Anthropic adapter, Google Gemini adapter
-- Same system prompts across all providers; each adapter places the prompt in the correct API field
+- Same system prompts across all providers; each adapter places the prompt in the correct API field (role:system for OpenAI-compat, top-level system field for Anthropic, systemInstruction for Gemini)
 - Per-provider default timeouts (e.g., 10s for fast models, 30s for reasoning models) -- no user-facing timeout setting
 - All implementations must work cross-platform (macOS + Windows)
 - Separate keychain account per provider (e.g., account='openai_api_key', 'anthropic_api_key', etc.) under the same service name 'com.lakshmanturlapati.cmd-k'
@@ -30,7 +30,7 @@ All 5 providers have REST APIs with streaming support. OpenAI, xAI, and OpenRout
 - Hybrid model lists: hardcoded curated lists per provider + "Refresh models" capability from provider APIs
 - Curated models get tier tags (Fast, Balanced, Most Capable) -- hardcoded tier mapping
 - OpenRouter: model list fetched from /api/v1/models endpoint, filtered to chat-capable
-- API key validation at save time only (lightweight API call when user enters/saves key)
+- API key validation at save time only (lightweight API call), no re-validation on provider switch
 - Provider-specific error messages with provider name + actionable hint
 - No automatic retry on rate limits
 - Mid-stream errors: keep partial response visible and append error indicator
@@ -51,67 +51,73 @@ None -- discussion stayed within phase scope
 
 | ID | Description | Research Support |
 |----|-------------|-----------------|
-| PROV-01 | User can select their AI provider from OpenAI, Anthropic, Google Gemini, xAI, or OpenRouter | Provider enum, settings.json persistence, IPC parameter |
-| PROV-02 | User can store a separate API key per provider in the platform keychain | Parameterized keyring::Entry with provider-specific account names |
-| PROV-03 | Existing xAI API key is migrated automatically on upgrade from v0.2.4 | First-launch migration function reading old 'xai_api_key' entry |
-| PROV-04 | User can validate their API key for any provider before saving | Per-provider validation endpoints (GET /models or minimal chat completion) |
-| PROV-05 | User can see available models for their selected provider | Hardcoded curated lists + API fetch per provider |
-| PROV-06 | AI responses stream in real-time from all 5 providers | 3 streaming adapters (OpenAI-compat, Anthropic, Gemini) |
-| PROV-07 | Provider-specific error messages show the correct provider name and troubleshooting hints | Provider name injected into error strings with actionable URLs |
+| PROV-01 | User can select AI provider from 5 options | Provider enum with 5 variants; selection persisted in settings.json via tauri-plugin-store |
+| PROV-02 | User can store separate API key per provider in platform keychain | keyring crate with per-provider account names (e.g., 'openai_api_key') under shared service |
+| PROV-03 | Existing xAI API key migrated automatically on upgrade | Migration function in app setup reads old 'xai_api_key', copies to new entry, sets xAI as default |
+| PROV-04 | User can validate API key for any provider | Per-provider validation endpoints documented below; lightweight API call at save time |
+| PROV-05 | User can see available models for selected provider | Hardcoded curated lists + API-fetched refresh; model list endpoints documented per provider |
+| PROV-06 | AI responses stream in real-time from all 5 providers | 3 streaming adapters cover all 5 providers; SSE parsing patterns documented below |
+| PROV-07 | Provider-specific error messages with troubleshooting hints | Error mapping from HTTP status codes to provider-named messages with console URLs |
 </phase_requirements>
 
 ## Standard Stack
 
-### Core
+### Core (Already in Cargo.toml -- no new dependencies)
 | Library | Version | Purpose | Why Standard |
 |---------|---------|---------|--------------|
-| keyring | 3.6.x | Platform keychain (macOS Keychain, Windows Credential Manager) | Already in Cargo.toml with platform features |
-| tauri-plugin-http (reqwest) | 2.x | HTTP client for all provider API calls | Already in use, handles streaming via bytes_stream() |
-| eventsource-stream | 0.2.x | SSE event parsing for OpenAI-compat and Anthropic | Already in use for xAI streaming |
-| futures-util | 0.3.x | StreamExt for async SSE consumption | Already in use |
-| tokio | 1.x | Async runtime, timeout wrapping | Already in use |
-| serde/serde_json | 1.x | JSON serialization for API bodies and responses | Already in use |
-| tauri-plugin-store | 2.x | Persistent JSON config (settings.json) | Already in use for hotkey, model selection |
+| `keyring` | 3.x | Platform keychain access | Already used; apple-native + windows-native features enabled |
+| `eventsource-stream` | 0.2 | SSE stream parsing | Already used for xAI streaming; works for OpenAI-compat and Anthropic |
+| `futures-util` | 0.3 | StreamExt for async iteration | Already used for SSE stream consumption |
+| `tauri-plugin-http` | 2.x (stream feature) | HTTP client (reqwest re-export) | Already used; provides `reqwest::Client` for all API calls |
+| `tokio` | 1.x (time feature) | Async runtime + timeouts | Already used for `tokio::time::timeout` |
+| `serde` / `serde_json` | 1.x | JSON serialization | Already used throughout |
+| `tauri-plugin-store` | 2.x | Persistent JSON config | Already used for settings.json (hotkey, model, etc.) |
 
-### Supporting
+### Supporting (Already available)
 | Library | Version | Purpose | When to Use |
 |---------|---------|---------|-------------|
-| @tauri-apps/plugin-store | 2.x (JS) | Frontend reads/writes settings.json | Provider/model persistence from frontend |
+| `tauri::ipc::Channel<String>` | Tauri 2.x | Token streaming to frontend | All streaming adapters emit tokens through this |
+| `Store.load("settings.json")` | tauri-plugin-store TS | Frontend config persistence | Provider + model selection read/write |
 
 ### Alternatives Considered
 | Instead of | Could Use | Tradeoff |
 |------------|-----------|----------|
-| eventsource-stream for Gemini | Manual line parsing | Gemini SSE is standard SSE with `alt=sse`; eventsource-stream handles it fine |
-| Separate HTTP clients per provider | Single reqwest::Client | Single client is sufficient; all providers use HTTPS + JSON |
+| Manual SSE parsing for Gemini | eventsource-stream | Gemini SSE format uses standard `data:` prefix with `alt=sse`; same crate works |
+| Separate HTTP client per provider | Single reqwest::Client | One client is fine; per-request headers differ but client is reusable |
+| async-trait for provider abstraction | Enum dispatch with match | Enum dispatch is simpler, no vtable overhead, all providers known at compile time |
 
 **Installation:**
-No new crates needed. All dependencies already in `Cargo.toml`.
+```bash
+# No new dependencies needed -- all crates already in Cargo.toml
+```
 
 ## Architecture Patterns
 
 ### Recommended Project Structure
 ```
 src-tauri/src/commands/
-  providers/
-    mod.rs           # Provider enum, ProviderConfig, dispatch functions
-    openai_compat.rs # OpenAI/xAI/OpenRouter streaming adapter
-    anthropic.rs     # Anthropic Messages API streaming adapter
-    gemini.rs        # Google Gemini streamGenerateContent adapter
-  ai.rs              # Refactored: accepts provider param, dispatches to adapter
-  keychain.rs        # Refactored: parameterized by provider account name
-  xai.rs             # Removed or gutted (logic moves to providers/)
-  mod.rs             # Updated module declarations
+├── ai.rs              # stream_ai_response (refactored: accepts provider param, dispatches)
+├── providers/         # NEW: provider module
+│   ├── mod.rs         # Provider enum, ProviderConfig, dispatch logic
+│   ├── openai_compat.rs  # OpenAI-compatible adapter (OpenAI, xAI, OpenRouter)
+│   ├── anthropic.rs      # Anthropic adapter
+│   └── gemini.rs         # Google Gemini adapter
+├── keychain.rs        # Parameterized: save_api_key(provider, key), get_api_key(provider), etc.
+├── models.rs          # NEW: renamed from xai.rs -- validate_and_fetch_models(provider, key)
+├── mod.rs             # Updated: register providers module
+└── ...existing files...
 ```
 
-### Pattern 1: Provider Enum with Config
-**What:** A Rust enum representing each provider, with associated configuration (base URL, auth header format, default models, timeout).
-**When to use:** Everywhere a provider-specific behavior diverges.
-**Example:**
+### Pattern 1: Provider Enum with Data Methods
+**What:** A Rust enum where each variant carries provider-specific config as methods, not associated data.
+**When to use:** When all providers are known at compile time and dispatch is exhaustive.
+
 ```rust
+// Source: Project convention (match existing Tauri command patterns)
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Provider {
     OpenAI,
     Anthropic,
@@ -122,7 +128,7 @@ pub enum Provider {
 
 impl Provider {
     /// Keychain account name for this provider's API key
-    pub fn keychain_account(&self) -> &str {
+    pub fn keychain_account(&self) -> &'static str {
         match self {
             Provider::OpenAI => "openai_api_key",
             Provider::Anthropic => "anthropic_api_key",
@@ -132,30 +138,19 @@ impl Provider {
         }
     }
 
-    /// Base URL for chat completions
-    pub fn base_url(&self) -> &str {
+    /// Base URL for chat completions / message creation
+    pub fn api_url(&self) -> &'static str {
         match self {
-            Provider::OpenAI => "https://api.openai.com/v1",
-            Provider::Anthropic => "https://api.anthropic.com/v1",
-            Provider::Gemini => "https://generativelanguage.googleapis.com/v1beta",
-            Provider::XAI => "https://api.x.ai/v1",
-            Provider::OpenRouter => "https://openrouter.ai/api/v1",
-        }
-    }
-
-    /// Display name for error messages
-    pub fn display_name(&self) -> &str {
-        match self {
-            Provider::OpenAI => "OpenAI",
-            Provider::Anthropic => "Anthropic",
-            Provider::Gemini => "Google Gemini",
-            Provider::XAI => "xAI",
-            Provider::OpenRouter => "OpenRouter",
+            Provider::OpenAI => "https://api.openai.com/v1/chat/completions",
+            Provider::Anthropic => "https://api.anthropic.com/v1/messages",
+            Provider::Gemini => "https://generativelanguage.googleapis.com/v1beta/models/",
+            Provider::XAI => "https://api.x.ai/v1/chat/completions",
+            Provider::OpenRouter => "https://openrouter.ai/api/v1/chat/completions",
         }
     }
 
     /// Default streaming timeout in seconds
-    pub fn timeout_secs(&self) -> u64 {
+    pub fn default_timeout_secs(&self) -> u64 {
         match self {
             Provider::OpenAI => 30,
             Provider::Anthropic => 30,
@@ -165,465 +160,790 @@ impl Provider {
         }
     }
 
-    /// Which streaming adapter to use
-    pub fn adapter(&self) -> StreamAdapter {
+    /// Display name for error messages
+    pub fn display_name(&self) -> &'static str {
         match self {
-            Provider::OpenAI | Provider::XAI | Provider::OpenRouter => StreamAdapter::OpenAICompat,
-            Provider::Anthropic => StreamAdapter::Anthropic,
-            Provider::Gemini => StreamAdapter::Gemini,
+            Provider::OpenAI => "OpenAI",
+            Provider::Anthropic => "Anthropic",
+            Provider::Gemini => "Google Gemini",
+            Provider::XAI => "xAI",
+            Provider::OpenRouter => "OpenRouter",
+        }
+    }
+
+    /// Console/dashboard URL for troubleshooting
+    pub fn console_url(&self) -> &'static str {
+        match self {
+            Provider::OpenAI => "platform.openai.com",
+            Provider::Anthropic => "console.anthropic.com",
+            Provider::Gemini => "aistudio.google.com",
+            Provider::XAI => "console.x.ai",
+            Provider::OpenRouter => "openrouter.ai/keys",
+        }
+    }
+
+    /// Which streaming adapter to use
+    pub fn adapter_kind(&self) -> AdapterKind {
+        match self {
+            Provider::OpenAI | Provider::XAI | Provider::OpenRouter => AdapterKind::OpenAICompat,
+            Provider::Anthropic => AdapterKind::Anthropic,
+            Provider::Gemini => AdapterKind::Gemini,
         }
     }
 }
 
-pub enum StreamAdapter {
+#[derive(Debug, Clone, Copy)]
+pub enum AdapterKind {
     OpenAICompat,
     Anthropic,
     Gemini,
 }
 ```
 
-### Pattern 2: Adapter Dispatch in stream_ai_response
-**What:** The refactored `stream_ai_response` command accepts a `provider` string parameter, resolves it to the enum, reads the correct keychain entry, and dispatches to the right adapter function.
-**When to use:** The main IPC entry point for AI streaming.
-**Example:**
+### Pattern 2: Streaming Adapter Dispatch
+**What:** The refactored `stream_ai_response` accepts a provider parameter and dispatches to the correct adapter.
+**When to use:** In the main AI command handler.
+
 ```rust
+// In commands/ai.rs (refactored signature)
 #[tauri::command]
 pub async fn stream_ai_response(
-    provider: String,     // NEW: "openai", "anthropic", "gemini", "xai", "openrouter"
+    provider: Provider,       // NEW: explicit provider param
     query: String,
     model: String,
     context_json: String,
     history: Vec<ChatMessage>,
     on_token: tauri::ipc::Channel<String>,
 ) -> Result<(), String> {
-    let provider = Provider::from_str(&provider)?;
-    let api_key = read_provider_key(&provider)?;
-    let (system_prompt, user_message) = build_prompts(&query, &context_json, &history)?;
+    // 1. Read API key from keychain using provider-specific account
+    let account = provider.keychain_account();
+    let entry = keyring::Entry::new(SERVICE, account)
+        .map_err(|e| format!("{}: Keyring error: {}", provider.display_name(), e))?;
+    let api_key = entry
+        .get_password()
+        .map_err(|_| format!("No {} API key configured. Open Settings to add one.", provider.display_name()))?;
 
-    match provider.adapter() {
-        StreamAdapter::OpenAICompat => {
-            openai_compat::stream(&provider, &api_key, &model, system_prompt, user_message, history, on_token).await
+    // 2. Parse context, build system prompt and user message (unchanged logic)
+    // ...
+
+    // 3. Dispatch to correct adapter
+    let timeout = tokio::time::Duration::from_secs(provider.default_timeout_secs());
+    match provider.adapter_kind() {
+        AdapterKind::OpenAICompat => {
+            openai_compat::stream(&provider, &api_key, &model, messages, &on_token, timeout).await
         }
-        StreamAdapter::Anthropic => {
-            anthropic::stream(&api_key, &model, system_prompt, user_message, history, on_token).await
+        AdapterKind::Anthropic => {
+            anthropic::stream(&api_key, &model, &system_prompt, messages, &on_token, timeout).await
         }
-        StreamAdapter::Gemini => {
-            gemini::stream(&api_key, &model, system_prompt, user_message, history, on_token).await
+        AdapterKind::Gemini => {
+            gemini::stream(&api_key, &model, &system_prompt, messages, &on_token, timeout).await
         }
     }
 }
 ```
 
-### Pattern 3: Parameterized Keychain
-**What:** Keychain functions accept a provider parameter to determine the account name.
-**When to use:** All keychain operations (save, get, delete).
-**Example:**
+### Pattern 3: OpenAI-Compatible Adapter (covers OpenAI, xAI, OpenRouter)
+**What:** Single adapter for all OpenAI-compatible APIs.
+**When to use:** For OpenAI, xAI, and OpenRouter -- same SSE format, different base URLs.
+
 ```rust
-const SERVICE: &str = "com.lakshmanturlapati.cmd-k";
-
-#[tauri::command]
-pub fn save_api_key(provider: String, key: String) -> Result<(), String> {
-    let provider = Provider::from_str(&provider)?;
-    let entry = keyring::Entry::new(SERVICE, provider.keychain_account())
-        .map_err(|e| format!("Keychain entry error: {}", e))?;
-    entry.set_password(&key)
-        .map_err(|e| format!("Failed to save to Keychain: {}", e))
-}
-```
-
-### Anti-Patterns to Avoid
-- **Monolithic adapter file:** Don't put all 3 streaming adapters in `ai.rs`. Separate files keep each adapter independently maintainable.
-- **Provider-specific logic in frontend:** Don't let the frontend know about API formats. It sends `provider: "anthropic"` and gets back tokens -- same shape always.
-- **Hardcoding URLs in adapter functions:** Put base URLs in the Provider enum so they're centralized and testable.
-- **Re-creating reqwest::Client per request:** Create one client and reuse it. The existing code already creates a new client per call, which is fine for now but could be optimized later.
-
-## Don't Hand-Roll
-
-| Problem | Don't Build | Use Instead | Why |
-|---------|-------------|-------------|-----|
-| SSE parsing | Custom line-by-line parser | `eventsource-stream` crate | Handles reconnection, event names, multi-line data fields |
-| Keychain access | Platform-specific APIs | `keyring` crate v3 | Already handles macOS Keychain + Windows Credential Manager |
-| JSON config persistence | Custom file I/O | `tauri-plugin-store` | Already integrated, handles atomic writes, accessible from both Rust and JS |
-| HTTP client | Raw TCP/TLS | `tauri-plugin-http`'s reqwest | Already configured with stream feature |
-
-**Key insight:** The existing codebase already has all the infrastructure needed. This phase is about refactoring and parameterizing, not adding new capabilities.
-
-## Common Pitfalls
-
-### Pitfall 1: Anthropic SSE Event Format Differs from OpenAI
-**What goes wrong:** Treating Anthropic's SSE stream like OpenAI's (looking for `choices[0].delta.content` and `[DONE]`).
-**Why it happens:** Anthropic uses named SSE events (`event: content_block_delta`) with different JSON structure (`delta.text` inside `text_delta` type).
-**How to avoid:** The Anthropic adapter must:
-1. Check the SSE event name (not just data)
-2. Parse `content_block_delta` events specifically
-3. Extract text from `delta.text` where `delta.type == "text_delta"`
-4. Stop on `message_stop` event (not `[DONE]`)
-**Warning signs:** Empty responses or parse errors from Anthropic.
-
-### Pitfall 2: Gemini API Authentication Differs
-**What goes wrong:** Sending Gemini API key as a Bearer token in the Authorization header.
-**Why it happens:** All other providers use `Authorization: Bearer <key>`. Gemini uses `?key=<key>` query parameter.
-**How to avoid:** The Gemini adapter must append the API key as a query parameter, not a header.
-**Warning signs:** 401 errors from Gemini despite valid key.
-
-### Pitfall 3: Anthropic Requires anthropic-version Header
-**What goes wrong:** Omitting the `anthropic-version` header, getting 400 errors.
-**Why it happens:** Anthropic requires `anthropic-version: 2023-06-01` on every request. Other providers don't have this.
-**How to avoid:** Anthropic adapter always includes `x-api-key` (NOT `Authorization: Bearer`), `anthropic-version: 2023-06-01`, and `content-type: application/json`.
-**Warning signs:** 400 Bad Request from Anthropic API.
-
-### Pitfall 4: Anthropic System Prompt is Top-Level, Not in Messages
-**What goes wrong:** Putting the system prompt as a `{"role": "system", "content": "..."}` message for Anthropic.
-**Why it happens:** OpenAI-compatible APIs use system role in messages array. Anthropic uses a top-level `system` field.
-**How to avoid:** Anthropic adapter builds body as:
-```json
-{
-  "model": "...",
-  "max_tokens": 4096,
-  "system": "system prompt here",
-  "messages": [{"role": "user", "content": "..."}],
-  "stream": true
-}
-```
-**Warning signs:** System prompt being ignored or errors from Anthropic.
-
-### Pitfall 5: Gemini Message Format Differs
-**What goes wrong:** Sending `{"role": "user", "content": "text"}` to Gemini.
-**Why it happens:** Gemini uses `contents` array with `parts` sub-array: `{"role": "user", "parts": [{"text": "..."}]}`. System prompt goes in `systemInstruction.parts.text`.
-**How to avoid:** Gemini adapter translates the internal message format to Gemini's `contents` format. Also note Gemini uses `"role": "model"` instead of `"role": "assistant"`.
-**Warning signs:** 400 errors from Gemini API.
-
-### Pitfall 6: Anthropic Requires max_tokens
-**What goes wrong:** Omitting `max_tokens` in Anthropic request body.
-**Why it happens:** OpenAI-compatible APIs have sensible defaults. Anthropic requires `max_tokens` explicitly.
-**How to avoid:** Always include `max_tokens: 4096` (or appropriate value) in Anthropic requests.
-**Warning signs:** 400 error: "max_tokens is required".
-
-### Pitfall 7: Migration Race Condition
-**What goes wrong:** Migration runs multiple times or conflicts with user actions.
-**Why it happens:** Migration checks for old key on every launch without recording completion.
-**How to avoid:** Record migration completion in `settings.json` (e.g., `"migration_v026_done": true`). Check this flag before running migration.
-**Warning signs:** Duplicate keychain entries or unexpected provider defaults.
-
-### Pitfall 8: Gemini SSE Chunk Format
-**What goes wrong:** Trying to parse Gemini SSE chunks as OpenAI format.
-**Why it happens:** Gemini returns `GenerateContentResponse` objects, not OpenAI-style delta chunks.
-**How to avoid:** Extract text from `candidates[0].content.parts[0].text` in Gemini SSE chunks.
-**Warning signs:** Null/empty tokens from Gemini streaming.
-
-## Code Examples
-
-### OpenAI-Compatible Streaming Adapter (covers OpenAI, xAI, OpenRouter)
-```rust
-// Source: Existing ai.rs pattern + OpenAI/xAI API docs
+// Source: OpenAI API docs (https://platform.openai.com/docs/api-reference/chat-streaming)
+// In commands/providers/openai_compat.rs
 pub async fn stream(
     provider: &Provider,
     api_key: &str,
     model: &str,
-    system_prompt: String,
-    user_message: String,
-    history: Vec<ChatMessage>,
-    on_token: tauri::ipc::Channel<String>,
+    messages: Vec<serde_json::Value>,  // includes system message in messages array
+    on_token: &tauri::ipc::Channel<String>,
+    timeout: tokio::time::Duration,
 ) -> Result<(), String> {
-    let mut messages: Vec<serde_json::Value> = vec![
-        serde_json::json!({"role": "system", "content": system_prompt}),
-    ];
-    for msg in &history {
-        messages.push(serde_json::json!({"role": msg.role, "content": msg.content}));
-    }
-    messages.push(serde_json::json!({"role": "user", "content": user_message}));
+    let client = reqwest::Client::new();
+    let url = provider.api_url();
 
     let body = serde_json::json!({
         "model": model,
         "messages": messages,
         "stream": true,
         "temperature": 0.1
-    });
+    }).to_string();
 
-    let client = reqwest::Client::new();
     let mut request = client
-        .post(format!("{}/chat/completions", provider.base_url()))
+        .post(url)
         .header("Authorization", format!("Bearer {}", api_key))
         .header("Content-Type", "application/json");
 
-    // OpenRouter-specific headers
+    // OpenRouter requires additional headers
     if *provider == Provider::OpenRouter {
         request = request
-            .header("HTTP-Referer", "https://github.com/cmd-k-app")
+            .header("HTTP-Referer", "https://cmdkapp.com")
             .header("X-Title", "CMD+K");
     }
 
-    let response = request.body(body.to_string()).send().await
-        .map_err(|e| format!("{}: Network error: Check your internet connection.", provider.display_name()))?;
+    let response = request
+        .body(body)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: Check your internet connection."))?;
 
-    // ... status check and SSE parsing (same as existing ai.rs) ...
-    Ok(())
-}
-```
+    // Check HTTP status with provider-specific error messages
+    handle_http_status(provider, response.status().as_u16())?;
 
-### Anthropic Streaming Adapter
-```rust
-// Source: https://platform.claude.com/docs/en/api/messages-streaming
-pub async fn stream(
-    api_key: &str,
-    model: &str,
-    system_prompt: String,
-    user_message: String,
-    history: Vec<ChatMessage>,
-    on_token: tauri::ipc::Channel<String>,
-) -> Result<(), String> {
-    let mut messages: Vec<serde_json::Value> = Vec::new();
-    // NOTE: No system role in messages -- system is top-level
-    for msg in &history {
-        messages.push(serde_json::json!({"role": msg.role, "content": msg.content}));
-    }
-    messages.push(serde_json::json!({"role": "user", "content": user_message}));
-
-    let body = serde_json::json!({
-        "model": model,
-        "max_tokens": 4096,
-        "system": system_prompt,  // Top-level, not in messages
-        "messages": messages,
-        "stream": true,
-        "temperature": 0.1
-    });
-
-    let client = reqwest::Client::new();
-    let response = client
-        .post("https://api.anthropic.com/v1/messages")
-        .header("x-api-key", api_key)                    // NOT Authorization: Bearer
-        .header("anthropic-version", "2023-06-01")        // Required
-        .header("Content-Type", "application/json")
-        .body(body.to_string())
-        .send().await
-        .map_err(|e| format!("Anthropic: Network error: Check your internet connection."))?;
-
-    // Parse SSE: look for event: content_block_delta with text_delta
+    // Parse SSE -- same format as existing xAI code
     let mut stream = response.bytes_stream().eventsource();
-    while let Some(event) = stream.next().await {
-        match event {
-            Ok(ev) => {
-                // ev.event contains the SSE event name
-                if ev.event == "message_stop" {
-                    break;
-                }
-                if ev.event == "content_block_delta" {
-                    if let Ok(data) = serde_json::from_str::<serde_json::Value>(&ev.data) {
-                        if data["delta"]["type"] == "text_delta" {
-                            if let Some(text) = data["delta"]["text"].as_str() {
-                                if !text.is_empty() {
-                                    on_token.send(text.to_string())
-                                        .map_err(|e| format!("Channel error: {}", e))?;
-                                }
+    tokio::time::timeout(timeout, async {
+        while let Some(event) = stream.next().await {
+            match event {
+                Ok(event) => {
+                    if event.data == "[DONE]" { break; }
+                    if let Ok(chunk) = serde_json::from_str::<serde_json::Value>(&event.data) {
+                        if let Some(token) = chunk["choices"][0]["delta"]["content"].as_str() {
+                            if !token.is_empty() {
+                                on_token.send(token.to_string())
+                                    .map_err(|e| format!("Channel error: {}", e))?;
                             }
                         }
                     }
                 }
-                // Ignore ping, message_start, content_block_start, content_block_stop, message_delta
+                Err(e) => return Err(format!("{}: Stream error: {}", provider.display_name(), e)),
             }
-            Err(e) => return Err(format!("Anthropic: Stream error: {}", e)),
         }
-    }
-    Ok(())
+        Ok(())
+    }).await
+    .map_err(|_| format!("{}: Request timed out. Try again.", provider.display_name()))?
 }
 ```
 
-### Gemini Streaming Adapter
+### Pattern 4: Anthropic Adapter
+**What:** Adapter for Anthropic's unique SSE event protocol.
+**When to use:** For the Anthropic provider only.
+
 ```rust
-// Source: https://ai.google.dev/api/generate-content
+// Source: Anthropic docs (https://docs.anthropic.com/en/api/messages-streaming)
+// In commands/providers/anthropic.rs
+
+// KEY DIFFERENCES from OpenAI-compat:
+// 1. Auth header: "x-api-key" (NOT "Authorization: Bearer")
+// 2. Required header: "anthropic-version: 2023-06-01"
+// 3. System prompt: top-level "system" field (NOT in messages array)
+// 4. Required field: "max_tokens" (must be specified)
+// 5. SSE events: named events (event: content_block_delta), NOT just data lines
+// 6. Text extraction: delta.text (NOT choices[0].delta.content)
+// 7. No [DONE] sentinel -- stream ends with event: message_stop
+
 pub async fn stream(
     api_key: &str,
     model: &str,
-    system_prompt: String,
-    user_message: String,
-    history: Vec<ChatMessage>,
-    on_token: tauri::ipc::Channel<String>,
+    system_prompt: &str,
+    messages: Vec<serde_json::Value>,  // user/assistant only, NO system message
+    on_token: &tauri::ipc::Channel<String>,
+    timeout: tokio::time::Duration,
 ) -> Result<(), String> {
-    let mut contents: Vec<serde_json::Value> = Vec::new();
-    for msg in &history {
-        let role = if msg.role == "assistant" { "model" } else { &msg.role };
-        contents.push(serde_json::json!({"role": role, "parts": [{"text": msg.content}]}));
-    }
-    contents.push(serde_json::json!({"role": "user", "parts": [{"text": user_message}]}));
+    let client = reqwest::Client::new();
 
     let body = serde_json::json!({
-        "contents": contents,
-        "systemInstruction": {
-            "parts": [{"text": system_prompt}]
-        }
-    });
+        "model": model,
+        "system": system_prompt,           // Top-level, not in messages
+        "messages": messages,              // Only user/assistant roles
+        "max_tokens": 4096,                // Required by Anthropic
+        "stream": true
+    }).to_string();
 
-    // Gemini: API key as query param, model in URL path
+    let response = client
+        .post("https://api.anthropic.com/v1/messages")
+        .header("x-api-key", api_key)                    // NOT Bearer token
+        .header("anthropic-version", "2023-06-01")       // Required version header
+        .header("Content-Type", "application/json")
+        .body(body)
+        .send()
+        .await
+        .map_err(|_| "Network error: Check your internet connection.".to_string())?;
+
+    handle_http_status_anthropic(response.status().as_u16())?;
+
+    // Anthropic SSE uses named events -- eventsource-stream handles this
+    let mut stream = response.bytes_stream().eventsource();
+    tokio::time::timeout(timeout, async {
+        while let Some(event) = stream.next().await {
+            match event {
+                Ok(event) => {
+                    // eventsource-stream provides event.event (the SSE event name)
+                    // and event.data (the JSON payload)
+                    if event.data.is_empty() || event.event == "ping" {
+                        continue;
+                    }
+                    if event.event == "message_stop" {
+                        break;
+                    }
+                    if event.event == "content_block_delta" {
+                        if let Ok(chunk) = serde_json::from_str::<serde_json::Value>(&event.data) {
+                            if chunk["delta"]["type"].as_str() == Some("text_delta") {
+                                if let Some(text) = chunk["delta"]["text"].as_str() {
+                                    if !text.is_empty() {
+                                        on_token.send(text.to_string())
+                                            .map_err(|e| format!("Channel error: {}", e))?;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // Ignore: message_start, content_block_start, content_block_stop, message_delta
+                }
+                Err(e) => return Err(format!("Anthropic: Stream error: {}", e)),
+            }
+        }
+        Ok(())
+    }).await
+    .map_err(|_| "Anthropic: Request timed out. Try again.".to_string())?
+}
+```
+
+### Pattern 5: Google Gemini Adapter
+**What:** Adapter for Google Gemini's REST streaming API.
+**When to use:** For the Gemini provider only.
+
+```rust
+// Source: Google Gemini API docs (https://ai.google.dev/api/generate-content)
+// In commands/providers/gemini.rs
+
+// KEY DIFFERENCES from OpenAI-compat:
+// 1. URL includes model name + ?alt=sse&key=API_KEY (API key in URL, not header)
+// 2. Body format: { "contents": [{ "role": "user", "parts": [{ "text": "..." }] }] }
+// 3. System prompt: top-level "systemInstruction" field with parts array
+// 4. SSE data: candidates[0].content.parts[0].text (NOT choices[0].delta.content)
+// 5. Role names: "user" and "model" (NOT "user" and "assistant")
+// 6. No [DONE] -- stream ends when connection closes
+// 7. Config in "generationConfig" object (NOT top-level temperature)
+
+pub async fn stream(
+    api_key: &str,
+    model: &str,
+    system_prompt: &str,
+    messages: Vec<serde_json::Value>,  // needs conversion to Gemini format
+    on_token: &tauri::ipc::Channel<String>,
+    timeout: tokio::time::Duration,
+) -> Result<(), String> {
+    let client = reqwest::Client::new();
+
+    // Gemini URL format: base/models/{model}:streamGenerateContent?alt=sse&key={key}
     let url = format!(
         "https://generativelanguage.googleapis.com/v1beta/models/{}:streamGenerateContent?alt=sse&key={}",
         model, api_key
     );
 
-    let client = reqwest::Client::new();
+    // Convert messages from OpenAI format to Gemini format
+    let contents: Vec<serde_json::Value> = messages.iter()
+        .filter(|m| m["role"].as_str() != Some("system"))  // system handled separately
+        .map(|m| {
+            let role = match m["role"].as_str().unwrap_or("user") {
+                "assistant" => "model",     // Gemini uses "model" not "assistant"
+                other => other,
+            };
+            serde_json::json!({
+                "role": role,
+                "parts": [{ "text": m["content"].as_str().unwrap_or("") }]
+            })
+        })
+        .collect();
+
+    let body = serde_json::json!({
+        "contents": contents,
+        "systemInstruction": {
+            "parts": [{ "text": system_prompt }]
+        },
+        "generationConfig": {
+            "temperature": 0.1
+        }
+    }).to_string();
+
     let response = client
         .post(&url)
         .header("Content-Type", "application/json")
-        .body(body.to_string())
-        .send().await
-        .map_err(|e| format!("Google Gemini: Network error: Check your internet connection."))?;
+        .body(body)
+        .send()
+        .await
+        .map_err(|_| "Network error: Check your internet connection.".to_string())?;
 
-    // Parse SSE: each chunk is a GenerateContentResponse
+    handle_http_status_gemini(response.status().as_u16())?;
+
+    // Gemini with alt=sse returns standard SSE format
     let mut stream = response.bytes_stream().eventsource();
-    while let Some(event) = stream.next().await {
-        match event {
-            Ok(ev) => {
-                if let Ok(chunk) = serde_json::from_str::<serde_json::Value>(&ev.data) {
-                    if let Some(text) = chunk["candidates"][0]["content"]["parts"][0]["text"].as_str() {
-                        if !text.is_empty() {
-                            on_token.send(text.to_string())
-                                .map_err(|e| format!("Channel error: {}", e))?;
+    tokio::time::timeout(timeout, async {
+        while let Some(event) = stream.next().await {
+            match event {
+                Ok(event) => {
+                    if event.data.is_empty() { continue; }
+                    if let Ok(chunk) = serde_json::from_str::<serde_json::Value>(&event.data) {
+                        // Gemini nests text in candidates[0].content.parts[0].text
+                        if let Some(text) = chunk["candidates"][0]["content"]["parts"][0]["text"].as_str() {
+                            if !text.is_empty() {
+                                on_token.send(text.to_string())
+                                    .map_err(|e| format!("Channel error: {}", e))?;
+                            }
                         }
                     }
                 }
+                Err(e) => return Err(format!("Google Gemini: Stream error: {}", e)),
             }
-            Err(e) => return Err(format!("Google Gemini: Stream error: {}", e)),
         }
-    }
-    Ok(())
+        Ok(())
+    }).await
+    .map_err(|_| "Google Gemini: Request timed out. Try again.".to_string())?
 }
 ```
 
-### Key Validation Per Provider
+### Pattern 6: Parameterized Keychain
+**What:** Refactored keychain commands that accept a provider parameter.
+**When to use:** Replacing the current hardcoded `ACCOUNT` constant.
+
 ```rust
-// Validation strategy per provider:
-// - OpenAI, xAI: GET /v1/models (returns model list, validates key)
-// - Anthropic: GET /v1/models with x-api-key + anthropic-version headers
-// - Gemini: GET /v1beta/models?key=<key>
-// - OpenRouter: GET /api/v1/models (returns model list, validates key)
-//
-// All return model lists on success (200), 401 on invalid key.
-// Fallback: minimal chat completion call if /models returns 404.
+// In commands/keychain.rs (refactored)
+const SERVICE: &str = "com.lakshmanturlapati.cmd-k";
+
+#[tauri::command]
+pub fn save_api_key(provider: Provider, key: String) -> Result<(), String> {
+    let entry = Entry::new(SERVICE, provider.keychain_account())
+        .map_err(|e| format!("Keychain entry error: {}", e))?;
+    entry
+        .set_password(&key)
+        .map_err(|e| format!("Failed to save to Keychain: {}", e))
+}
+
+#[tauri::command]
+pub fn get_api_key(provider: Provider) -> Result<Option<String>, String> {
+    let entry = Entry::new(SERVICE, provider.keychain_account())
+        .map_err(|e| format!("Keychain entry error: {}", e))?;
+    match entry.get_password() {
+        Ok(key) => Ok(Some(key)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(format!("Failed to read from Keychain: {}", e)),
+    }
+}
+
+#[tauri::command]
+pub fn delete_api_key(provider: Provider) -> Result<(), String> {
+    let entry = Entry::new(SERVICE, provider.keychain_account())
+        .map_err(|e| format!("Keychain entry error: {}", e))?;
+    entry
+        .delete_credential()
+        .map_err(|e| format!("Failed to delete from Keychain: {}", e))
+}
 ```
 
-### Migration Function
-```rust
-pub fn migrate_v024_key() -> Result<(), String> {
-    let old_entry = keyring::Entry::new(SERVICE, "xai_api_key")
-        .map_err(|e| format!("Migration error: {}", e))?;
+### Pattern 7: v0.2.4 Migration
+**What:** One-time migration of existing xAI key to new provider-keyed entry.
+**When to use:** In Tauri `.setup()` callback, runs on every app launch but is idempotent.
 
-    match old_entry.get_password() {
-        Ok(key) => {
-            // Key exists -- copy to new location (xai provider uses same account name)
-            // The old entry remains as backup (per decision)
-            eprintln!("[migration] Found existing xAI API key, preserving as default provider");
-            Ok(())
+```rust
+// In lib.rs setup or a new commands/migration.rs
+fn migrate_v024_api_key() {
+    let old_entry = match keyring::Entry::new(SERVICE, "xai_api_key") {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+
+    // Check if old key exists
+    let old_key = match old_entry.get_password() {
+        Ok(k) => k,
+        Err(_) => return, // No old key, nothing to migrate
+    };
+
+    // Check if new-format key already exists (migration already done)
+    let new_entry = match keyring::Entry::new(SERVICE, "xai_api_key") {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+
+    // The account name is the same for xAI ("xai_api_key"), so migration is about
+    // ensuring the settings.json has provider set to "xai" and the key is accessible
+    // through the new parameterized interface.
+    //
+    // Key action: write "provider": "xai" to settings.json if not already set
+    // The keychain entry itself doesn't need copying since the account name hasn't changed.
+}
+```
+
+**Important migration note:** Since the existing xAI keychain account is already `"xai_api_key"` and the new Provider::XAI also maps to `"xai_api_key"`, the actual keychain data does NOT need to be copied. The migration only needs to:
+1. Check if an xAI key exists in keychain
+2. If yes, write `"provider": "xai"` to `settings.json` (so the app defaults to xAI)
+3. The key is already accessible through the new parameterized interface
+
+### Anti-Patterns to Avoid
+- **Trait objects for providers:** Don't use `Box<dyn Provider>` -- the enum is exhaustively known at compile time, making match dispatch simpler and more efficient
+- **Per-provider HTTP clients:** Don't create separate `reqwest::Client` instances per provider -- one client with per-request headers is correct
+- **System prompt in messages array for Anthropic/Gemini:** These providers use separate fields; putting system in messages will cause API errors
+- **Hardcoded API key in URL for non-Gemini:** Only Gemini uses URL-param auth; OpenAI-compat and Anthropic use headers
+- **Forgetting `max_tokens` for Anthropic:** Anthropic requires `max_tokens` in every request; omitting it causes 400 errors
+
+## Don't Hand-Roll
+
+| Problem | Don't Build | Use Instead | Why |
+|---------|-------------|-------------|-----|
+| SSE parsing | Custom line-by-line parser | `eventsource-stream` crate | Handles reconnection, named events, multi-line data; already in deps |
+| Keychain access | File-based key storage | `keyring` crate v3 | Platform-native (macOS Keychain, Windows Credential Manager); already in deps |
+| Config persistence | Custom file I/O | `tauri-plugin-store` | Already used for settings.json; handles atomic writes, app data dir paths |
+| HTTP client | Raw TCP/TLS | `tauri-plugin-http` (reqwest) | Already in deps with stream feature; handles TLS, redirects, timeouts |
+| JSON serialization | Manual string building | `serde_json` | Already in deps; type-safe, handles escaping |
+
+**Key insight:** The existing codebase already has every dependency needed. The refactoring is purely structural -- no new crates, just reorganization and generalization.
+
+## Common Pitfalls
+
+### Pitfall 1: Anthropic System Prompt Placement
+**What goes wrong:** Putting the system prompt as a `{"role": "system", "content": "..."}` message in the messages array.
+**Why it happens:** OpenAI convention bleeds into Anthropic code.
+**How to avoid:** Anthropic requires a top-level `"system"` field in the request body. The messages array must only contain `"user"` and `"assistant"` roles.
+**Warning signs:** Anthropic returns 400 with "messages: roles must alternate between user and assistant" or "system messages are not supported in messages".
+
+### Pitfall 2: Gemini Role Naming
+**What goes wrong:** Using `"assistant"` as a role name in Gemini API calls.
+**Why it happens:** Copy-paste from OpenAI-format message building.
+**How to avoid:** Gemini uses `"model"` instead of `"assistant"`. Convert roles when building the Gemini request body.
+**Warning signs:** Gemini returns 400 with invalid role error.
+
+### Pitfall 3: Gemini API Key Auth Method
+**What goes wrong:** Sending the Gemini API key as a Bearer token in the Authorization header.
+**Why it happens:** Assuming all APIs use Bearer auth like OpenAI.
+**How to avoid:** Gemini uses URL query parameter: `?key=API_KEY`. No Authorization header.
+**Warning signs:** 401 errors even with a valid Gemini key.
+
+### Pitfall 4: Anthropic Auth Header Format
+**What goes wrong:** Using `"Authorization: Bearer {key}"` for Anthropic.
+**Why it happens:** Same as above -- OpenAI convention assumed.
+**How to avoid:** Anthropic uses `"x-api-key: {key}"` header (no "Bearer" prefix). Also requires `"anthropic-version: 2023-06-01"`.
+**Warning signs:** 401 authentication error with valid key.
+
+### Pitfall 5: Missing max_tokens for Anthropic
+**What goes wrong:** Not including `max_tokens` in the Anthropic request body.
+**Why it happens:** OpenAI doesn't require it (defaults to model max).
+**How to avoid:** Always include `"max_tokens": 4096` (or appropriate value) in Anthropic requests.
+**Warning signs:** 400 error mentioning missing required field.
+
+### Pitfall 6: Anthropic SSE Event Name Handling
+**What goes wrong:** Treating Anthropic SSE as data-only events (like OpenAI's `data: {json}\n\n`).
+**Why it happens:** Assuming all SSE streams work like OpenAI.
+**How to avoid:** Anthropic SSE uses named events (`event: content_block_delta`). The `eventsource-stream` crate exposes `event.event` (the event name) alongside `event.data`. Filter on `event.event == "content_block_delta"` and extract `delta.text`.
+**Warning signs:** Trying to parse `message_start` or `ping` events as content, getting None/empty tokens.
+
+### Pitfall 7: OpenRouter Rate Headers Missing
+**What goes wrong:** OpenRouter requests work but the app is not identified, preventing analytics/attribution.
+**Why it happens:** Not reading the OpenRouter docs on required headers.
+**How to avoid:** Include `HTTP-Referer` and `X-Title` headers on OpenRouter requests.
+**Warning signs:** No analytics in OpenRouter dashboard; functionally works but misses attribution.
+
+### Pitfall 8: Gemini Streaming URL Parameter
+**What goes wrong:** Using `generateContent` endpoint instead of `streamGenerateContent` for streaming.
+**Why it happens:** Not noticing Gemini has separate endpoints.
+**How to avoid:** Use `streamGenerateContent?alt=sse` endpoint. The `alt=sse` parameter is required for SSE format.
+**Warning signs:** Getting a single JSON response instead of streaming chunks.
+
+### Pitfall 9: Frontend IPC Contract Breaking Change
+**What goes wrong:** Changing the `stream_ai_response` IPC signature without updating the frontend `invoke` call.
+**Why it happens:** Adding the `provider` parameter to the Rust command but forgetting the frontend.
+**How to avoid:** Update the `submitQuery` function in `src/store/index.ts` to pass `provider` alongside `query`, `model`, `contextJson`, `history`, and `onToken`. The frontend must read the selected provider from settings.
+**Warning signs:** Tauri invoke fails with "missing argument" error.
+
+## Code Examples
+
+### Provider-Specific Validation Endpoints
+
+```rust
+// Source: Official API docs for each provider
+pub async fn validate_api_key(provider: &Provider, api_key: &str) -> Result<(), String> {
+    let client = reqwest::Client::new();
+    match provider {
+        // OpenAI: GET /v1/models (list models validates key)
+        Provider::OpenAI => {
+            let resp = client.get("https://api.openai.com/v1/models")
+                .header("Authorization", format!("Bearer {}", api_key))
+                .send().await.map_err(|_| "Network error".to_string())?;
+            match resp.status().as_u16() {
+                200 => Ok(()),
+                401 => Err("invalid_key".to_string()),
+                s => Err(format!("API error: {}", s)),
+            }
         }
-        Err(keyring::Error::NoEntry) => {
-            eprintln!("[migration] No existing xAI key found, skipping migration");
-            Ok(())
+        // Anthropic: POST /v1/messages with max_tokens=1
+        Provider::Anthropic => {
+            let body = serde_json::json!({
+                "model": "claude-sonnet-4-20250514",
+                "max_tokens": 1,
+                "messages": [{"role": "user", "content": "hi"}]
+            }).to_string();
+            let resp = client.post("https://api.anthropic.com/v1/messages")
+                .header("x-api-key", api_key)
+                .header("anthropic-version", "2023-06-01")
+                .header("Content-Type", "application/json")
+                .body(body)
+                .send().await.map_err(|_| "Network error".to_string())?;
+            match resp.status().as_u16() {
+                200 => Ok(()),
+                401 => Err("invalid_key".to_string()),
+                s => Err(format!("API error: {}", s)),
+            }
         }
-        Err(e) => Err(format!("Migration error: {}", e)),
+        // Gemini: GET /v1beta/models?key={key}
+        Provider::Gemini => {
+            let url = format!(
+                "https://generativelanguage.googleapis.com/v1beta/models?key={}", api_key
+            );
+            let resp = client.get(&url)
+                .send().await.map_err(|_| "Network error".to_string())?;
+            match resp.status().as_u16() {
+                200 => Ok(()),
+                400 | 403 => Err("invalid_key".to_string()),
+                s => Err(format!("API error: {}", s)),
+            }
+        }
+        // xAI: existing pattern (GET /v1/models, fallback to POST /v1/chat/completions)
+        Provider::XAI => {
+            // Reuse existing validate_and_fetch_models logic
+            let resp = client.get("https://api.x.ai/v1/models")
+                .header("Authorization", format!("Bearer {}", api_key))
+                .send().await.map_err(|_| "Network error".to_string())?;
+            match resp.status().as_u16() {
+                200 => Ok(()),
+                401 => Err("invalid_key".to_string()),
+                404 => {
+                    // Fallback: try chat completions
+                    let body = serde_json::json!({
+                        "model": "grok-3", "messages": [{"role":"user","content":"hi"}],
+                        "max_tokens": 1
+                    }).to_string();
+                    let r = client.post("https://api.x.ai/v1/chat/completions")
+                        .header("Authorization", format!("Bearer {}", api_key))
+                        .header("Content-Type", "application/json")
+                        .body(body).send().await.map_err(|_| "Network error".to_string())?;
+                    match r.status().as_u16() {
+                        200 => Ok(()),
+                        401 => Err("invalid_key".to_string()),
+                        s => Err(format!("API error: {}", s)),
+                    }
+                }
+                s => Err(format!("API error: {}", s)),
+            }
+        }
+        // OpenRouter: GET /api/v1/models
+        Provider::OpenRouter => {
+            let resp = client.get("https://openrouter.ai/api/v1/models")
+                .header("Authorization", format!("Bearer {}", api_key))
+                .send().await.map_err(|_| "Network error".to_string())?;
+            match resp.status().as_u16() {
+                200 => Ok(()),
+                401 => Err("invalid_key".to_string()),
+                s => Err(format!("API error: {}", s)),
+            }
+        }
     }
 }
 ```
 
-### Curated Model Lists (Hardcoded Defaults)
+### Provider-Specific Error Messages
+
 ```rust
-pub fn default_models(provider: &Provider) -> Vec<ModelWithMeta> {
+// Source: CONTEXT.md locked decision
+fn handle_http_status(provider: &Provider, status: u16) -> Result<(), String> {
+    match status {
+        200 => Ok(()),
+        401 => Err(format!(
+            "{}: Authentication failed. Check your API key at {}.",
+            provider.display_name(), provider.console_url()
+        )),
+        429 => Err(format!(
+            "{}: Rate limited. Wait a moment and try again.",
+            provider.display_name()
+        )),
+        _ => Err(format!(
+            "{}: API error ({}). Try again.",
+            provider.display_name(), status
+        )),
+    }
+}
+```
+
+### Hardcoded Curated Model Lists
+
+```rust
+// Source: Provider documentation and model pages
+
+pub fn curated_models(provider: &Provider) -> Vec<ModelWithMeta> {
     match provider {
         Provider::OpenAI => vec![
+            ModelWithMeta { id: "gpt-4o".into(), label: "Balanced".into(), tier: "balanced".into() },
+            ModelWithMeta { id: "gpt-4o-mini".into(), label: "Fast".into(), tier: "fast".into() },
             ModelWithMeta { id: "gpt-4.1".into(), label: "Most Capable".into(), tier: "capable".into() },
-            ModelWithMeta { id: "gpt-4.1-mini".into(), label: "Balanced".into(), tier: "balanced".into() },
-            ModelWithMeta { id: "gpt-4.1-nano".into(), label: "Fast".into(), tier: "fast".into() },
+            ModelWithMeta { id: "gpt-4.1-mini".into(), label: "Fast".into(), tier: "fast".into() },
+            ModelWithMeta { id: "gpt-4.1-nano".into(), label: "Fastest".into(), tier: "fast".into() },
         ],
         Provider::Anthropic => vec![
-            ModelWithMeta { id: "claude-sonnet-4-20250514".into(), label: "Most Capable".into(), tier: "capable".into() },
-            ModelWithMeta { id: "claude-haiku-4-20250514".into(), label: "Fast".into(), tier: "fast".into() },
+            ModelWithMeta { id: "claude-sonnet-4-20250514".into(), label: "Balanced".into(), tier: "balanced".into() },
+            ModelWithMeta { id: "claude-haiku-3-5-20241022".into(), label: "Fast".into(), tier: "fast".into() },
+            ModelWithMeta { id: "claude-opus-4-20250514".into(), label: "Most Capable".into(), tier: "capable".into() },
         ],
         Provider::Gemini => vec![
-            ModelWithMeta { id: "gemini-2.5-pro".into(), label: "Most Capable".into(), tier: "capable".into() },
-            ModelWithMeta { id: "gemini-2.5-flash".into(), label: "Balanced".into(), tier: "balanced".into() },
+            ModelWithMeta { id: "gemini-2.0-flash".into(), label: "Fast".into(), tier: "fast".into() },
+            ModelWithMeta { id: "gemini-2.5-pro-preview-06-05".into(), label: "Most Capable".into(), tier: "capable".into() },
+            ModelWithMeta { id: "gemini-2.5-flash-preview-05-20".into(), label: "Balanced".into(), tier: "balanced".into() },
         ],
         Provider::XAI => vec![
             ModelWithMeta { id: "grok-3".into(), label: "Balanced".into(), tier: "balanced".into() },
             ModelWithMeta { id: "grok-3-mini".into(), label: "Fast".into(), tier: "fast".into() },
+            ModelWithMeta { id: "grok-4".into(), label: "Most Capable".into(), tier: "capable".into() },
         ],
-        Provider::OpenRouter => vec![], // Always fetched from API
+        Provider::OpenRouter => vec![], // OpenRouter fetches from API
     }
 }
 ```
 
-## Provider API Reference
+### Model Fetching Per Provider
 
-### Endpoint Summary
+```rust
+// Source: Official API docs
+pub async fn fetch_models(provider: &Provider, api_key: &str) -> Result<Vec<ModelWithMeta>, String> {
+    let client = reqwest::Client::new();
+    match provider {
+        // OpenAI, xAI: GET /v1/models
+        Provider::OpenAI => {
+            let resp = client.get("https://api.openai.com/v1/models")
+                .header("Authorization", format!("Bearer {}", api_key))
+                .send().await.map_err(|_| "Network error".to_string())?;
+            // Parse response.data array, filter to chat models
+            // ...
+            todo!()
+        }
+        // OpenRouter: GET /api/v1/models, filter chat-capable
+        Provider::OpenRouter => {
+            let resp = client.get("https://openrouter.ai/api/v1/models")
+                .header("Authorization", format!("Bearer {}", api_key))
+                .send().await.map_err(|_| "Network error".to_string())?;
+            // Parse response, filter to chat-capable models
+            // ...
+            todo!()
+        }
+        // Gemini: GET /v1beta/models?key={key}
+        Provider::Gemini => {
+            let url = format!(
+                "https://generativelanguage.googleapis.com/v1beta/models?key={}", api_key
+            );
+            let resp = client.get(&url)
+                .send().await.map_err(|_| "Network error".to_string())?;
+            // Parse response, filter to generateContent-capable models
+            // ...
+            todo!()
+        }
+        // Anthropic: no public model list API -- use hardcoded only
+        Provider::Anthropic => Ok(curated_models(provider)),
+        // xAI: existing pattern
+        Provider::XAI => {
+            // Reuse existing validate_and_fetch_models logic
+            todo!()
+        }
+    }
+}
+```
 
-| Provider | Chat Endpoint | Models Endpoint | Auth | System Prompt |
-|----------|---------------|-----------------|------|---------------|
-| OpenAI | POST /v1/chat/completions | GET /v1/models | `Authorization: Bearer <key>` | `role: "system"` in messages |
-| Anthropic | POST /v1/messages | GET /v1/models | `x-api-key: <key>` + `anthropic-version: 2023-06-01` | Top-level `system` field |
-| Gemini | POST /v1beta/models/{model}:streamGenerateContent?alt=sse&key={key} | GET /v1beta/models?key={key} | API key as query param | `systemInstruction.parts[].text` |
-| xAI | POST /v1/chat/completions | GET /v1/models | `Authorization: Bearer <key>` | `role: "system"` in messages |
-| OpenRouter | POST /api/v1/chat/completions | GET /api/v1/models | `Authorization: Bearer <key>` | `role: "system"` in messages |
+### Frontend IPC Update (store/index.ts)
 
-### SSE Format Summary
+```typescript
+// Source: Existing pattern in src/store/index.ts
+// The submitQuery function needs to pass provider to the backend
 
-| Provider | Event Names | Token Location | Stream End Signal |
-|----------|-------------|----------------|-------------------|
-| OpenAI/xAI/OpenRouter | None (data-only) | `choices[0].delta.content` | `data: [DONE]` |
-| Anthropic | `content_block_delta`, `message_stop`, etc. | `delta.text` (when `delta.type == "text_delta"`) | `event: message_stop` |
-| Gemini | Standard SSE data events | `candidates[0].content.parts[0].text` | Stream closes naturally |
-
-### Temperature Defaults
-All providers: `temperature: 0.1` (matching existing xAI behavior). All support `temperature` parameter with similar 0.0-2.0 range.
-
-### Additional Headers
-- **OpenRouter:** Optional `HTTP-Referer` (app URL) and `X-Title` (app name) for attribution/rankings
-- **Anthropic:** Required `anthropic-version: 2023-06-01`
+// In the invoke call (line ~475 of store/index.ts):
+await invoke("stream_ai_response", {
+  provider: selectedProvider,  // NEW: read from settings
+  query,
+  model: selectedModel,
+  contextJson,
+  history,
+  onToken,
+});
+```
 
 ## State of the Art
 
 | Old Approach | Current Approach | When Changed | Impact |
 |--------------|------------------|--------------|--------|
-| xAI-only hardcoded | Multi-provider abstraction | This phase | 5 providers supported |
-| Single keychain account | Per-provider keychain accounts | This phase | Separate keys per provider |
-| `XaiModelWithMeta` struct | `ModelWithMeta` (generic) | This phase | Provider-agnostic model metadata |
-| No migration logic | Read-on-first-launch migration | This phase | Smooth upgrade for existing users |
+| OpenAI-only API format | Each provider has its own REST API | 2023-2024 | Must handle 3 distinct formats |
+| Bearer auth everywhere | Anthropic uses x-api-key, Gemini uses URL param | Always | Auth logic varies per provider |
+| Single SSE format | Anthropic named events, Gemini alt=sse | Always | SSE parsing differs per adapter |
+| `gpt-3.5-turbo` | `gpt-4o`, `gpt-4.1` | 2024-2025 | Model IDs change; hardcoded lists need periodic updates |
+
+**Deprecated/outdated:**
+- Anthropic's `v1/complete` endpoint (replaced by `v1/messages`)
+- OpenAI's `text-davinci-003` and similar completion models (replaced by chat models)
+- Google PaLM API (replaced by Gemini API)
 
 ## Open Questions
 
-1. **Exact curated model IDs at ship time**
-   - What we know: Model IDs for current top-tier models from each provider
-   - What's unclear: Providers release new models frequently; IDs may change by ship date
-   - Recommendation: Use current best-known IDs, the "Refresh models" capability handles updates
+1. **Anthropic model list API**
+   - What we know: Anthropic does not have a public REST endpoint to list available models
+   - What's unclear: Whether they plan to add one
+   - Recommendation: Use hardcoded curated list only for Anthropic; no "Refresh models" for this provider
 
-2. **OpenRouter model filtering**
-   - What we know: `/api/v1/models` returns hundreds of models
-   - What's unclear: Exact filtering criteria for "chat-capable" models
-   - Recommendation: Filter by checking model `type` or `architecture` fields; show all but tag curated ones
+2. **Gemini model ID stability**
+   - What we know: Gemini model IDs include preview/date suffixes that change frequently
+   - What's unclear: How often the stable model aliases update
+   - Recommendation: Use stable aliases like `gemini-2.0-flash` in curated lists; accept that API-fetched lists will include preview models
 
-3. **Anthropic max_tokens optimal value**
-   - What we know: Anthropic requires explicit max_tokens; 4096 is a safe default
-   - What's unclear: Whether different Claude models have different optimal max_tokens
-   - Recommendation: Use 4096 for all Anthropic models (CMD+K generates short responses)
+3. **Temperature parameter compatibility**
+   - What we know: All providers accept `temperature` but ranges differ slightly. OpenAI: 0-2, Anthropic: 0-1, Gemini: 0-2
+   - What's unclear: Whether 0.1 works well across all providers
+   - Recommendation: Use 0.1 for all (within valid range for all providers); this is Claude's discretion per CONTEXT.md
+
+## Validation Architecture
+
+### Test Framework
+| Property | Value |
+|----------|-------|
+| Framework | None detected -- no test infrastructure exists |
+| Config file | none -- see Wave 0 |
+| Quick run command | N/A |
+| Full suite command | N/A |
+
+### Phase Requirements -> Test Map
+| Req ID | Behavior | Test Type | Automated Command | File Exists? |
+|--------|----------|-----------|-------------------|-------------|
+| PROV-01 | Provider selection persists | manual-only | Manual: select provider, restart app, verify selection | N/A |
+| PROV-02 | Per-provider keychain storage | manual-only | Manual: save key for each provider, verify retrieval | N/A |
+| PROV-03 | v0.2.4 xAI key migration | manual-only | Manual: install v0.2.4, add key, upgrade to v0.2.6, verify | N/A |
+| PROV-04 | API key validation per provider | manual-only | Manual: enter valid/invalid keys, verify messages | N/A |
+| PROV-05 | Available models per provider | manual-only | Manual: select provider, verify model list appears | N/A |
+| PROV-06 | Real-time streaming all providers | manual-only | Manual: generate command with each provider, verify streaming | N/A |
+| PROV-07 | Provider-specific error messages | manual-only | Manual: trigger errors, verify provider name in message | N/A |
+
+**Note:** All requirements involve external API calls and platform-specific keychain operations, making unit testing impractical without mocking infrastructure. Testing is manual for this phase.
+
+### Sampling Rate
+- **Per task commit:** Manual smoke test -- generate a command with the provider being implemented
+- **Per wave merge:** Test all 5 providers end-to-end (key save, validate, stream, error)
+- **Phase gate:** All 5 providers streaming successfully + migration verified
+
+### Wave 0 Gaps
+None -- no test infrastructure to set up for this phase (all manual testing).
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Anthropic Streaming Messages API - [platform.claude.com/docs/en/api/messages-streaming](https://platform.claude.com/docs/en/api/messages-streaming) - Full SSE event format, request/response examples
-- Google Gemini generateContent API - [ai.google.dev/api/generate-content](https://ai.google.dev/api/generate-content) - REST endpoint, streaming format, systemInstruction
-- OpenRouter API Reference - [openrouter.ai/docs/api/api-reference/chat/send-chat-completion-request](https://openrouter.ai/docs/api/api-reference/chat/send-chat-completion-request) - OpenAI-compatible format, optional headers
-- keyring crate docs - [docs.rs/keyring](https://docs.rs/keyring) - Multi-account support, platform backends
+- Anthropic Messages API streaming docs -- SSE event types, request format, auth headers (https://docs.anthropic.com/en/api/messages-streaming -> https://platform.claude.com/docs/en/api/messages-streaming)
+- Google Gemini API generateContent reference -- streamGenerateContent endpoint, URL format, systemInstruction field (https://ai.google.dev/api/generate-content)
+- OpenAI Chat Completions API streaming -- SSE format, [DONE] sentinel (https://platform.openai.com/docs/api-reference/chat-streaming)
+- OpenRouter API docs -- required headers, /api/v1/models endpoint, OpenAI compatibility (https://openrouter.ai/docs/api/reference/overview)
+- Existing codebase: `commands/ai.rs`, `commands/keychain.rs`, `commands/xai.rs`, `src/store/index.ts`
 
 ### Secondary (MEDIUM confidence)
-- OpenAI Chat Completions API - [platform.openai.com/docs/api-reference/chat](https://platform.openai.com/docs/api-reference/chat) - Standard SSE format verified via WebSearch
-- Anthropic Models List - [docs.anthropic.com/en/api/models-list](https://docs.anthropic.com/en/api/models-list) - GET /v1/models for key validation
-- Google Gemini Models API - [ai.google.dev/api/models](https://ai.google.dev/api/models) - GET /v1beta/models for key validation
+- keyring crate v3 docs -- platform support, feature flags (https://docs.rs/keyring)
+- eventsource-stream crate -- named event support via `.event` field
 
 ### Tertiary (LOW confidence)
-- Specific model IDs (gpt-4.1, claude-sonnet-4, gemini-2.5-pro) - These are current as of March 2026 but may change before ship
+- Curated model lists -- model IDs based on current knowledge; may need updating before release
+- Gemini preview model IDs -- change frequently; use stable aliases
 
 ## Metadata
 
 **Confidence breakdown:**
-- Standard stack: HIGH - All libraries already in use, no new dependencies
-- Architecture: HIGH - Clear adapter pattern, well-understood API differences from official docs
-- Pitfalls: HIGH - Verified API format differences from official documentation
-- Model lists: LOW - Specific model IDs may change; mitigated by refresh capability
+- Standard stack: HIGH -- all crates already in use, no new dependencies
+- Architecture: HIGH -- patterns derived directly from existing codebase + verified API docs
+- Pitfalls: HIGH -- each pitfall verified against official API documentation
+- Model lists: MEDIUM -- model IDs are current but may change before release
 
 **Research date:** 2026-03-09
-**Valid until:** 2026-04-09 (stable APIs, but model IDs may shift)
+**Valid until:** 2026-04-09 (30 days -- API formats are stable; model IDs may need refresh)
