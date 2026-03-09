@@ -126,21 +126,28 @@ pub fn detect_full_with_hwnd(
                         if let Some(ref text) = uia_text {
                             eprintln!("[detect_full_with_hwnd] UIA text: {} bytes, content: {:?}", text.len(), &text[..text.len().min(500)]);
 
+                            // Step 1: Try UIA text-based WSL detection UNCONDITIONALLY
+                            // This is the PRIMARY WSL detection mechanism.
+                            // Process tree ancestry (detect_wsl_in_ancestry) is the fallback,
+                            // but it fails for WSL 2 where Linux processes run in Hyper-V VM.
+                            if !terminal.is_wsl {
+                                if detect_wsl_from_text(text) {
+                                    eprintln!("[detect_full_with_hwnd] WSL detected from UIA text (process tree missed it)");
+                                    terminal.is_wsl = true;
+                                }
+                            }
+
+                            // Step 2: If WSL (from either process tree or UIA text), infer Linux context
                             if terminal.is_wsl {
-                                // WSL: try to infer Linux CWD from terminal prompt text
                                 if let Some(linux_cwd) = infer_linux_cwd_from_text(text) {
                                     eprintln!("[detect_full_with_hwnd] inferred Linux CWD from UIA text: {}", &linux_cwd);
                                     terminal.cwd = Some(linux_cwd);
                                 }
-                                // Also infer shell from text for WSL sessions
-                                if terminal.shell_type.is_none() || terminal.cwd.is_none() {
-                                    let shell = infer_shell_from_text(text);
-                                    eprintln!("[detect_full_with_hwnd] inferred shell from UIA text: {}", shell);
-                                    terminal.shell_type = Some(shell.to_string());
-                                }
+                                let shell = infer_shell_from_text(text);
+                                eprintln!("[detect_full_with_hwnd] WSL shell from UIA text: {}", shell);
+                                terminal.shell_type = Some(shell.to_string());
                             } else if terminal.cwd.is_none() {
                                 // Non-WSL: infer shell type from visible text when process tree detection failed
-                                // (e.g. Windows Terminal ConPTY where shells aren't WT descendants)
                                 let shell = infer_shell_from_text(text);
                                 eprintln!("[detect_full_with_hwnd] inferred shell from UIA text: {}", shell);
                                 terminal.shell_type = Some(shell.to_string());
@@ -487,6 +494,21 @@ fn infer_shell_from_text(text: &str) -> &'static str {
         if trimmed.len() >= 3 && trimmed.chars().nth(1) == Some(':') && trimmed.contains('>') && !trimmed.starts_with("PS") {
             return "cmd";
         }
+        // Linux bash/zsh prompt: user@host:/path or user@host:~
+        if trimmed.contains('@') && trimmed.contains(':') {
+            if let Some(colon_pos) = trimmed.find(':') {
+                let before_colon = &trimmed[..colon_pos];
+                let after_colon = &trimmed[colon_pos + 1..];
+                if before_colon.contains('@')
+                    && (after_colon.starts_with('/')
+                        || after_colon.starts_with('~')
+                        || after_colon.trim_start().starts_with('/')
+                        || after_colon.trim_start().starts_with('~'))
+                {
+                    return "bash";
+                }
+            }
+        }
         // Fish prompt: "user@host /path>"
         if trimmed.contains('@') && trimmed.ends_with('>') && !trimmed.contains('\\') {
             return "fish";
@@ -501,6 +523,66 @@ fn infer_shell_from_text(text: &str) -> &'static str {
         }
     }
     "powershell" // default fallback
+}
+
+/// Detect WSL from visible terminal text (UIA).
+/// This is the PRIMARY WSL detection mechanism -- process tree ancestry fails for WSL 2
+/// where Linux processes run in a Hyper-V VM invisible to Windows process APIs.
+///
+/// Checks the last 15 lines of terminal text for Linux/WSL indicators:
+/// - user@host:/path or user@host:~ prompt patterns
+/// - user@host...$ or user@host...# prompt endings (without Windows backslash paths)
+/// - Linux-specific paths like /home/, /root/, /var/, /etc/, /usr/, /tmp/, /opt/
+#[cfg(target_os = "windows")]
+fn detect_wsl_from_text(text: &str) -> bool {
+    let linux_paths = ["/home/", "/root/", "/var/", "/etc/", "/usr/", "/tmp/", "/opt/"];
+
+    // Check for Linux paths anywhere in text
+    for lp in &linux_paths {
+        if text.contains(lp) {
+            eprintln!("[detect_wsl_from_text] WSL detected from UIA text: Linux path {}", lp);
+            return true;
+        }
+    }
+
+    // Check last 15 lines for prompt patterns
+    for line in text.lines().rev().take(15) {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        // Pattern 1: user@host:/path or user@host:~ (canonical Linux prompt)
+        if let Some(colon_pos) = trimmed.find(':') {
+            let before_colon = &trimmed[..colon_pos];
+            if before_colon.contains('@') {
+                let after_colon = &trimmed[colon_pos + 1..];
+                let path_part = after_colon
+                    .trim_end_matches(|c: char| c == '$' || c == '#' || c == ' ');
+                if path_part.starts_with('/') || path_part.starts_with('~') {
+                    eprintln!("[detect_wsl_from_text] WSL detected from UIA text: user@host:path prompt");
+                    return true;
+                }
+            }
+        }
+
+        // Pattern 2: user@host...$ or user@host...# without Windows backslash paths
+        if trimmed.contains('@') {
+            if let Some(at_pos) = trimmed.find('@') {
+                let after_at = &trimmed[at_pos + 1..];
+                let host_part = after_at.split(|c: char| c.is_whitespace() || c == ':').next().unwrap_or("");
+                if !host_part.contains('\\')
+                    && (trimmed.ends_with('$') || trimmed.ends_with('#')
+                        || trimmed.contains("$ ") || trimmed.contains("# "))
+                {
+                    eprintln!("[detect_wsl_from_text] WSL detected from UIA text: user@host prompt with $ or #");
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
 }
 
 /// Attempt to infer the Linux CWD from visible terminal text.
