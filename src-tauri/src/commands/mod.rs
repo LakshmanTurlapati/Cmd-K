@@ -9,4 +9,4 @@ pub mod safety;
 pub mod terminal;
 pub mod tray;
 pub mod window;
-pub mod xai;
+pub mod models;

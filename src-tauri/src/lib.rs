@@ -13,7 +13,7 @@ use commands::{
     terminal::{get_app_context, get_terminal_context},
     tray::setup_tray,
     window::{hide_overlay, show_overlay, set_overlay_position},
-    xai::validate_and_fetch_models,
+    models::{validate_api_key, fetch_models},
 };
 use state::AppState;
 use tauri::Manager;
@@ -233,7 +233,8 @@ pub fn run() {
             save_api_key,
             get_api_key,
             delete_api_key,
-            validate_and_fetch_models,
+            validate_api_key,
+            fetch_models,
             open_accessibility_settings,
             check_accessibility_permission,
             request_accessibility_permission,
