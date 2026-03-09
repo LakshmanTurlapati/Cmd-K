@@ -79,6 +79,9 @@ All prior decisions archived in PROJECT.md Key Decisions table.
 - [23.1-02] Interactive shell preference (powershell, pwsh, bash, zsh, fish) applies only to IDE terminals
 - [Phase 23.1]: Removed try_focused_subtree -- VS Code doesn't expose xterm.js UIA tree without screen reader mode
 - [Phase 23.1]: Pivoted to multi-signal WSL detection: window title + full tree walk + CWD path style + shell child detection
+- [24-01] UpdateState as separate managed state (not inside AppState) because Update is not Default
+- [24-01] MenuItem stored in UpdateState for dynamic tray text updates without global lookups
+- [24-01] Pubkey placeholder in tauri.conf.json -- user generates Ed25519 keypair before release
 - [24-02] Heredoc-based latest.json assembly in release job rather than external script
 - [24-02] Both darwin-aarch64 and darwin-x86_64 point to same universal .app.tar.gz
 - [24-02] Windows .sig renamed alongside .exe to maintain filename consistency
@@ -98,6 +101,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-09T17:22:30Z
-Stopped at: Completed 24-02-PLAN.md
-Resume file: .planning/phases/24-auto-updater/24-02-SUMMARY.md
+Last session: 2026-03-09T17:25:15Z
+Stopped at: Completed 24-01-PLAN.md
+Resume file: .planning/phases/24-auto-updater/24-01-SUMMARY.md

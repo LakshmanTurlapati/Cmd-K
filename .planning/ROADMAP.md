@@ -142,7 +142,7 @@ Plans:
   3. User can download and install the update with one click from the tray, with the update applied on next app launch (no forced restart)
   4. Updates are cryptographically signed (Ed25519) and verified before installation
   5. CI/CD pipeline produces signed update artifacts and a latest.json manifest alongside existing release artifacts
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 24-01-PLAN.md — Updater plugin config, update state machine, background checker, tray menu integration, install-on-quit
@@ -182,4 +182,4 @@ Recommended order: 21 -> 22 -> 23 -> 23.1 -> 24
 | 22. Multi-Provider Frontend | v0.2.6 | Complete | Complete | 2026-03-09 |
 | 23. WSL Terminal Context | v0.2.6 | Complete | Complete | 2026-03-09 |
 | 23.1. VS Code WSL Terminal Tab Detection | 2/2 | Complete   | 2026-03-09 | 2026-03-09 |
-| 24. Auto-Updater | v0.2.6 | 2/2 | Complete | 2026-03-09 |
+| 24. Auto-Updater | 2/2 | Complete   | 2026-03-09 | 2026-03-09 |

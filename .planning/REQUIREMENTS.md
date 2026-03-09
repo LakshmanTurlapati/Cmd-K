@@ -45,14 +45,14 @@ Requirements for multi-provider AI, WSL terminal context, and auto-updater.
 
 ### Auto-Updater
 
-- [ ] **UPDT-01**: App checks for updates on launch without blocking the UI
-- [ ] **UPDT-02**: User sees an "Update Available" indicator in the tray menu when an update exists
-- [ ] **UPDT-03**: User can download and install the update with one click from the tray
-- [ ] **UPDT-04**: Update is applied on next app launch (no forced restart)
-- [ ] **UPDT-05**: Updates are cryptographically signed and verified before installation
+- [x] **UPDT-01**: App checks for updates on launch without blocking the UI
+- [x] **UPDT-02**: User sees an "Update Available" indicator in the tray menu when an update exists
+- [x] **UPDT-03**: User can download and install the update with one click from the tray
+- [x] **UPDT-04**: Update is applied on next app launch (no forced restart)
+- [x] **UPDT-05**: Updates are cryptographically signed and verified before installation
 - [x] **UPDT-06**: CI/CD pipeline generates signed update artifacts and latest.json manifest
-- [ ] **UPDT-07**: Background update checks run silently every 24 hours after launch
-- [ ] **UPDT-08**: Dismissing the update notification suppresses it until next app launch
+- [x] **UPDT-07**: Background update checks run silently every 24 hours after launch
+- [x] **UPDT-08**: Dismissing the update notification suppresses it until next app launch
 
 ## Future Requirements
 
@@ -103,14 +103,14 @@ Requirements for multi-provider AI, WSL terminal context, and auto-updater.
 | WSLT-08 | Phase 23 | Complete |
 | WSLT-09 | Phase 23 | Complete |
 | WSLT-10 | Phase 23 | Complete |
-| UPDT-01 | Phase 24 | Pending |
-| UPDT-02 | Phase 24 | Pending |
-| UPDT-03 | Phase 24 | Pending |
-| UPDT-04 | Phase 24 | Pending |
-| UPDT-05 | Phase 24 | Pending |
+| UPDT-01 | Phase 24 | Complete |
+| UPDT-02 | Phase 24 | Complete |
+| UPDT-03 | Phase 24 | Complete |
+| UPDT-04 | Phase 24 | Complete |
+| UPDT-05 | Phase 24 | Complete |
 | UPDT-06 | Phase 24 | Complete |
-| UPDT-07 | Phase 24 | Pending |
-| UPDT-08 | Phase 24 | Pending |
+| UPDT-07 | Phase 24 | Complete |
+| UPDT-08 | Phase 24 | Complete |
 
 **Coverage:**
 - v0.2.6 requirements: 32 total
