@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: in_progress
-stopped_at: Completed 22-01-PLAN.md
-last_updated: "2026-03-09T08:47:46Z"
-last_activity: 2026-03-09 -- Phase 22 plan 01 complete (provider selection onboarding)
+stopped_at: Completed 22-02-PLAN.md
+last_updated: "2026-03-09T08:53:01Z"
+last_activity: 2026-03-09 -- Phase 22 plan 02 complete (settings provider switching and tier-grouped models)
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-08)
 ## Current Position
 
 Phase: 22 (second of 4 in v0.2.6) -- Multi-Provider Frontend
-Plan: 1 of 1 (plan 01 complete)
+Plan: 2 of 2 (plan 02 complete)
 Status: In Progress
-Last activity: 2026-03-09 -- Phase 22 plan 01 complete (provider selection onboarding)
+Last activity: 2026-03-09 -- Phase 22 plan 02 complete (settings provider switching and tier-grouped models)
 
-Progress: [████████░░] 75%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -46,7 +46,7 @@ Progress: [████████░░] 75%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 21. Provider Abstraction | 2/2 | 8min | 4min |
-| 22. Multi-Provider Frontend | 1/1 | 3min | 3min |
+| 22. Multi-Provider Frontend | 2/2 | 6min | 3min |
 | 23. WSL Terminal Context | -- | -- | -- |
 | 24. Auto-Updater | -- | -- | -- |
 
@@ -64,6 +64,9 @@ All prior decisions archived in PROJECT.md Key Decisions table.
 - [22-01] Provider initials as styled circles instead of icons -- avoids asset dependencies
 - [22-01] providerRef race condition guard in StepApiKey prevents stale async results
 - [22-01] v0.2.4 upgrade: reset onboarding to step 0 if no savedProvider
+- [22-02] Provider dropdown checks stored keys on open for green checkmarks (keychain lookup, no API validation)
+- [22-02] Tier sections render only when models exist for that tier; OpenRouter models appear in All Models only
+- [22-02] Per-provider model memory checked before default auto-select logic on provider switch
 
 ### Pending Todos
 
@@ -75,6 +78,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-09T08:47:46Z
-Stopped at: Completed 22-01-PLAN.md
-Resume file: .planning/phases/22-multi-provider-frontend/22-01-SUMMARY.md
+Last session: 2026-03-09T08:53:01Z
+Stopped at: Completed 22-02-PLAN.md
+Resume file: .planning/phases/22-multi-provider-frontend/22-02-SUMMARY.md

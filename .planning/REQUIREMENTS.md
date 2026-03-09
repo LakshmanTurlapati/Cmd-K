@@ -20,15 +20,15 @@ Requirements for multi-provider AI, WSL terminal context, and auto-updater.
 ### Provider Frontend
 
 - [x] **PFUI-01**: User can select a provider during first-run onboarding
-- [ ] **PFUI-02**: User can switch providers in the settings Account tab
-- [ ] **PFUI-03**: User can pick a model from a dropdown filtered to their selected provider
-- [ ] **PFUI-04**: Models are grouped by capability tier (Fast, Balanced, Most Capable) across all providers
+- [x] **PFUI-02**: User can switch providers in the settings Account tab
+- [x] **PFUI-03**: User can pick a model from a dropdown filtered to their selected provider
+- [x] **PFUI-04**: Models are grouped by capability tier (Fast, Balanced, Most Capable) across all providers
 - [x] **PFUI-05**: User can switch providers without losing conversation history
 
 ### OpenRouter
 
-- [ ] **ORTR-01**: User can use a single OpenRouter API key to access models from all supported providers
-- [ ] **ORTR-02**: OpenRouter model list is filtered to chat-capable models with sensible grouping
+- [x] **ORTR-01**: User can use a single OpenRouter API key to access models from all supported providers
+- [x] **ORTR-02**: OpenRouter model list is filtered to chat-capable models with sensible grouping
 
 ### WSL Terminal Context
 
@@ -87,12 +87,12 @@ Requirements for multi-provider AI, WSL terminal context, and auto-updater.
 | PROV-06 | Phase 21 | Complete |
 | PROV-07 | Phase 21 | Complete |
 | PFUI-01 | Phase 22 | Complete |
-| PFUI-02 | Phase 22 | Pending |
-| PFUI-03 | Phase 22 | Pending |
-| PFUI-04 | Phase 22 | Pending |
+| PFUI-02 | Phase 22 | Complete |
+| PFUI-03 | Phase 22 | Complete |
+| PFUI-04 | Phase 22 | Complete |
 | PFUI-05 | Phase 22 | Complete |
-| ORTR-01 | Phase 22 | Pending |
-| ORTR-02 | Phase 22 | Pending |
+| ORTR-01 | Phase 22 | Complete |
+| ORTR-02 | Phase 22 | Complete |
 | WSLT-01 | Phase 23 | Pending |
 | WSLT-02 | Phase 23 | Pending |
 | WSLT-03 | Phase 23 | Pending |
