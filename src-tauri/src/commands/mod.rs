@@ -4,6 +4,7 @@ pub mod hotkey;
 pub mod keychain;
 pub mod paste;
 pub mod permissions;
+pub mod providers;
 pub mod safety;
 pub mod terminal;
 pub mod tray;
