@@ -35,6 +35,9 @@ pub struct TerminalContext {
     /// Name of the process running inside the shell, if any (e.g., "node", "python").
     /// None if the shell is idle (no foreground child process).
     pub running_process: Option<String>,
+    /// True when the session is running inside Windows Subsystem for Linux.
+    /// Always false on non-Windows platforms.
+    pub is_wsl: bool,
 }
 
 /// Full context about the frontmost application, returned to the frontend.
@@ -109,6 +112,7 @@ pub fn detect_full_with_hwnd(
 ) -> Option<AppContext> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
+        #[allow(unused_mut)]
         let mut result = detect_app_context(previous_app_pid, pre_captured_text);
 
         // Windows: if we have a terminal context but no visible_output, try UIA
@@ -121,9 +125,22 @@ pub fn detect_full_with_hwnd(
                             .map(|text| filter::filter_sensitive(&text));
                         if let Some(ref text) = uia_text {
                             eprintln!("[detect_full_with_hwnd] UIA text: {} bytes, content: {:?}", text.len(), &text[..text.len().min(500)]);
-                            // Infer shell type from visible text when process tree detection failed
-                            // (e.g. Windows Terminal ConPTY where shells aren't WT descendants)
-                            if terminal.cwd.is_none() {
+
+                            if terminal.is_wsl {
+                                // WSL: try to infer Linux CWD from terminal prompt text
+                                if let Some(linux_cwd) = infer_linux_cwd_from_text(text) {
+                                    eprintln!("[detect_full_with_hwnd] inferred Linux CWD from UIA text: {}", &linux_cwd);
+                                    terminal.cwd = Some(linux_cwd);
+                                }
+                                // Also infer shell from text for WSL sessions
+                                if terminal.shell_type.is_none() || terminal.cwd.is_none() {
+                                    let shell = infer_shell_from_text(text);
+                                    eprintln!("[detect_full_with_hwnd] inferred shell from UIA text: {}", shell);
+                                    terminal.shell_type = Some(shell.to_string());
+                                }
+                            } else if terminal.cwd.is_none() {
+                                // Non-WSL: infer shell type from visible text when process tree detection failed
+                                // (e.g. Windows Terminal ConPTY where shells aren't WT descendants)
                                 let shell = infer_shell_from_text(text);
                                 eprintln!("[detect_full_with_hwnd] inferred shell from UIA text: {}", shell);
                                 terminal.shell_type = Some(shell.to_string());
@@ -199,6 +216,7 @@ fn detect_inner(previous_app_pid: i32) -> Option<TerminalContext> {
             cwd: proc_info.cwd,
             visible_output,
             running_process: proc_info.running_process,
+            is_wsl: false,
         })
     }
 
@@ -251,11 +269,23 @@ fn detect_inner_windows(previous_app_pid: i32) -> Option<TerminalContext> {
         None
     };
 
+    let is_wsl = proc_info.is_wsl;
+
+    // If WSL session detected, override CWD and shell with Linux-native values
+    let (cwd, shell_type) = if is_wsl {
+        let wsl_cwd = process::get_wsl_cwd().or(proc_info.cwd);
+        let wsl_shell = process::get_wsl_shell().or(proc_info.shell_type);
+        (wsl_cwd, wsl_shell)
+    } else {
+        (proc_info.cwd, proc_info.shell_type)
+    };
+
     Some(TerminalContext {
-        shell_type: proc_info.shell_type,
-        cwd: proc_info.cwd,
+        shell_type,
+        cwd,
         visible_output,
         running_process: proc_info.running_process,
+        is_wsl,
     })
 }
 
@@ -330,6 +360,7 @@ fn detect_app_context_macos(previous_app_pid: i32, pre_captured_text: Option<Str
             cwd: proc_info.cwd,
             visible_output,
             running_process: proc_info.running_process,
+            is_wsl: false,
         })
     } else {
         None
@@ -393,18 +424,30 @@ fn detect_app_context_windows(previous_app_pid: i32, _pre_captured_text: Option<
     let has_shell = proc_info.shell_type.is_some() || proc_info.cwd.is_some();
 
     let terminal = if has_shell {
-        // Strip ".exe" from shell_type if present (e.g., "powershell.exe" → "powershell")
+        let is_wsl = proc_info.is_wsl;
+
+        // Strip ".exe" from shell_type if present (e.g., "powershell.exe" -> "powershell")
         let shell_type = proc_info.shell_type.map(|s| {
             s.trim_end_matches(".exe")
                 .trim_end_matches(".EXE")
                 .to_lowercase()
         });
 
+        // If WSL session detected, override CWD and shell with Linux-native values
+        let (cwd, shell_type) = if is_wsl {
+            let wsl_cwd = process::get_wsl_cwd().or(proc_info.cwd);
+            let wsl_shell = process::get_wsl_shell().or(shell_type);
+            (wsl_cwd, wsl_shell)
+        } else {
+            (proc_info.cwd, shell_type)
+        };
+
         Some(TerminalContext {
             shell_type,
-            cwd: proc_info.cwd,
+            cwd,
             visible_output: None, // UIA reading done separately via get_terminal_output command
             running_process: proc_info.running_process,
+            is_wsl,
         })
     } else if _is_terminal {
         // Known terminal (e.g. WindowsTerminal.exe) but no shell found in process tree.
@@ -416,6 +459,7 @@ fn detect_app_context_windows(previous_app_pid: i32, _pre_captured_text: Option<
             cwd: None,
             visible_output: None,
             running_process: None,
+            is_wsl: false,
         })
     } else {
         None
@@ -431,7 +475,7 @@ fn detect_app_context_windows(previous_app_pid: i32, _pre_captured_text: Option<
 }
 
 /// Infer shell type from visible terminal text.
-/// "PS C:\>" or "PS>" patterns → powershell, "C:\>" without PS → cmd, "$" prompt → bash.
+/// "PS C:\>" or "PS>" patterns -> powershell, "C:\>" without PS -> cmd, "$" prompt -> bash, "#" prompt -> bash (root).
 fn infer_shell_from_text(text: &str) -> &'static str {
     // Check last few lines for prompt patterns
     for line in text.lines().rev().take(10) {
@@ -443,10 +487,40 @@ fn infer_shell_from_text(text: &str) -> &'static str {
         if trimmed.len() >= 3 && trimmed.chars().nth(1) == Some(':') && trimmed.contains('>') && !trimmed.starts_with("PS") {
             return "cmd";
         }
-        // Bash/zsh prompt
+        // Fish prompt: "user@host /path>"
+        if trimmed.contains('@') && trimmed.ends_with('>') && !trimmed.contains('\\') {
+            return "fish";
+        }
+        // Bash/zsh prompt (user or root)
         if trimmed.ends_with('$') || trimmed.contains("$ ") {
+            return "bash";
+        }
+        // Root prompt (common in Linux/WSL)
+        if trimmed.contains('@') && (trimmed.ends_with('#') || trimmed.contains("# ")) {
             return "bash";
         }
     }
     "powershell" // default fallback
+}
+
+/// Attempt to infer the Linux CWD from visible terminal text.
+/// Looks for common prompt patterns: user@host:/path$ or user@host:/path #
+#[cfg(target_os = "windows")]
+fn infer_linux_cwd_from_text(text: &str) -> Option<String> {
+    for line in text.lines().rev().take(10) {
+        let trimmed = line.trim();
+        // Pattern: user@host:/absolute/path$ or user@host:/path #
+        if let Some(colon_pos) = trimmed.find(':') {
+            if trimmed[..colon_pos].contains('@') {
+                let after_colon = &trimmed[colon_pos + 1..];
+                let path = after_colon
+                    .trim_end_matches(|c: char| c == '$' || c == '#' || c == ' ')
+                    .trim();
+                if path.starts_with('/') || path == "~" {
+                    return Some(path.to_string());
+                }
+            }
+        }
+    }
+    None
 }

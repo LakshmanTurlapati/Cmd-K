@@ -78,6 +78,8 @@ pub struct ProcessInfo {
     /// Name of the foreground process running inside the shell (if any).
     /// None if the shell is idle.
     pub running_process: Option<String>,
+    /// True when wsl.exe is found in the process ancestry (Windows only).
+    pub is_wsl: bool,
 }
 
 /// Get CWD, shell type, and running process for the terminal identified by `terminal_pid`.
@@ -104,6 +106,7 @@ pub fn get_foreground_info(terminal_pid: i32) -> ProcessInfo {
                 cwd: None,
                 shell_type: None,
                 running_process: None,
+                is_wsl: false,
             }
         }
     };
@@ -120,10 +123,17 @@ pub fn get_foreground_info(terminal_pid: i32) -> ProcessInfo {
     // Check if a foreground process is running inside the shell (e.g., node, python)
     let running_process = find_running_process(shell_pid, &shell_name);
 
+    // Detect WSL session on Windows by checking if wsl.exe is in the process ancestry
+    #[cfg(target_os = "windows")]
+    let is_wsl = detect_wsl_in_ancestry(shell_pid);
+    #[cfg(not(target_os = "windows"))]
+    let is_wsl = false;
+
     ProcessInfo {
         cwd,
         shell_type,
         running_process,
+        is_wsl,
     }
 }
 
@@ -892,5 +902,126 @@ fn find_running_process(shell_pid: i32, shell_name: &Option<String>) -> Option<S
             return Some(n.clone());
         }
     }
+    None
+}
+
+/// Detect if wsl.exe is in the process ancestry of the given PID.
+///
+/// Takes a separate process snapshot and walks the parent chain looking for wsl.exe.
+/// The snapshot is cheap (~1ms) and avoids changing find_shell_by_ancestry's signature.
+#[cfg(target_os = "windows")]
+fn detect_wsl_in_ancestry(pid: i32) -> bool {
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
+    };
+
+    unsafe {
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if snapshot == INVALID_HANDLE_VALUE {
+            return false;
+        }
+
+        let mut parent_map: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
+        let mut exe_map: std::collections::HashMap<u32, String> = std::collections::HashMap::new();
+
+        let mut entry: PROCESSENTRY32W = std::mem::zeroed();
+        entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+
+        if Process32FirstW(snapshot, &mut entry) != 0 {
+            loop {
+                parent_map.insert(entry.th32ProcessID, entry.th32ParentProcessID);
+
+                let name_len = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
+                let name = String::from_utf16_lossy(&entry.szExeFile[..name_len]);
+                exe_map.insert(entry.th32ProcessID, name);
+
+                if Process32NextW(snapshot, &mut entry) == 0 {
+                    break;
+                }
+            }
+        }
+        CloseHandle(snapshot);
+
+        // Walk ancestry from the given PID looking for wsl.exe
+        let mut current = pid as u32;
+        for _ in 0..20 {
+            if let Some(exe) = exe_map.get(&current) {
+                if exe.eq_ignore_ascii_case("wsl.exe") {
+                    eprintln!("[process] WSL detected: wsl.exe found at pid {} in ancestry of {}", current, pid);
+                    return true;
+                }
+            }
+            match parent_map.get(&current) {
+                Some(&ppid) if ppid <= 1 || ppid == current => break,
+                Some(&ppid) => current = ppid,
+                None => break,
+            }
+        }
+        false
+    }
+}
+
+/// Get the Linux CWD from WSL via subprocess.
+///
+/// Spawns `wsl.exe -e sh -c "pwd"` to read the default WSL distro's CWD.
+/// Note: This returns the HOME directory of the WSL default user, not the
+/// active shell's CWD. UIA text inference provides better CWD when available.
+#[cfg(target_os = "windows")]
+pub fn get_wsl_cwd() -> Option<String> {
+    let output = std::process::Command::new("wsl.exe")
+        .args(["-e", "sh", "-c", "pwd"])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        let cwd = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !cwd.is_empty() && cwd.starts_with('/') {
+            eprintln!("[process] WSL CWD via subprocess: {}", &cwd);
+            Some(cwd)
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn get_wsl_cwd() -> Option<String> {
+    None
+}
+
+/// Get the Linux shell type from WSL via subprocess.
+///
+/// Reads $SHELL from the default WSL distro. This is the configured default shell,
+/// which may differ from the actually running shell.
+#[cfg(target_os = "windows")]
+pub fn get_wsl_shell() -> Option<String> {
+    let output = std::process::Command::new("wsl.exe")
+        .args(["-e", "sh", "-c", "basename \"$SHELL\""])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        let shell = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !shell.is_empty() {
+            eprintln!("[process] WSL shell via subprocess: {}", &shell);
+            Some(shell)
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn get_wsl_shell() -> Option<String> {
     None
 }
