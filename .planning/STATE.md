@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
-status: completed
-stopped_at: Phase 22 context gathered
-last_updated: "2026-03-09T08:28:29.091Z"
-last_activity: 2026-03-09 -- Phase 21 complete (all backend + frontend provider abstraction)
+status: in_progress
+stopped_at: Completed 22-01-PLAN.md
+last_updated: "2026-03-09T08:47:46Z"
+last_activity: 2026-03-09 -- Phase 22 plan 01 complete (provider selection onboarding)
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
-  percent: 25
+  total_plans: 4
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-08)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Phase 21 -- Provider Abstraction Layer
+**Current focus:** Phase 22 -- Multi-Provider Frontend
 
 ## Current Position
 
-Phase: 21 (first of 4 in v0.2.6) -- Provider Abstraction Layer -- COMPLETE
-Plan: 2 of 2 (all complete)
-Status: Phase Complete
-Last activity: 2026-03-09 -- Phase 21 complete (all backend + frontend provider abstraction)
+Phase: 22 (second of 4 in v0.2.6) -- Multi-Provider Frontend
+Plan: 1 of 1 (plan 01 complete)
+Status: In Progress
+Last activity: 2026-03-09 -- Phase 22 plan 01 complete (provider selection onboarding)
 
-Progress: [██░░░░░░░░] 25%
+Progress: [████████░░] 75%
 
 ## Performance Metrics
 
@@ -46,7 +46,7 @@ Progress: [██░░░░░░░░] 25%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 21. Provider Abstraction | 2/2 | 8min | 4min |
-| 22. Multi-Provider Frontend | -- | -- | -- |
+| 22. Multi-Provider Frontend | 1/1 | 3min | 3min |
 | 23. WSL Terminal Context | -- | -- | -- |
 | 24. Auto-Updater | -- | -- | -- |
 
@@ -61,6 +61,9 @@ All prior decisions archived in PROJECT.md Key Decisions table.
 - [21-01] v0.2.4 migration writes only provider to settings.json; xAI keychain account name unchanged
 - [21-02] Split validate_and_fetch_models into validate_api_key + fetch_models for separation of concerns
 - [21-02] Curated models with tier tags merged with API-fetched models; default provider is "xai"
+- [22-01] Provider initials as styled circles instead of icons -- avoids asset dependencies
+- [22-01] providerRef race condition guard in StepApiKey prevents stale async results
+- [22-01] v0.2.4 upgrade: reset onboarding to step 0 if no savedProvider
 
 ### Pending Todos
 
@@ -72,6 +75,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-09T08:28:29.076Z
-Stopped at: Phase 22 context gathered
-Resume file: .planning/phases/22-multi-provider-frontend/22-CONTEXT.md
+Last session: 2026-03-09T08:47:46Z
+Stopped at: Completed 22-01-PLAN.md
+Resume file: .planning/phases/22-multi-provider-frontend/22-01-SUMMARY.md

@@ -91,7 +91,7 @@ Plans:
   3. User can pick a model from a dropdown that shows only models for their selected provider, grouped by capability tier (Fast, Balanced, Most Capable)
   4. User can switch providers without losing their conversation history
   5. User with an OpenRouter API key can access models from multiple providers through a single key, with the model list filtered to chat-capable models
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 - [ ] 22-01-PLAN.md — Provider selection in onboarding + store foundation (StepProviderSelect, 5-step wizard, provider-aware text, App.tsx startup loading)
@@ -160,6 +160,6 @@ Recommended order: 21 -> 22 -> 23 -> 24
 | 19. Exhaustive Destructive Patterns | v0.2.4 | 1/1 | Complete | 2026-03-04 |
 | 20. CI/CD Pipeline | v0.2.4 | 2/2 | Complete | 2026-03-04 |
 | 21. Provider Abstraction Layer | 2/2 | Complete    | 2026-03-09 | - |
-| 22. Multi-Provider Frontend | v0.2.6 | 0/2 | Not started | - |
+| 22. Multi-Provider Frontend | 1/2 | In Progress|  | - |
 | 23. WSL Terminal Context | v0.2.6 | 0/TBD | Not started | - |
 | 24. Auto-Updater | v0.2.6 | 0/TBD | Not started | - |

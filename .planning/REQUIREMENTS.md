@@ -19,11 +19,11 @@ Requirements for multi-provider AI, WSL terminal context, and auto-updater.
 
 ### Provider Frontend
 
-- [ ] **PFUI-01**: User can select a provider during first-run onboarding
+- [x] **PFUI-01**: User can select a provider during first-run onboarding
 - [ ] **PFUI-02**: User can switch providers in the settings Account tab
 - [ ] **PFUI-03**: User can pick a model from a dropdown filtered to their selected provider
 - [ ] **PFUI-04**: Models are grouped by capability tier (Fast, Balanced, Most Capable) across all providers
-- [ ] **PFUI-05**: User can switch providers without losing conversation history
+- [x] **PFUI-05**: User can switch providers without losing conversation history
 
 ### OpenRouter
 
@@ -86,11 +86,11 @@ Requirements for multi-provider AI, WSL terminal context, and auto-updater.
 | PROV-05 | Phase 21 | Complete |
 | PROV-06 | Phase 21 | Complete |
 | PROV-07 | Phase 21 | Complete |
-| PFUI-01 | Phase 22 | Pending |
+| PFUI-01 | Phase 22 | Complete |
 | PFUI-02 | Phase 22 | Pending |
 | PFUI-03 | Phase 22 | Pending |
 | PFUI-04 | Phase 22 | Pending |
-| PFUI-05 | Phase 22 | Pending |
+| PFUI-05 | Phase 22 | Complete |
 | ORTR-01 | Phase 22 | Pending |
 | ORTR-02 | Phase 22 | Pending |
 | WSLT-01 | Phase 23 | Pending |
