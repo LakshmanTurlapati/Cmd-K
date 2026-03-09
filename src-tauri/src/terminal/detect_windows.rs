@@ -48,6 +48,7 @@ pub const KNOWN_SHELL_EXES: &[&str] = &[
     "fish.exe",
     "nu.exe",
     "sh.exe",
+    "wsl.exe",
 ];
 
 /// Returns true if the given exe name is a known terminal emulator.

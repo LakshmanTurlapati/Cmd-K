@@ -130,6 +130,7 @@ pub fn detect_full_with_hwnd(
                             // This is the PRIMARY WSL detection mechanism.
                             // Process tree ancestry (detect_wsl_in_ancestry) is the fallback,
                             // but it fails for WSL 2 where Linux processes run in Hyper-V VM.
+                            let wsl_from_process_tree = terminal.is_wsl;
                             if !terminal.is_wsl {
                                 if detect_wsl_from_text(text) {
                                     eprintln!("[detect_full_with_hwnd] WSL detected from UIA text (process tree missed it)");
@@ -137,8 +138,14 @@ pub fn detect_full_with_hwnd(
                                 }
                             }
 
-                            // Step 2: If WSL (from either process tree or UIA text), infer Linux context
-                            if terminal.is_wsl {
+                            // Step 2: If WSL detected from UIA text, use text to infer shell and CWD.
+                            // If WSL was detected from process tree (e.g., wsl.exe found), only use
+                            // UIA text if it actually contains WSL content — VS Code UIA returns
+                            // UI chrome (menus, buttons) not terminal text, so don't overwrite
+                            // good process-tree values with bad UIA inferences.
+                            let uia_has_wsl_content = !wsl_from_process_tree && terminal.is_wsl;
+                            if terminal.is_wsl && uia_has_wsl_content {
+                                // WSL detected from UIA text — text has terminal prompts
                                 if let Some(linux_cwd) = infer_linux_cwd_from_text(text) {
                                     eprintln!("[detect_full_with_hwnd] inferred Linux CWD from UIA text: {}", &linux_cwd);
                                     terminal.cwd = Some(linux_cwd);
@@ -146,6 +153,20 @@ pub fn detect_full_with_hwnd(
                                 let shell = infer_shell_from_text(text);
                                 eprintln!("[detect_full_with_hwnd] WSL shell from UIA text: {}", shell);
                                 terminal.shell_type = Some(shell.to_string());
+                            } else if terminal.is_wsl && wsl_from_process_tree {
+                                // WSL detected from process tree — UIA text may be UI chrome.
+                                // Only use UIA text to fill MISSING values, don't overwrite.
+                                if terminal.cwd.is_none() {
+                                    if let Some(linux_cwd) = infer_linux_cwd_from_text(text) {
+                                        eprintln!("[detect_full_with_hwnd] inferred Linux CWD from UIA text: {}", &linux_cwd);
+                                        terminal.cwd = Some(linux_cwd);
+                                    }
+                                }
+                                if terminal.shell_type.is_none() || terminal.shell_type.as_deref() == Some("wsl") {
+                                    let shell = infer_shell_from_text(text);
+                                    eprintln!("[detect_full_with_hwnd] WSL shell from UIA text: {}", shell);
+                                    terminal.shell_type = Some(shell.to_string());
+                                }
                             } else if terminal.cwd.is_none() {
                                 // Non-WSL: infer shell type from visible text when process tree detection failed
                                 let shell = infer_shell_from_text(text);
