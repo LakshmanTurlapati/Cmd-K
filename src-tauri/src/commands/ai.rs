@@ -27,6 +27,17 @@ const TERMINAL_SYSTEM_PROMPT_TEMPLATE: &str =
      For CMD, use standard commands (dir, findstr, etc.). \
      For bash/Git Bash, use POSIX tools.";
 
+/// System prompt for WSL terminal mode: generates Linux commands for WSL sessions.
+/// Only compiled on Windows since WSL only exists there.
+#[cfg(target_os = "windows")]
+const WSL_TERMINAL_SYSTEM_PROMPT_TEMPLATE: &str =
+    "You are a terminal command generator for Linux (WSL on Windows). Given the user's task \
+     description and terminal context, output ONLY the exact command(s) to run. No explanations, \
+     no markdown, no code fences. Just the raw command(s). If multiple commands are needed, \
+     separate them with && or use pipes. Prefer common POSIX tools (grep, find, sed, awk). \
+     The user is in a WSL Linux terminal with {shell_type} shell. You may reference WSL-Windows \
+     interop features (e.g., `code .` to open VS Code, `explorer.exe .` to open Explorer) when relevant.";
+
 /// Fallback system prompt for other platforms.
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 const TERMINAL_SYSTEM_PROMPT_TEMPLATE: &str =
@@ -75,6 +86,8 @@ struct TerminalContextView {
     cwd: Option<String>,
     visible_output: Option<String>,
     running_process: Option<String>,
+    #[serde(default)]
+    is_wsl: bool,
 }
 
 /// Build the user message string from the app context and raw query.
@@ -107,6 +120,9 @@ fn build_user_message(query: &str, ctx: &AppContextView, is_follow_up: bool) -> 
             parts.push(format!("App: {}", name));
         }
         if let Some(terminal) = &ctx.terminal {
+            if terminal.is_wsl {
+                parts.push("OS: WSL on Windows (Linux terminal)".to_string());
+            }
             if let Some(shell) = &terminal.shell_type {
                 parts.push(format!("Shell: {}", shell));
             }
@@ -212,24 +228,40 @@ pub async fn stream_ai_response(
         .and_then(|t| t.shell_type.as_ref())
         .is_some();
 
+    let is_wsl = ctx
+        .terminal
+        .as_ref()
+        .map(|t| t.is_wsl)
+        .unwrap_or(false);
+
     let system_prompt = if is_terminal_mode {
+        let default_shell = if is_wsl { "bash" } else { "zsh" };
         let shell_type = ctx
             .terminal
             .as_ref()
             .and_then(|t| t.shell_type.as_deref())
-            .unwrap_or("zsh");
-        TERMINAL_SYSTEM_PROMPT_TEMPLATE.replace("{shell_type}", shell_type)
+            .unwrap_or(default_shell);
+
+        if is_wsl {
+            #[cfg(target_os = "windows")]
+            { WSL_TERMINAL_SYSTEM_PROMPT_TEMPLATE.replace("{shell_type}", shell_type) }
+            #[cfg(not(target_os = "windows"))]
+            { TERMINAL_SYSTEM_PROMPT_TEMPLATE.replace("{shell_type}", shell_type) }
+        } else {
+            TERMINAL_SYSTEM_PROMPT_TEMPLATE.replace("{shell_type}", shell_type)
+        }
     } else {
         ASSISTANT_SYSTEM_PROMPT.to_string()
     };
 
     eprintln!(
-        "[ai] mode={}",
+        "[ai] mode={} wsl={}",
         if is_terminal_mode {
             "terminal"
         } else {
             "assistant"
-        }
+        },
+        is_wsl
     );
 
     // 4. Build the user message with context (follow-ups omit terminal context)
