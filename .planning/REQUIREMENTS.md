@@ -1,0 +1,122 @@
+# Requirements: CMD+K
+
+**Defined:** 2026-03-08
+**Core Value:** The overlay must appear on top of the currently active application and feel instant
+
+## v0.2.6 Requirements
+
+Requirements for multi-provider AI, WSL terminal context, and auto-updater.
+
+### Provider Abstraction
+
+- [ ] **PROV-01**: User can select their AI provider from OpenAI, Anthropic, Google Gemini, xAI, or OpenRouter
+- [ ] **PROV-02**: User can store a separate API key per provider in the platform keychain
+- [ ] **PROV-03**: Existing xAI API key is migrated automatically on upgrade from v0.2.4
+- [ ] **PROV-04**: User can validate their API key for any provider before saving
+- [ ] **PROV-05**: User can see available models for their selected provider
+- [ ] **PROV-06**: AI responses stream in real-time from all 5 providers
+- [ ] **PROV-07**: Provider-specific error messages show the correct provider name and troubleshooting hints
+
+### Provider Frontend
+
+- [ ] **PFUI-01**: User can select a provider during first-run onboarding
+- [ ] **PFUI-02**: User can switch providers in the settings Account tab
+- [ ] **PFUI-03**: User can pick a model from a dropdown filtered to their selected provider
+- [ ] **PFUI-04**: Models are grouped by capability tier (Fast, Balanced, Most Capable) across all providers
+- [ ] **PFUI-05**: User can switch providers without losing conversation history
+
+### OpenRouter
+
+- [ ] **ORTR-01**: User can use a single OpenRouter API key to access models from all supported providers
+- [ ] **ORTR-02**: OpenRouter model list is filtered to chat-capable models with sensible grouping
+
+### WSL Terminal Context
+
+- [ ] **WSLT-01**: CMD+K detects WSL sessions in Windows Terminal
+- [ ] **WSLT-02**: CMD+K detects WSL sessions in VS Code Remote-WSL terminals
+- [ ] **WSLT-03**: CMD+K detects WSL sessions in Cursor Remote-WSL terminals
+- [ ] **WSLT-04**: CMD+K detects standalone wsl.exe console sessions
+- [ ] **WSLT-05**: CMD+K reads the current working directory from WSL sessions
+- [ ] **WSLT-06**: CMD+K detects the shell type (bash, zsh, fish) in WSL sessions
+- [ ] **WSLT-07**: CMD+K reads visible terminal output from WSL sessions
+- [ ] **WSLT-08**: AI generates Linux commands when user is in a WSL session
+- [ ] **WSLT-09**: Linux destructive command patterns are applied in WSL sessions
+- [ ] **WSLT-10**: WSL distro name is shown in the context badge (e.g., "bash (WSL: Ubuntu)")
+
+### Auto-Updater
+
+- [ ] **UPDT-01**: App checks for updates on launch without blocking the UI
+- [ ] **UPDT-02**: User sees an "Update Available" indicator in the tray menu when an update exists
+- [ ] **UPDT-03**: User can download and install the update with one click from the tray
+- [ ] **UPDT-04**: Update is applied on next app launch (no forced restart)
+- [ ] **UPDT-05**: Updates are cryptographically signed and verified before installation
+- [ ] **UPDT-06**: CI/CD pipeline generates signed update artifacts and latest.json manifest
+- [ ] **UPDT-07**: Background update checks run silently every 24 hours after launch
+- [ ] **UPDT-08**: Dismissing the update notification suppresses it until next app launch
+
+## Future Requirements
+
+### Deferred
+
+- **PROV-F01**: Fallback to secondary provider on API error
+- **PROV-F02**: Custom API endpoint URLs for self-hosted models
+- **PROV-F03**: Provider-specific prompt customization UI
+- **UPDT-F01**: Update channel selector (stable/beta)
+- **WSLT-F01**: WSL path translation (/mnt/c/... to C:\... for display)
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Multi-provider simultaneous queries | Wastes API credits, complicates UX |
+| Proxy/relay server for API calls | Adds infrastructure cost, privacy concerns, maintenance burden |
+| Forced auto-update | Breaks user trust, enterprise users need version pinning |
+| WSL file system browsing | Out of scope for a command overlay |
+| Full WSL process tree walking | Slow, unnecessary — wsl.exe -e commands suffice |
+| Auto-select "best" provider | Users have strong preferences — let them choose explicitly |
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| PROV-01 | — | Pending |
+| PROV-02 | — | Pending |
+| PROV-03 | — | Pending |
+| PROV-04 | — | Pending |
+| PROV-05 | — | Pending |
+| PROV-06 | — | Pending |
+| PROV-07 | — | Pending |
+| PFUI-01 | — | Pending |
+| PFUI-02 | — | Pending |
+| PFUI-03 | — | Pending |
+| PFUI-04 | — | Pending |
+| PFUI-05 | — | Pending |
+| ORTR-01 | — | Pending |
+| ORTR-02 | — | Pending |
+| WSLT-01 | — | Pending |
+| WSLT-02 | — | Pending |
+| WSLT-03 | — | Pending |
+| WSLT-04 | — | Pending |
+| WSLT-05 | — | Pending |
+| WSLT-06 | — | Pending |
+| WSLT-07 | — | Pending |
+| WSLT-08 | — | Pending |
+| WSLT-09 | — | Pending |
+| WSLT-10 | — | Pending |
+| UPDT-01 | — | Pending |
+| UPDT-02 | — | Pending |
+| UPDT-03 | — | Pending |
+| UPDT-04 | — | Pending |
+| UPDT-05 | — | Pending |
+| UPDT-06 | — | Pending |
+| UPDT-07 | — | Pending |
+| UPDT-08 | — | Pending |
+
+**Coverage:**
+- v0.2.6 requirements: 32 total
+- Mapped to phases: 0
+- Unmapped: 32 (pending roadmap creation)
+
+---
+*Requirements defined: 2026-03-08*
+*Last updated: 2026-03-08 after initial definition*
