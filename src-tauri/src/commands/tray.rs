@@ -5,7 +5,9 @@ use tauri::{
     App, Emitter, Manager,
 };
 
+use super::updater;
 use super::window::show_overlay;
+use crate::state::UpdateState;
 
 /// Set up the menu bar tray icon with K-white.png branding and the required menu items.
 ///
@@ -21,6 +23,13 @@ use super::window::show_overlay;
 ///
 /// The K-white.png image is loaded from the repo root (one level up from src-tauri/).
 pub fn setup_tray(app: &App) -> tauri::Result<()> {
+    let check_for_updates = MenuItem::with_id(
+        app,
+        "check_for_updates",
+        "Check for Updates...",
+        true,
+        None::<&str>,
+    )?;
     let settings = MenuItem::with_id(app, "settings", "Settings...", true, None::<&str>)?;
     let change_hotkey =
         MenuItem::with_id(app, "change_hotkey", "Change Hotkey...", true, None::<&str>)?;
@@ -28,7 +37,16 @@ pub fn setup_tray(app: &App) -> tauri::Result<()> {
     let separator = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "Quit CMD+K", true, None::<&str>)?;
 
-    let menu = Menu::with_items(app, &[&settings, &change_hotkey, &about, &separator, &quit])?;
+    let menu = Menu::with_items(
+        app,
+        &[&check_for_updates, &settings, &change_hotkey, &about, &separator, &quit],
+    )?;
+
+    // Store the menu item reference in UpdateState for dynamic text updates
+    let update_state = app.state::<UpdateState>();
+    if let Ok(mut mi) = update_state.menu_item.lock() {
+        *mi = Some(check_for_updates);
+    }
 
     // Load K-white.png from repo root as the tray icon
     let icon = load_tray_icon(app);
@@ -36,6 +54,12 @@ pub fn setup_tray(app: &App) -> tauri::Result<()> {
     let mut builder = TrayIconBuilder::new()
         .menu(&menu)
         .on_menu_event(|app, event| match event.id.as_ref() {
+            "check_for_updates" => {
+                let app_handle = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    updater::manual_update_check(app_handle).await;
+                });
+            }
             "settings" => {
                 let _ = show_overlay(app.clone());
                 let _ = app.emit("open-settings", ());
@@ -49,6 +73,8 @@ pub fn setup_tray(app: &App) -> tauri::Result<()> {
                 let _ = app.emit("open-about", ());
             }
             "quit" => {
+                // Install pending update before exiting (if any downloaded)
+                updater::install_pending_update(app);
                 app.exit(0);
             }
             _ => {}
