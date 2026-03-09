@@ -1,317 +1,346 @@
-# Technology Stack: Windows Support (v0.2.1)
+# Technology Stack: Multi-Provider AI, WSL Context & Auto-Updater (v0.2.6)
 
-**Project:** CMD+K -- Windows Platform Port
-**Researched:** 2026-03-01
+**Project:** CMD+K -- Multi-Provider, WSL & Auto-Update
+**Researched:** 2026-03-08
 **Confidence:** HIGH (overall)
 
-> This document supersedes the v0.1.1 STACK.md. The validated macOS stack (Tauri v2, React 19, TypeScript, Vite, Zustand 5, xAI/Grok, NSPanel, libproc FFI, Accessibility API) is not re-researched. Focus is strictly on what the Windows port adds or changes.
+> This document supersedes the v0.2.4 STACK.md. The validated stack (Tauri v2, React 19, TypeScript, Vite, Zustand 5, NSPanel, Win32 APIs, keyring, eventsource-stream, etc.) is not re-researched. Focus is strictly on what the three new features add or change.
 
 ---
 
 ## Guiding Principle
 
-The existing Tauri v2 + React 19 + Zustand codebase already compiles for Windows for platform-agnostic layers (HTTP, AI streaming, state, safety checks, UI). This document covers ONLY what must change or be added for Windows-specific functionality. Everything not listed here stays as-is.
+All five AI providers (OpenAI, Anthropic, Google Gemini, xAI, OpenRouter) use HTTP POST with SSE streaming. The existing `tauri-plugin-http` + `eventsource-stream` + `futures-util` stack handles this already for xAI. The provider abstraction is a Rust trait, NOT a new dependency. WSL context is Win32 API work on the existing `windows-sys` crate. Auto-updater is a single Tauri plugin addition.
+
+**No new HTTP or AI client crates are needed.** The current reqwest (via tauri-plugin-http) + eventsource-stream pattern works for all providers.
 
 ---
 
 ## Already Cross-Platform (No Changes Needed)
 
-These crates/libraries work on Windows with zero modifications:
+These crates/libraries work across all three features with zero modifications:
 
 | Component | Crate/Library | Notes |
 |-----------|---------------|-------|
-| Framework | Tauri v2 | Cross-platform by design |
-| Frontend | React 19 + Zustand 5 | Runs in WebView2 on Windows |
-| Build tooling | Vite | Platform-agnostic bundler |
-| AI streaming | tauri-plugin-http + eventsource-stream + futures-util | HTTP is cross-platform |
-| Safety checks | regex + once_cell | Pure Rust, no platform deps |
-| Serialization | serde + serde_json | Pure Rust |
-| Async runtime | tokio | Cross-platform |
-| Persistent config | tauri-plugin-store v2 | Cross-platform Tauri plugin |
-| State management | AppState (Rust Mutex HashMap) | Pure Rust |
-| Global shortcut | tauri-plugin-global-shortcut v2 | Supports Windows, macOS, Linux (verified via official docs) |
-| System tray | Tauri tray-icon feature | Supports Windows (requires .ico format icon) |
-| Window positioner | tauri-plugin-positioner v2 | Cross-platform |
+| HTTP client | tauri-plugin-http (reqwest) | All providers use REST+SSE |
+| SSE parsing | eventsource-stream 0.2 | Parses SSE for all OpenAI-compatible providers |
+| Stream combinators | futures-util 0.3 | Async stream processing |
+| Async runtime | tokio 1 | Used for timeouts, async commands |
+| Serialization | serde + serde_json 1 | JSON request/response bodies |
+| Secure storage | keyring 3 | Multiple keys (one per provider) |
+| Frontend state | Zustand 5 | Provider selection state |
+| Persistent config | tauri-plugin-store 2 | Provider + model preferences |
+| Process tree walking | windows-sys 0.59 | Already has all needed features for WSL |
 
-**Confidence:** HIGH -- verified via official Tauri v2 plugin documentation and crate docs.
+**Confidence:** HIGH -- verified by reading current Cargo.toml and crate capabilities.
 
 ---
 
-## Recommended Stack: Windows-Specific Additions
+## Feature 1: Multi-Provider AI Support
 
-### 1. Overlay Window (Replaces tauri-nspanel + NSVisualEffectView)
+### API Compatibility Matrix
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Tauri Window API | 2.x (built-in) | `always_on_top`, `skip_taskbar`, `decorations: false`, `transparent` | Replaces NSPanel level/behavior; native Tauri APIs work on Windows |
-| window-vibrancy | 0.7.1 (already in Cargo.toml at 0.5 -- update) | `apply_mica()` on Win11, `apply_acrylic()` on Win10 | Already a dependency; has Windows-specific functions alongside macOS |
-| windows crate (conditional) | 0.61+ | `WS_EX_NOACTIVATE` via raw HWND if needed for non-activating behavior | Only if Tauri's `always_on_top` proves insufficient |
+All five providers follow the OpenAI-compatible chat completions format with minor variations:
 
-**Why this stack:** tauri-nspanel is macOS-only (NSPanel is a Cocoa concept). On Windows, the overlay becomes a standard Tauri window configured with `always_on_top: true`, `decorations: false`, `skip_taskbar: true`, and `transparent: true`. The window-vibrancy crate already in use provides `apply_mica()` (Win11) and `apply_acrylic()` (Win10) alongside the macOS vibrancy it already provides.
+| Provider | Endpoint | Auth Header | SSE Format | Key Difference |
+|----------|----------|-------------|------------|----------------|
+| xAI (Grok) | `https://api.x.ai/v1/chat/completions` | `Bearer {key}` | OpenAI-compatible | Current implementation, no change |
+| OpenAI | `https://api.openai.com/v1/chat/completions` | `Bearer {key}` | `data: {"choices":[{"delta":{"content":"..."}}]}` | Identical to xAI SSE format |
+| OpenRouter | `https://openrouter.ai/api/v1/chat/completions` | `Bearer {key}` | OpenAI-compatible | Requires `HTTP-Referer` and `X-Title` headers |
+| Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions` | `Bearer {key}` | OpenAI-compatible via their OpenAI-compat endpoint | Use OpenAI-compat endpoint, NOT native Gemini API |
+| Anthropic | `https://api.anthropic.com/v1/messages` | `x-api-key: {key}` | Different: `content_block_delta` events with `{"delta":{"text":"..."}}` | Only non-OpenAI-compatible provider |
 
-**Key behavioral difference from NSPanel:** NSPanel's `nonactivating_panel` style lets the panel accept keyboard input without deactivating the underlying app. Windows has no exact equivalent. The overlay will steal focus from the terminal. After paste, `SetForegroundWindow` restores focus to the terminal. If needed, `WS_EX_NOACTIVATE` extended window style can be applied via raw HWND manipulation through the `windows` crate.
+**Confidence:** HIGH for OpenAI, xAI, OpenRouter (all OpenAI-compatible). MEDIUM for Gemini OpenAI-compat endpoint (Google provides this but it may lag behind native features). HIGH for Anthropic (well-documented, just different format).
 
-**Confidence:** HIGH for vibrancy (verified via window-vibrancy 0.7.1 docs). MEDIUM for non-activating behavior (may need raw Win32 API experimentation).
+### What This Means for Implementation
 
----
+Four of five providers share identical SSE parsing: `chunk["choices"][0]["delta"]["content"]` -- the exact code in `ai.rs` today. Only Anthropic differs:
 
-### 2. Foreground Window Detection (Replaces NSWorkspace.frontmostApplication)
+- **Anthropic SSE events:** `event: content_block_delta` with `data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"..."}}`
+- **Anthropic headers:** `x-api-key` (not `Authorization: Bearer`), `anthropic-version: 2023-06-01`, `content-type: application/json`
+- **Anthropic request body:** `{"model":"...","messages":[...],"stream":true,"max_tokens":4096}` -- requires `max_tokens` (others default to model max)
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| windows crate | 0.61+ | `GetForegroundWindow()` + `GetWindowThreadProcessId()` | Official Microsoft Rust bindings; stable Win32 API |
+### New Rust Dependencies: NONE
 
-**Why this stack:** macOS uses `NSWorkspace.frontmostApplication.processIdentifier` via ObjC FFI. Windows equivalent is `GetForegroundWindow()` to get the HWND, then `GetWindowThreadProcessId()` to get the PID. Both are well-documented, stable Win32 APIs with official Rust bindings.
+No new crates needed. The provider abstraction is a Rust trait + enum:
 
-**Additional capability:** The HWND must also be captured (not just PID) because `SetForegroundWindow(hwnd)` is needed later to return focus to the terminal after paste. Store both HWND and PID in AppState.
+```rust
+enum Provider { OpenAI, Anthropic, Gemini, Xai, OpenRouter }
 
-**Confidence:** HIGH -- GetForegroundWindow is a foundational Win32 API.
-
----
-
-### 3. Process Tree Walking (Replaces libproc FFI)
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| sysinfo | 0.38+ | Process enumeration, parent PID, process name, exe path | Cross-platform, well-maintained (35M+ downloads), replaces libproc for non-CWD operations |
-| windows crate | 0.61+ | `NtQueryInformationProcess` + PEB reading for CWD | sysinfo's `cwd()` returns empty on Windows -- must use direct API |
-
-**Critical finding:** `sysinfo::Process::cwd()` is **always empty on Windows**. This is a known, documented limitation of the sysinfo crate on Windows. Getting the CWD of another process on Windows requires:
-
-1. `OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, pid)`
-2. `NtQueryInformationProcess(ProcessBasicInformation)` to get PEB address
-3. `ReadProcessMemory` to read `RTL_USER_PROCESS_PARAMETERS.CurrentDirectory`
-
-**What sysinfo handles well on Windows:**
-- `Process::parent()` -- parent PID (replaces `ps -o ppid=` and `proc_listchildpids`)
-- `Process::name()` -- process name (replaces `proc_pidpath`)
-- `System::processes()` -- enumerate all processes (replaces `pgrep`)
-- `Process::exe()` -- executable path
-
-**Windows process tree patterns (different from macOS):**
-- Windows Terminal: `WindowsTerminal.exe` -> `conhost.exe`/`OpenConsole.exe` -> `powershell.exe`/`cmd.exe`/`bash.exe`
-- PowerShell standalone: `powershell.exe` or `pwsh.exe` directly
-- Git Bash: `mintty.exe` -> `bash.exe`
-- CMD: `cmd.exe` directly (or via `conhost.exe`)
-- WSL: `wsl.exe` -> Linux processes (not visible to Win32 process APIs)
-
-**Confidence:** HIGH for sysinfo (verified docs). MEDIUM for CWD via NtQueryInformationProcess (well-documented but complex unsafe code requiring PEB traversal and ReadProcessMemory).
-
----
-
-### 4. Terminal Text Reading (Replaces macOS Accessibility API / AX Reader)
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| uiautomation | 0.22+ | Read terminal text via Windows UI Automation tree | Rust wrapper for UIA; mirrors the AX reader pattern |
-| windows crate | 0.61+ | `AttachConsole` + `ReadConsoleOutputCharacter` for legacy consoles | Fallback when UIA is unavailable |
-
-**Two-tier approach (mirrors macOS AX + GPU terminal fallback):**
-
-**Tier 1 -- UI Automation (equivalent of AX reader):**
-Windows Terminal has UIA providers (ScreenInfoUiaProvider, UiaTextRange) that expose terminal text content to automation clients. The `uiautomation` crate (v0.22+) wraps the COM-based IUIAutomation API:
-- `UIAutomation::new()` to initialize
-- `TreeWalker` for element tree navigation
-- `get_property_value(UIProperty::ValueValue)` to read text
-- Works for: Windows Terminal, PowerShell windows, CMD windows
-
-**Tier 2 -- Console Buffer API (fallback for terminals without UIA):**
-- `AttachConsole(pid)` to attach to another process's console
-- `GetConsoleScreenBufferInfo` to find visible region coordinates
-- `ReadConsoleOutputCharacter` to read visible text
-- Limitation: a process can only be attached to one console at a time
-- Works for: CMD, legacy conhost-based terminals
-
-**Terminal-specific UIA support:**
-- Windows Terminal: Full UIA support (confirmed via Microsoft terminal repo PR #1691)
-- PowerShell: UIA works when "Use UI Automation" accessibility option enabled
-- CMD: UIA works (conhost has UIA providers)
-- Git Bash (mintty): May not expose UIA -- Console Buffer API or no-text fallback
-- WSL: Text visible via Windows Terminal's UIA tree (WSL runs inside WT)
-
-**Confidence:** MEDIUM -- UIA for Windows Terminal confirmed via Microsoft's terminal repository. Git Bash/mintty UIA support is unverified; may need Console API fallback or graceful degradation (no visible text, CWD-only context).
-
----
-
-### 5. Auto-Paste to Terminal (Replaces AppleScript + CGEventPost)
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| arboard | 3.4+ | Cross-platform clipboard write (replaces `pbcopy`) | Maintained by 1Password; works on both Windows and macOS |
-| enigo | 0.6+ | Send Ctrl+V keystroke to paste from clipboard | Cross-platform input simulation; replaces CGEventPost |
-| windows crate | 0.61+ | `SetForegroundWindow` to activate terminal before paste | Replaces AppleScript `activate` command |
-
-**Paste sequence on Windows:**
-1. Write command to clipboard via `arboard`
-2. `SetForegroundWindow(terminal_hwnd)` to activate the terminal
-3. Small delay (100-150ms) for focus transfer
-4. Send keystrokes via `enigo`:
-   - PowerShell/CMD/Windows Terminal: Ctrl+V (paste)
-   - Git Bash (mintty): Shift+Insert (mintty's paste shortcut)
-5. Optionally restore overlay focus
-
-**Why arboard over clipboard-win:** arboard is cross-platform (replaces both `pbcopy` on macOS and Windows clipboard APIs), reducing platform-specific dependencies. Can eventually replace the current `pbcopy` shell call on macOS.
-
-**Why enigo over raw SendInput:** enigo abstracts Win32 SendInput into a clean cross-platform API. It handles virtual key codes, Unicode input, and modifier keys correctly. Also works on macOS, potentially unifying the paste path in future.
-
-**SetForegroundWindow restriction:** Windows restricts which processes can call `SetForegroundWindow`. Our app qualifies because it has the foreground lock (overlay was focused when the user initiated paste). If restrictions cause issues, `AllowSetForegroundWindow` can be used.
-
-**Confidence:** HIGH for clipboard + Ctrl+V paste. MEDIUM for SetForegroundWindow restrictions (should work given our foreground lock, but needs testing).
-
----
-
-### 6. API Key Storage (keyring crate -- already cross-platform)
-
-| Technology | Version | Purpose | Change Needed |
-|------------|---------|---------|---------------|
-| keyring | 3.6.3 | Secure credential storage | Add `windows-native` feature flag |
-
-**Required Cargo.toml change:**
-
-```toml
-# Before (macOS only):
-keyring = { version = "3", features = ["apple-native"] }
-
-# After (macOS + Windows):
-keyring = { version = "3", features = ["apple-native", "windows-native"] }
-```
-
-On Windows, keyring uses Windows Credential Manager. Each entry maps to a "generic credential" keyed by service + account -- identical API surface as macOS Keychain.
-
-**No code changes needed.** The `Entry::new(SERVICE, ACCOUNT)`, `set_password()`, `get_password()`, and `delete_credential()` calls in `keychain.rs` are platform-agnostic.
-
-**Confidence:** HIGH -- verified via keyring v3.6.3 docs. Windows is explicitly listed as a supported platform with `windows-native` feature.
-
----
-
-### 7. App Identity on Windows (Replaces bundle_id)
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| sysinfo | 0.38+ | `Process::exe()` for executable path | Maps PID to exe name for app identity |
-| windows crate | 0.61+ | `GetWindowTextW(hwnd)` for window title | Additional identity signal for terminal detection |
-
-**Window key format change:**
-- macOS: `"com.apple.Terminal:12345"` (bundle_id:shell_pid)
-- Windows: `"WindowsTerminal.exe:12345"` (exe_name:shell_pid)
-
-**Known terminal exe names on Windows:**
-
-| Terminal | Executable | Notes |
-|----------|-----------|-------|
-| Windows Terminal | `WindowsTerminal.exe` | Most common modern terminal |
-| PowerShell 5.x | `powershell.exe` | Legacy, ships with Windows |
-| PowerShell 7+ | `pwsh.exe` | Cross-platform PowerShell |
-| CMD | `cmd.exe` | Legacy command prompt |
-| Git Bash | `mintty.exe` or `git-bash.exe` | Git for Windows package |
-| WSL | `wsl.exe` | Shell runs in Linux subsystem |
-| Hyper | `Hyper.exe` | Electron-based terminal |
-| Alacritty | `alacritty.exe` | GPU-rendered |
-| WezTerm | `wezterm-gui.exe` | GPU-rendered |
-
-**Confidence:** HIGH -- standard Win32 APIs, well-documented exe names.
-
----
-
-### 8. Build and Distribution
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| NSIS installer | Built into Tauri | `.exe` setup installer | Cross-compilable from macOS/Linux; modern UX |
-| MSI installer | Built into Tauri (WiX v3) | `.msi` enterprise installer | Windows-only build; some enterprises require MSI |
-| OV/EV code signing cert | N/A | Sign binaries to avoid SmartScreen | Required for professional distribution |
-| WebView2 | Runtime | Windows WebView engine | Required by Tauri on Windows; bundled or bootstrapped |
-
-**Recommended: NSIS over MSI** because:
-- NSIS can be cross-compiled from macOS (MSI requires WiX which is Windows-only)
-- NSIS produces a single `-setup.exe` (familiar to Windows users)
-- NSIS supports multi-language in a single installer
-
-**tauri.conf.json additions:**
-```json
-{
-  "bundle": {
-    "windows": {
-      "nsis": {
-        "installMode": "currentUser"
-      },
-      "webviewInstallMode": {
-        "type": "downloadBootstrapper"
-      }
-    },
-    "icon": ["icons/icon.ico"]
-  }
+trait AiProvider {
+    fn endpoint(&self) -> &str;
+    fn auth_headers(&self, api_key: &str) -> Vec<(String, String)>;
+    fn build_body(&self, model: &str, messages: &[Message], stream: bool) -> serde_json::Value;
+    fn parse_sse_token(&self, data: &str) -> Option<String>;
 }
 ```
 
-**System tray icon:** Windows requires `.ico` format. The existing `K.png` needs a `.ico` variant.
+The existing `reqwest::Client`, `eventsource_stream::Eventsource`, and `futures_util::StreamExt` handle all providers.
 
-**Code signing (tauri.conf.json):**
+### Keychain Storage Changes
+
+Currently: single key at `(SERVICE, "xai_api_key")`.
+New: one key per provider, e.g., `(SERVICE, "openai_api_key")`, `(SERVICE, "anthropic_api_key")`, etc.
+
+The `keyring` crate already supports arbitrary account names. No crate changes needed.
+
+### Model Listing Per Provider
+
+Each provider needs a model-fetching strategy:
+
+| Provider | List Models Endpoint | Fallback Strategy |
+|----------|---------------------|-------------------|
+| xAI | `GET /v1/models` (current `validate_and_fetch_models`) | Hardcoded list + validation (already implemented) |
+| OpenAI | `GET /v1/models` | Hardcoded: gpt-4o, gpt-4o-mini, gpt-4.1, gpt-4.1-mini, o4-mini |
+| Anthropic | No list endpoint | Hardcoded: claude-sonnet-4-20250514, claude-haiku-4-20250414 |
+| Gemini | `GET /v1beta/openai/models` (OpenAI-compat) | Hardcoded: gemini-2.5-flash, gemini-2.5-pro |
+| OpenRouter | `GET /api/v1/models` | Hardcoded subset of popular models |
+
+**Confidence:** HIGH for OpenAI and xAI model endpoints. MEDIUM for Gemini OpenAI-compat model listing. HIGH for Anthropic (no list endpoint, hardcode is standard). MEDIUM for OpenRouter model listing (returns hundreds; needs filtering).
+
+### Frontend Changes
+
+| Change | What | Library Impact |
+|--------|------|----------------|
+| Provider selector in onboarding | New `StepProviderSelect` component | None -- React + Zustand |
+| Provider selector in settings | New tab or section in AccountTab | None -- React + Zustand |
+| Per-provider model dropdown | `availableModels` becomes provider-dependent | None -- existing pattern |
+| Per-provider API key input | One input per provider, stored separately | None -- existing keyring pattern |
+| Provider + model in tauri-plugin-store | `{provider: "openai", model: "gpt-4o"}` | None -- existing store pattern |
+
+### Frontend Dependencies: NONE
+
+No new npm packages. The existing `@tauri-apps/api` + `@tauri-apps/plugin-store` + Zustand handle everything.
+
+---
+
+## Feature 2: WSL Terminal Context Detection
+
+### The Problem
+
+When a Windows Terminal tab runs WSL (Ubuntu, Debian, etc.), the process tree from the Windows side looks like:
+
+```
+WindowsTerminal.exe
+  └── OpenConsole.exe
+       └── wsl.exe (or wslhost.exe)
+            └── [Linux PID namespace -- invisible to Win32 APIs]
+```
+
+The current `get_process_cwd()` reads CWD from the Windows PEB via `NtQueryInformationProcess`. For `wsl.exe`, this returns a Windows path like `C:\Windows\System32` (the wsl.exe binary location), NOT the Linux CWD.
+
+Similarly, `find_shell_pid()` finds `wsl.exe` or `bash.exe` (the WSL init process) but cannot see the actual Linux shell running inside.
+
+### Solution: Cross-Namespace Bridge via `wsl.exe` Commands
+
+The only reliable way to get WSL context from Windows is to invoke WSL commands from the Windows side:
+
+```
+wsl.exe -e pwd                     → Linux CWD (e.g., /home/user/project)
+wsl.exe -e printenv SHELL          → Linux shell (e.g., /bin/zsh)
+wsl.exe -e sh -c "echo $0"        → Current shell name
+```
+
+For reading recent terminal output, the existing `uiautomation` crate reads the Windows Terminal UIA tree -- this already works for WSL tabs because the text is rendered by Windows Terminal regardless of whether the shell is native or WSL.
+
+### New Rust Dependencies: NONE
+
+WSL detection uses:
+- **`std::process::Command`** to spawn `wsl.exe` subprocesses (stdlib, no crate)
+- **`windows-sys`** (already in Cargo.toml) for process tree walking to detect `wsl.exe` in the tree
+- **`uiautomation`** (already in Cargo.toml) for reading terminal text via Windows Terminal UIA
+
+### WSL Detection Additions to `windows-sys` Features: NONE
+
+The current `windows-sys` feature set already includes everything needed:
+- `Win32_System_Threading` -- process inspection
+- `Win32_System_Diagnostics_ToolHelp` -- CreateToolhelp32Snapshot for tree walking
+- `Win32_System_Diagnostics_Debug` -- ReadProcessMemory (for PEB CWD, used as fallback)
+
+### WSL-Specific Detection Logic
+
+| Signal | How to Detect | API |
+|--------|---------------|-----|
+| WSL tab detected | Process tree contains `wsl.exe` or `wslhost.exe` as child of OpenConsole | `CreateToolhelp32Snapshot` (existing) |
+| WSL distro name | `wsl.exe -l -q` or check `wsl.exe` command-line args | `std::process::Command` |
+| Linux CWD | `wsl.exe -e pwd` | `std::process::Command` |
+| Linux shell type | `wsl.exe -e printenv SHELL` or `wsl.exe -e basename "$SHELL"` | `std::process::Command` |
+| Terminal visible text | Windows Terminal UIA tree (already works for WSL tabs) | `uiautomation` (existing) |
+| VS Code Remote-WSL | VS Code window title contains `[WSL: distro]` | `GetWindowTextW` or UIA (existing) |
+
+### CWD Path Mapping
+
+WSL paths need mapping for the AI prompt context:
+
+| Scenario | WSL CWD | Mapped Windows Path | Strategy |
+|----------|---------|---------------------|----------|
+| WSL filesystem | `/home/user/project` | `\\wsl$\Ubuntu\home\user\project` | Prefix with `\\wsl$\{distro}\` |
+| Windows mount | `/mnt/c/Users/foo` | `C:\Users\foo` | Replace `/mnt/{letter}/` with `{LETTER}:\` |
+| No mapping needed | AI just gets the Linux path | N/A | Pass Linux path directly to AI -- it is a Linux terminal |
+
+**Recommendation:** Pass the raw Linux path to the AI. The AI already gets `shell_type: "zsh"` which signals this is a Linux context. No path mapping needed for command generation.
+
+### VS Code Remote-WSL and Cursor
+
+These are special cases where the IDE itself handles the WSL connection:
+
+- **Detection:** Window title contains `[WSL: Ubuntu]` or similar
+- **Terminal output:** UIA reads the integrated terminal text (same as native terminals)
+- **CWD:** `wsl.exe -e pwd` still works because WSL is running
+- **Shell type:** `wsl.exe -e printenv SHELL`
+
+The existing `KNOWN_IDE_EXES` list already includes `Code.exe` and `Cursor.exe`. The WSL detection adds a flag to `ProcessInfo`:
+
+```rust
+pub struct ProcessInfo {
+    pub cwd: Option<String>,
+    pub shell_type: Option<String>,
+    pub running_process: Option<String>,
+    pub is_wsl: bool,  // NEW: signals Linux context to AI prompt
+}
+```
+
+**Confidence:** HIGH for `wsl.exe` subprocess approach (well-documented, used by all WSL tooling). MEDIUM for VS Code Remote-WSL detection (window title parsing may vary). HIGH for terminal text reading (Windows Terminal UIA already works for WSL tabs).
+
+---
+
+## Feature 3: Auto-Updater (tauri-plugin-updater)
+
+### New Rust Dependency
+
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| tauri-plugin-updater | 2 | Check for updates, download, install on restart | Official Tauri v2 plugin, designed for this exact use case |
+
+### New Frontend Dependency
+
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| @tauri-apps/plugin-updater | ^2 | Frontend JS API for update checking and triggering | Official companion to the Rust plugin |
+
+### How tauri-plugin-updater Works
+
+1. **Check:** App calls `check()` on startup -- hits a JSON endpoint for the latest version
+2. **Compare:** Plugin compares current `version` from `tauri.conf.json` against the endpoint response
+3. **Download:** If update available, `download_and_install()` downloads the new binary
+4. **Install:** On next app restart, the update is applied (NSIS on Windows, DMG/tar.gz on macOS)
+
+### Required Configuration
+
+**Cargo.toml addition:**
+
+```toml
+[dependencies]
+tauri-plugin-updater = "2"
+```
+
+**tauri.conf.json addition:**
+
 ```json
 {
-  "bundle": {
-    "windows": {
-      "certificateThumbprint": "YOUR_THUMBPRINT",
-      "digestAlgorithm": "sha256",
-      "timestampUrl": "http://timestamp.comodoca.com"
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/user/repo/releases/latest/download/latest.json"
+      ],
+      "pubkey": "YOUR_PUBLIC_KEY_HERE"
     }
   }
 }
 ```
 
-**Confidence:** HIGH -- official Tauri v2 distribution docs.
+**package.json addition:**
+
+```json
+{
+  "dependencies": {
+    "@tauri-apps/plugin-updater": "^2"
+  }
+}
+```
+
+### Signing Requirement
+
+tauri-plugin-updater requires update bundles to be signed. This is separate from macOS code signing or Windows Authenticode:
+
+1. **Generate keypair:** `tauri signer generate -w ~/.tauri/cmd-k.key` (one-time)
+2. **Set env vars in CI:** `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+3. **Set pubkey in config:** The `pubkey` field in `tauri.conf.json` plugins.updater
+
+The signing happens automatically during `tauri build` when the env vars are set. The CI pipeline (`release.yml`) needs two new secrets.
+
+### Update Endpoint Format
+
+The `latest.json` file at the endpoint must follow this schema:
+
+```json
+{
+  "version": "0.2.6",
+  "notes": "Release notes here",
+  "pub_date": "2026-03-08T00:00:00Z",
+  "platforms": {
+    "darwin-aarch64": {
+      "signature": "...",
+      "url": "https://github.com/.../CMD+K_0.2.6_aarch64.app.tar.gz"
+    },
+    "darwin-x86_64": {
+      "signature": "...",
+      "url": "https://github.com/.../CMD+K_0.2.6_x64.app.tar.gz"
+    },
+    "windows-x86_64": {
+      "signature": "...",
+      "url": "https://github.com/.../CMD+K_0.2.6_x64-setup.nsis.zip"
+    }
+  }
+}
+```
+
+GitHub Releases can host this file. The CI pipeline needs to generate and upload `latest.json` alongside the release artifacts.
+
+### Plugin Registration in Rust
+
+```rust
+// In main.rs or lib.rs, add to the Tauri builder:
+.plugin(tauri_plugin_updater::Builder::new().build())
+```
+
+### Frontend Update Flow
+
+```typescript
+import { check } from "@tauri-apps/plugin-updater";
+
+// On app startup:
+const update = await check();
+if (update) {
+  // Show update prompt to user
+  // User accepts:
+  await update.downloadAndInstall();
+  // Restart app (or prompt user to restart)
+}
+```
+
+**Confidence:** HIGH -- tauri-plugin-updater is the official, first-party Tauri v2 plugin for auto-updates. Well-documented with clear API surface. The signing requirement is the main integration complexity.
 
 ---
 
 ## New Dependencies Summary
 
-### Add to Cargo.toml (Windows-only, platform-gated)
+### Add to Cargo.toml (cross-platform)
 
 ```toml
-[target.'cfg(target_os = "windows")'.dependencies]
-# Windows Win32 APIs (foreground window, process info, console buffer, window management)
-windows = { version = "0.61", features = [
-    "Win32_UI_WindowsAndMessaging",
-    "Win32_System_Threading",
-    "Win32_Foundation",
-    "Win32_System_Console",
-    "Win32_System_Diagnostics_Debug",
-    "Wdk_System_Threading"
-] }
-
-# UI Automation for reading terminal text (equivalent of macOS AX reader)
-uiautomation = "0.22"
-
-# Cross-platform input simulation (replaces CGEventPost for keystrokes)
-enigo = { version = "0.6", features = [] }
-
-# Cross-platform clipboard (replaces pbcopy for clipboard write)
-arboard = "3.4"
-
-# Process enumeration, parent PID, process name, exe path
-sysinfo = "0.38"
+[dependencies]
+tauri-plugin-updater = "2"
 ```
 
-### Modify Existing Cargo.toml
+### Add to package.json
 
-```toml
-# Add Windows keyring backend alongside macOS:
-keyring = { version = "3", features = ["apple-native", "windows-native"] }
-
-# Update window-vibrancy for latest Windows support:
-window-vibrancy = "0.7"
+```bash
+pnpm add @tauri-apps/plugin-updater
 ```
 
-### Platform-Gate macOS-Only Dependencies
+### No Other New Dependencies
 
-These compile only on macOS (already won't compile on Windows, but should be explicitly gated):
-
-```toml
-[target.'cfg(target_os = "macos")'.dependencies]
-tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2.1" }
-accessibility-sys = "0.2"
-core-foundation-sys = "0.8"
-```
+That is it. One Rust crate, one npm package. Everything else is architecture (trait-based provider abstraction) and logic (WSL detection via subprocess calls to existing APIs).
 
 ---
 
@@ -319,72 +348,135 @@ core-foundation-sys = "0.8"
 
 | Category | Recommended | Alternative | Why Not |
 |----------|-------------|-------------|---------|
-| Process CWD (Windows) | windows crate (NtQueryInformationProcess + PEB) | sysinfo `cwd()` | sysinfo returns empty CWD on Windows -- known limitation |
-| Clipboard | arboard (cross-platform) | clipboard-win (Windows-only) | arboard works on both platforms; reduces total dependency count |
-| Input simulation | enigo (cross-platform) | winput, raw SendInput | enigo abstracts platform differences; cleaner API |
-| Terminal text reading | uiautomation crate | Raw IUIAutomation COM via windows crate | uiautomation wraps COM complexity into safe Rust API |
-| Process enumeration | sysinfo (cross-platform) | tasklist crate, wmic subprocess | sysinfo is the standard Rust ecosystem choice (35M+ downloads) |
-| Vibrancy | window-vibrancy 0.7 (existing dep, update) | Raw DWM API calls | Already a dependency; well-maintained by Tauri team |
-| Installer | NSIS | MSI | NSIS cross-compiles from macOS; MSI requires Windows build env |
-| Overlay non-activating | Tauri always_on_top + SetForegroundWindow restore | WS_EX_NOACTIVATE raw style | Start with simpler approach; only add raw Win32 if needed |
+| Multi-provider HTTP | Existing reqwest + eventsource-stream | async-openai crate | async-openai only supports OpenAI-compatible APIs. Anthropic is not OpenAI-compatible. Adding a crate for 4 providers while still needing custom code for the 5th adds complexity without reducing it. |
+| Multi-provider HTTP | Existing reqwest + eventsource-stream | genai crate (multi-provider Rust SDK) | Immature, low adoption, adds a large dependency for something we can do in ~200 lines of trait implementation |
+| Anthropic API format | Native Messages API with custom SSE parsing | Anthropic OpenAI-compat proxy | Anthropic does not offer an official OpenAI-compat endpoint. Third-party proxies add latency and a point of failure. |
+| Gemini API | Google's OpenAI-compat endpoint | Native Gemini API (generateContent) | OpenAI-compat endpoint means we reuse the same SSE parser for 4 of 5 providers. Native Gemini API has a different streaming format (Server-Sent Events with different JSON structure). |
+| WSL CWD detection | `wsl.exe -e pwd` subprocess | Parse `/proc/PID/cwd` via `\\wsl$\` UNC path | UNC path approach requires knowing the exact Linux PID and distro name. subprocess is simpler and more reliable. |
+| WSL CWD detection | `wsl.exe -e pwd` subprocess | WslApi.dll (`WslLaunch`) | WslApi requires linking against a Windows SDK DLL. `wsl.exe` subprocess is simpler and universally available on WSL-enabled systems. |
+| Auto-updater | tauri-plugin-updater | Custom update checker + download | Reinventing verified, signed update mechanisms is error-prone and a security risk. The official plugin handles signature verification, atomic installs, and rollback. |
+| Auto-updater | tauri-plugin-updater | Electron-style autoUpdater | Not applicable -- this is a Tauri app |
+| Update hosting | GitHub Releases latest.json | Self-hosted update server | GitHub Releases is free, already used for distribution, and has CDN. No reason to self-host. |
+
+---
+
+## Integration Points
+
+### How Provider Abstraction Connects to Existing Code
+
+**Current flow (ai.rs):**
+1. Read API key from keyring `(SERVICE, "xai_api_key")`
+2. Build messages array
+3. POST to `https://api.x.ai/v1/chat/completions`
+4. Parse SSE: `chunk["choices"][0]["delta"]["content"]`
+
+**New flow:**
+1. Read `provider` from tauri-plugin-store (e.g., `"openai"`)
+2. Read API key from keyring `(SERVICE, "{provider}_api_key")`
+3. Get provider config: endpoint, headers, body builder, SSE parser
+4. Build messages array (same logic)
+5. POST to provider-specific endpoint
+6. Parse SSE using provider-specific parser
+
+**The `stream_ai_response` command gains a `provider` parameter.** Frontend sends the selected provider alongside model and query.
+
+### How WSL Detection Connects to Existing Code
+
+**Current flow (detect_windows.rs + process.rs):**
+1. `get_exe_name(hwnd)` identifies terminal
+2. `find_shell_pid()` walks process tree
+3. `get_process_cwd()` reads CWD via PEB
+4. Returns `ProcessInfo { cwd, shell_type, running_process }`
+
+**New flow for WSL:**
+1. `get_exe_name(hwnd)` identifies terminal (same)
+2. `find_shell_pid()` walks process tree, finds `wsl.exe` instead of shell
+3. **NEW:** If leaf process is `wsl.exe`/`wslhost.exe`, call `wsl.exe -e pwd` for CWD
+4. **NEW:** Call `wsl.exe -e printenv SHELL` for shell type
+5. Returns `ProcessInfo { cwd: "/home/user/project", shell_type: "zsh", running_process: None, is_wsl: true }`
+
+**The system prompt needs WSL awareness.** When `is_wsl: true`, use the Linux terminal system prompt (commands should be Linux, not Windows).
+
+### How Auto-Updater Connects to Existing Code
+
+**Rust:** Single line in plugin registration chain.
+**Frontend:** New `useUpdateCheck` hook called in App.tsx on mount. Shows a small toast/banner when update available.
+**CI:** Modified `release.yml` to set `TAURI_SIGNING_PRIVATE_KEY` and generate `latest.json`.
+
+---
+
+## What NOT to Add
+
+| Temptation | Why Not |
+|------------|---------|
+| `async-openai` crate | Only handles OpenAI-compat. Still need Anthropic custom code. Net complexity increase. |
+| `anthropic-sdk` crate | Immature Rust SDK. We need ~30 lines of custom SSE parsing, not a full SDK. |
+| `google-genai` crate | Use OpenAI-compat endpoint instead. One less API format to support. |
+| Provider-specific Rust crates per provider | Five crates for something achievable with one trait and five implementations of ~20 lines each. |
+| `wslapi` crate or WslApi.dll FFI | `wsl.exe` subprocess is simpler and doesn't require SDK linking. |
+| Custom update server | GitHub Releases serves the same purpose for free. |
+| `reqwest` as direct dependency | Already available via `tauri-plugin-http`'s re-export. Adding it directly risks version conflicts. |
+| Changing SSE library | `eventsource-stream` works for all providers. No reason to switch. |
 
 ---
 
 ## Installation
 
-### Rust Dependencies
+### Rust
 
-```bash
-# In src-tauri/ -- the platform-gated deps are handled by Cargo.toml cfg attributes
-# No manual cargo add needed; just update Cargo.toml as shown above
+```toml
+# Add to [dependencies] in src-tauri/Cargo.toml:
+tauri-plugin-updater = "2"
 ```
 
-### System Requirements for Development
+### Frontend
 
 ```bash
-# Windows development requirements:
-# - Windows 10 v1809+ or Windows 11 (for Acrylic/Mica)
-# - Visual Studio Build Tools 2019+ (C++ workload)
-# - WebView2 runtime (ships with Windows 11, downloadable for Win10)
-# - Rust toolchain for x86_64-pc-windows-msvc target
-
-# Cross-compilation from macOS (NSIS installer only):
-# - Install NSIS: brew install nsis
-# - Rust cross-compilation target: rustup target add x86_64-pc-windows-msvc
-# - Note: Full cross-compilation requires Windows linker; CI/CD recommended
+pnpm add @tauri-apps/plugin-updater
 ```
 
-### Icon Preparation
+### CI/CD Secrets (GitHub Actions)
+
+```
+TAURI_SIGNING_PRIVATE_KEY     # Generated by `tauri signer generate`
+TAURI_SIGNING_PRIVATE_KEY_PASSWORD  # Password for the signing key
+```
+
+### One-Time Setup
 
 ```bash
-# Convert existing PNG tray icon to ICO for Windows:
-# Use ImageMagick or an online converter
-# Required sizes in ICO: 16x16, 32x32, 48x48, 256x256
-convert icons/K.png -define icon:auto-resize=256,48,32,16 icons/icon.ico
+# Generate update signing keypair (run once, store securely)
+npx tauri signer generate -w ~/.tauri/cmd-k.key
+# Output: public key (goes in tauri.conf.json) and private key file
 ```
+
+---
+
+## Version Pinning Notes
+
+| Dependency | Pin | Reason |
+|------------|-----|--------|
+| tauri-plugin-updater | `"2"` (semver range) | Matches Tauri v2 plugin ecosystem versioning. Tauri plugins use major version matching. |
+| @tauri-apps/plugin-updater | `"^2"` | NPM semver range matching Tauri v2 |
+
+All other existing dependencies remain at their current versions. No updates needed.
+
+**Confidence:** MEDIUM for exact latest patch versions (unable to verify crates.io due to tool restrictions). HIGH for major version compatibility (Tauri v2 plugins use v2 consistently).
 
 ---
 
 ## Sources
 
-- [window-vibrancy v0.7.1 (GitHub)](https://github.com/tauri-apps/window-vibrancy) -- HIGH confidence
-- [keyring v3.6.3 (docs.rs)](https://docs.rs/keyring) -- HIGH confidence
-- [sysinfo v0.38.2 (docs.rs)](https://docs.rs/sysinfo/latest/sysinfo/struct.Process.html) -- HIGH confidence
-- [uiautomation v0.22 (GitHub)](https://github.com/leexgone/uiautomation-rs) -- MEDIUM confidence
-- [enigo v0.6.1 (docs.rs)](https://docs.rs/enigo/latest/enigo/) -- HIGH confidence
-- [arboard v3.4 (GitHub)](https://github.com/1Password/arboard) -- HIGH confidence
-- [windows crate (Microsoft docs)](https://microsoft.github.io/windows-docs-rs/) -- HIGH confidence
-- [Tauri v2 Window Customization](https://v2.tauri.app/learn/window-customization/) -- HIGH confidence
-- [Tauri v2 Windows Installer](https://v2.tauri.app/distribute/windows-installer/) -- HIGH confidence
-- [Tauri v2 Windows Code Signing](https://v2.tauri.app/distribute/sign/windows/) -- HIGH confidence
-- [Tauri v2 Global Shortcut Plugin](https://v2.tauri.app/plugin/global-shortcut/) -- HIGH confidence
-- [Tauri v2 System Tray](https://v2.tauri.app/learn/system-tray/) -- HIGH confidence
-- [Windows Terminal UIA Provider (PR #1691)](https://github.com/microsoft/terminal/pull/1691) -- MEDIUM confidence
-- [NtQueryInformationProcess (MSDN)](https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntqueryinformationprocess) -- HIGH confidence
-- [GetForegroundWindow (MSDN)](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getforegroundwindow) -- HIGH confidence
-- [ReadConsoleOutputCharacter (MSDN)](https://learn.microsoft.com/en-us/windows/console/readconsoleoutputcharacter) -- HIGH confidence
-- [SetForegroundWindow (MSDN)](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setforegroundwindow) -- HIGH confidence
+- Current codebase analysis: `ai.rs`, `xai.rs`, `process.rs`, `detect_windows.rs`, `store/index.ts` -- HIGH confidence
+- OpenAI Chat Completions API format -- HIGH confidence (training data, well-established API since 2023)
+- Anthropic Messages API streaming format -- HIGH confidence (training data, distinct SSE format well-documented)
+- Google Gemini OpenAI-compatible endpoint -- MEDIUM confidence (training data; Google launched this in 2024 at `/v1beta/openai/` path)
+- OpenRouter API format -- HIGH confidence (explicitly designed as OpenAI-compatible proxy)
+- xAI API format -- HIGH confidence (already implemented and working in codebase)
+- WSL architecture and `wsl.exe` CLI -- HIGH confidence (training data + Microsoft documentation is well-established)
+- tauri-plugin-updater v2 -- MEDIUM confidence (training data; official Tauri plugin, API surface is stable but exact latest patch version unverified)
+- Tauri update signing -- MEDIUM confidence (training data; `tauri signer generate` command and env var names are documented)
 
 ---
-*Stack research for: CMD+K v0.2.1 Windows platform support*
-*Researched: 2026-03-01*
+*Stack research for: CMD+K v0.2.6 Multi-Provider AI, WSL Context & Auto-Updater*
+*Researched: 2026-03-08*

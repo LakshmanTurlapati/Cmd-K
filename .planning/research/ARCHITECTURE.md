@@ -1,894 +1,917 @@
-# Architecture Research: Windows Platform Support
+# Architecture Patterns
 
-**Domain:** Tauri v2 cross-platform overlay -- porting macOS CMD+K to Windows
-**Researched:** 2026-03-01
-**Confidence:** HIGH (core patterns), MEDIUM (specific Windows API edge cases)
-
----
-
-## Context: This is a Platform Port Architecture Doc (v0.2.1)
-
-This document analyzes how every Rust module and frontend component maps from macOS to Windows. It identifies what is already cross-platform, what needs a Windows-specific implementation, and what the abstraction strategy should be. The build order is dependency-driven.
+**Domain:** Multi-provider AI, WSL terminal context, and auto-updater integration into existing Tauri v2 app
+**Researched:** 2026-03-08
+**Confidence:** HIGH (provider abstraction, keychain), MEDIUM (WSL detection, auto-updater config)
 
 ---
 
-## Module Classification: What Changes, What Stays
+## Current Architecture Snapshot
 
-### Already Cross-Platform (Zero Changes)
+```
+Frontend (React + Zustand)                  Backend (Rust / Tauri)
+-----------------------------               ----------------------------------
+src/store/index.ts                          src-tauri/src/
+  useOverlayStore (Zustand)                   lib.rs         (plugin init, IPC handler registration)
+    - apiKeyStatus, selectedModel             state.rs       (AppState: Mutex-wrapped fields)
+    - submitQuery() -> invoke("stream_ai")    commands/
+                                                ai.rs        (stream_ai_response: hardcoded xAI endpoint)
+src/components/Onboarding/                      xai.rs       (validate_and_fetch_models: xAI-specific)
+  StepApiKey.tsx (xAI-only key input)           keychain.rs  (save/get/delete with hardcoded "xai_api_key")
+  StepModelSelect.tsx                           terminal.rs  (get_app_context -> terminal::detect_full_with_hwnd)
+                                                hotkey.rs    (capture PID/HWND before overlay)
+src/components/Settings/                        paste.rs     (AppleScript/Win32 paste)
+  AccountTab.tsx (xAI-only key mgmt)            window.rs    (show/hide overlay)
+  ModelTab.tsx                                  safety.rs    (destructive command detection)
+                                              terminal/
+                                                mod.rs       (detect, detect_full, detect_full_with_hwnd)
+                                                detect.rs    (macOS bundle ID classification)
+                                                detect_windows.rs (Windows exe classification)
+                                                process.rs   (process tree walk, CWD via libproc/PEB)
+                                                ax_reader.rs (macOS Accessibility API text)
+                                                uia_reader.rs (Windows UI Automation text)
+                                                filter.rs    (sensitive data redaction)
+                                                browser.rs   (DevTools console detection)
+```
 
-These modules have no platform-specific code and work identically on Windows:
-
-| Module | Why Cross-Platform |
-|--------|--------------------|
-| `commands/ai.rs` | Pure HTTP/SSE streaming via reqwest + eventsource-stream. No OS APIs. |
-| `commands/xai.rs` | HTTP API validation. No OS APIs. |
-| `commands/safety.rs` | Regex pattern matching (once_cell + regex). No OS APIs. |
-| `commands/history.rs` | Pure Zustand/Rust HashMap operations. No OS APIs. |
-| `state.rs` | Rust structs with Mutex fields. No OS APIs. |
-| `terminal/filter.rs` | Regex-based sensitive data redaction. No OS APIs. |
-| `commands/keychain.rs` | Uses `keyring` crate which already supports Windows Credential Manager (feature: `windows-native`). **Already cross-platform.** |
-| All React components | React 19, Zustand, Tailwind CSS, Radix UI. Platform-agnostic web layer. |
-| `src/store/index.ts` | Zustand store logic. All platform behavior enters via Tauri IPC, which is abstracted. |
-
-**Key finding: `keychain.rs` requires NO code changes.** The `keyring` crate v3 with `windows-native` feature uses Windows Credential Manager on Windows and macOS Keychain on macOS transparently. The current Cargo.toml has `features = ["apple-native"]` -- this needs to become platform-conditional (see Cargo.toml section).
-
-### Needs Windows Implementation (Platform-Specific Modules)
-
-| Module | macOS API | Windows Equivalent | Complexity |
-|--------|-----------|-------------------|------------|
-| `commands/hotkey.rs` (`get_frontmost_pid`) | `NSWorkspace.frontmostApplication.processIdentifier` via ObjC FFI | `GetForegroundWindow()` + `GetWindowThreadProcessId()` via Win32 API | Low |
-| `commands/paste.rs` | AppleScript dispatch + CGEventPost (Cmd+V, Ctrl+U) | `clipboard-win` + `SendInput` (Ctrl+V) via Win32 API | Medium |
-| `commands/permissions.rs` | `AXIsProcessTrusted` + AX probe | No equivalent needed -- Windows has no global accessibility permission gate | Low (mostly removal) |
-| `commands/window.rs` | `tauri_nspanel::ManagerExt` for NSPanel show/hide/positioning | Tauri native window with `always_on_top` + `WS_EX_NOACTIVATE` via raw HWND | High |
-| `commands/tray.rs` | macOS menu bar tray with `icon_as_template` | Windows system tray (Tauri's tray API is cross-platform, minor adjustments) | Low |
-| `terminal/ax_reader.rs` | macOS Accessibility API (`AXUIElement*` FFI) | Windows UI Automation API (`uiautomation` crate or direct COM) | High |
-| `terminal/process.rs` | `libproc` FFI (`proc_pidinfo`, `proc_pidpath`, `proc_listchildpids`) | `NtQueryInformationProcess` + `sysinfo` crate for process tree | High |
-| `terminal/detect.rs` | `NSRunningApplication` ObjC FFI for bundle ID + display name | `GetModuleFileNameExW` + `GetWindowTextW` via Win32 | Medium |
-| `terminal/browser.rs` | macOS AX API for DevTools detection | Windows UI Automation for DevTools window detection | Medium |
-| `lib.rs` (setup) | NSPanel creation, vibrancy, activation policy, panel level | HWND manipulation, Acrylic/Mica vibrancy, skip-taskbar | High |
+**Key coupling points for this milestone:**
+- `commands/ai.rs` line 8: hardcoded `ACCOUNT: &str = "xai_api_key"`
+- `commands/ai.rs` line 259: hardcoded `https://api.x.ai/v1/chat/completions`
+- `commands/ai.rs` line 307-308: SSE parsing assumes OpenAI-compatible `choices[0].delta.content`
+- `commands/xai.rs`: entire file is xAI-specific (model validation, fallback list)
+- `commands/keychain.rs` line 4: hardcoded `ACCOUNT: &str = "xai_api_key"`
+- `src/store/index.ts`: `XaiModelWithMeta` type name, no provider concept
+- `src/components/Onboarding/StepApiKey.tsx` line 98: "Enter your xAI API key"
+- `src/components/Settings/AccountTab.tsx` line 97: "Paste your xAI API key"
+- `terminal/detect_windows.rs`: no `wsl.exe` or `wslhost.exe` in known lists
+- `terminal/process.rs`: Windows process tree walk does not enter WSL namespace
 
 ---
 
-## Platform Abstraction Strategy
+## Feature 1: Multi-Provider AI Support
 
-### Recommendation: `cfg(target_os)` Conditional Compilation with Platform Submodules
+### Recommended Architecture: Provider Enum with Per-Variant Dispatch
 
-Use the **same pattern already established in the codebase**. The existing code already uses `#[cfg(target_os = "macos")]` extensively with paired `#[cfg(not(target_os = "macos"))]` stubs. This is the correct approach. Do NOT introduce trait-based dispatch -- it would add unnecessary abstraction layers for a two-platform app.
+**Why enum dispatch, not `Box<dyn Trait>`:** The provider set is fixed at compile time (5 variants). Async trait methods with `Box<dyn>` require boxing futures and lose the compiler's exhaustiveness checking. Enum dispatch is zero-cost, and the `match` arms catch missing implementations at compile time.
 
-**Pattern (already in use):**
+**New module structure:**
+
+```
+src-tauri/src/commands/providers/
+  mod.rs          -- Provider enum, from_str, ModelInfo struct
+  openai.rs       -- OpenAI implementation
+  anthropic.rs    -- Anthropic implementation
+  google.rs       -- Google Gemini implementation
+  xai.rs          -- xAI/Grok (extract from current ai.rs + xai.rs)
+  openrouter.rs   -- OpenRouter implementation
+```
+
+### Provider Enum Design
 
 ```rust
-// ax_reader.rs -- existing pattern
-#[cfg(target_os = "macos")]
-mod macos {
-    // macOS implementation using AX FFI
+// commands/providers/mod.rs
+
+pub mod openai;
+pub mod anthropic;
+pub mod google;
+pub mod xai;
+pub mod openrouter;
+
+use serde::{Serialize, Deserialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelInfo {
+    pub id: String,
+    pub label: String,
 }
 
-#[cfg(target_os = "windows")]  // NEW: add Windows module alongside
-mod windows {
-    // Windows implementation using UI Automation
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Provider {
+    OpenAI,
+    Anthropic,
+    Google,
+    Xai,
+    OpenRouter,
 }
 
-// Public API delegates to platform module
-#[cfg(target_os = "macos")]
-pub fn read_terminal_text(app_pid: i32, bundle_id: &str) -> Option<String> {
-    macos::read_terminal_text(app_pid, bundle_id)
-}
+impl Provider {
+    pub fn from_str(s: &str) -> Result<Self, String> {
+        match s {
+            "openai" => Ok(Self::OpenAI),
+            "anthropic" => Ok(Self::Anthropic),
+            "google" => Ok(Self::Google),
+            "xai" => Ok(Self::Xai),
+            "openrouter" => Ok(Self::OpenRouter),
+            _ => Err(format!("Unknown provider: {}", s)),
+        }
+    }
 
-#[cfg(target_os = "windows")]
-pub fn read_terminal_text(app_pid: i32, bundle_id: &str) -> Option<String> {
-    windows::read_terminal_text(app_pid, bundle_id)
+    pub fn keychain_account(&self) -> String {
+        match self {
+            Self::OpenAI => "openai_api_key",
+            Self::Anthropic => "anthropic_api_key",
+            Self::Google => "google_api_key",
+            Self::Xai => "xai_api_key",       // matches existing keychain entry
+            Self::OpenRouter => "openrouter_api_key",
+        }.to_string()
+    }
 }
 ```
 
-**Why this pattern:**
-- The codebase already has `#[cfg(not(target_os = "macos"))]` stubs returning `None` for every platform-specific function -- those stubs become real Windows implementations
-- No runtime dispatch overhead
-- Each platform's code is isolated in its own module
-- The public function signatures remain identical -- callers never change
-- The Tauri command layer and frontend are completely unaware of the platform
+### Provider-Specific Differences (Why Simple URL Swap Fails)
 
-**What changes from existing stubs:**
-- Replace `#[cfg(not(target_os = "macos"))]` (catch-all stub) with `#[cfg(target_os = "windows")]` (real implementation) + keep `#[cfg(not(any(target_os = "macos", target_os = "windows")))]` as the stub for future Linux
+| Aspect | OpenAI / xAI / OpenRouter | Anthropic | Google Gemini |
+|--------|---------------------------|-----------|---------------|
+| Endpoint | `/v1/chat/completions` | `/v1/messages` | `/v1beta/models/{model}:streamGenerateContent` |
+| Auth header | `Authorization: Bearer {key}` | `x-api-key: {key}` (different header name) | `?key={key}` query param |
+| System prompt | `{"role":"system","content":"..."}` in messages array | Top-level `"system"` field, NOT in messages | `"systemInstruction"` field |
+| SSE token path | `choices[0].delta.content` | `content_block_delta.delta.text` | `candidates[0].content.parts[0].text` |
+| SSE done signal | `data: [DONE]` | `event: message_stop` | `finishReason: "STOP"` in candidate |
+| Required fields | `model`, `messages`, `stream` | `model`, `messages`, `max_tokens` (required!) | `contents`, `generationConfig` |
+| Extra headers | None | `anthropic-version: 2023-06-01` | None |
 
----
+**Anthropic is the most divergent.** Three unique aspects: different auth header name, system prompt not in messages, required `max_tokens` field, and completely different SSE event structure. This alone justifies the provider abstraction.
 
-## Component-by-Component Windows Architecture
+### Per-Provider Module Contract
 
-### 1. Overlay Window (lib.rs + commands/window.rs)
-
-**macOS current approach:**
-- `tauri_nspanel` converts Tauri window to NSPanel
-- NSPanel with `can_become_key_window = true` + `NonactivatingPanel` style
-- `PanelLevel::Status` to float above fullscreen apps
-- `CollectionBehavior::full_screen_auxiliary().can_join_all_spaces()`
-- `window_vibrancy::apply_vibrancy()` with HudWindow material
-
-**Windows approach:**
-
-`tauri_nspanel` is macOS-only. On Windows, use Tauri's native window with post-creation HWND manipulation:
+Each provider module exports these functions (not a trait -- just convention):
 
 ```rust
-#[cfg(target_os = "windows")]
-fn setup_overlay_window(window: &tauri::WebviewWindow) -> Result<(), String> {
-    use windows::Win32::UI::WindowsAndMessaging::*;
-    use windows::Win32::Foundation::HWND;
+// Example: commands/providers/anthropic.rs
 
-    // Get raw HWND from Tauri window
-    let hwnd = window.hwnd().map_err(|e| e.to_string())?;
+/// Endpoint URL for streaming requests
+pub fn endpoint() -> &'static str {
+    "https://api.anthropic.com/v1/messages"
+}
 
-    unsafe {
-        // Set always-on-top (equivalent to PanelLevel::Status)
-        SetWindowPos(
-            hwnd,
-            HWND_TOPMOST,
-            0, 0, 0, 0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-        );
+/// Build HTTP headers for this provider
+pub fn headers(api_key: &str) -> Vec<(String, String)> {
+    vec![
+        ("x-api-key".to_string(), api_key.to_string()),
+        ("anthropic-version".to_string(), "2023-06-01".to_string()),
+        ("content-type".to_string(), "application/json".to_string()),
+    ]
+}
 
-        // Set WS_EX_NOACTIVATE + WS_EX_TOOLWINDOW:
-        // - WS_EX_NOACTIVATE: prevents the window from stealing focus
-        //   from the terminal (equivalent to NSPanel NonactivatingPanel)
-        // - WS_EX_TOOLWINDOW: hides from taskbar and Alt+Tab
-        //   (equivalent to skipTaskbar + ActivationPolicy::Accessory)
-        let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE) as u32;
-        SetWindowLongW(
-            hwnd,
-            GWL_EXSTYLE,
-            (ex_style | WS_EX_NOACTIVATE.0 | WS_EX_TOOLWINDOW.0) as i32,
-        );
+/// Build the request body. System prompt handled differently per provider.
+pub fn build_body(model: &str, system_prompt: &str, messages: &[serde_json::Value]) -> String {
+    serde_json::json!({
+        "model": model,
+        "system": system_prompt,  // Anthropic: top-level field
+        "messages": messages,     // NO system message in array
+        "max_tokens": 1024,       // Required for Anthropic
+        "stream": true
+    }).to_string()
+}
+
+/// Extract token from an SSE data chunk. Returns None if no token.
+pub fn extract_token(data: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(data).ok()?;
+    if v["type"] == "content_block_delta" {
+        v["delta"]["text"].as_str().map(|s| s.to_string())
+    } else {
+        None
     }
+}
 
-    // Apply Mica (Win11) or Acrylic (Win10) vibrancy
-    // window-vibrancy crate already supports this
-    if let Err(_) = window_vibrancy::apply_mica(&window, None) {
-        // Fallback to Acrylic on Windows 10
-        let _ = window_vibrancy::apply_acrylic(&window, Some((0, 0, 0, 128)));
+/// Check if this SSE event signals stream completion
+pub fn is_done(data: &str) -> bool {
+    let v: serde_json::Value = serde_json::from_str(data).ok().unwrap_or_default();
+    v["type"] == "message_stop"
+}
+
+/// Validate API key and return available models
+pub async fn validate_and_fetch_models(api_key: &str) -> Result<Vec<ModelInfo>, String> {
+    // Anthropic: GET /v1/models with x-api-key header
+    // ...
+}
+```
+
+### Refactored stream_ai_response
+
+```rust
+// commands/ai.rs -- refactored
+
+#[tauri::command]
+pub async fn stream_ai_response(
+    provider: String,           // NEW parameter
+    query: String,
+    model: String,
+    context_json: String,
+    history: Vec<ChatMessage>,
+    on_token: tauri::ipc::Channel<String>,
+) -> Result<(), String> {
+    let provider_enum = Provider::from_str(&provider)?;
+
+    // 1. Read API key for this provider from keychain
+    let account = provider_enum.keychain_account();
+    let entry = keyring::Entry::new(SERVICE, &account)
+        .map_err(|e| format!("Keyring error: {}", e))?;
+    let api_key = entry.get_password()
+        .map_err(|_| "No API key configured. Open Settings to add one.".to_string())?;
+
+    // 2. Parse context, build system prompt (unchanged logic)
+    let ctx: AppContextView = serde_json::from_str(&context_json).unwrap_or_else(/* ... */);
+    let system_prompt = build_system_prompt(&ctx);
+
+    // 3. Build messages array (system message excluded for Anthropic/Google)
+    let messages = build_messages_for_provider(&provider_enum, &system_prompt, &history, &query, &ctx);
+
+    // 4. Dispatch to provider-specific request building
+    let (endpoint, headers, body) = match provider_enum {
+        Provider::OpenAI => (openai::endpoint(), openai::headers(&api_key), openai::build_body(&model, &system_prompt, &messages)),
+        Provider::Anthropic => (anthropic::endpoint(), anthropic::headers(&api_key), anthropic::build_body(&model, &system_prompt, &messages)),
+        Provider::Google => (google::endpoint(&model), google::headers(&api_key), google::build_body(&system_prompt, &messages)),
+        Provider::Xai => (xai::endpoint(), xai::headers(&api_key), xai::build_body(&model, &system_prompt, &messages)),
+        Provider::OpenRouter => (openrouter::endpoint(), openrouter::headers(&api_key), openrouter::build_body(&model, &system_prompt, &messages)),
+    };
+
+    // 5. Make HTTP request
+    let client = reqwest::Client::new();
+    let mut req = client.post(endpoint);
+    for (name, value) in &headers {
+        req = req.header(name, value);
     }
+    let response = req.body(body).send().await.map_err(|e| format!("Network error: {}", e))?;
+
+    // 6. Parse SSE stream with provider-specific token extraction
+    let mut stream = response.bytes_stream().eventsource();
+    let timeout_duration = tokio::time::Duration::from_secs(10);
+
+    tokio::time::timeout(timeout_duration, async {
+        while let Some(event) = stream.next().await {
+            match event {
+                Ok(event) => {
+                    let data = &event.data;
+                    // Provider-specific done check
+                    let is_done = match provider_enum {
+                        Provider::OpenAI | Provider::Xai | Provider::OpenRouter => data == "[DONE]",
+                        Provider::Anthropic => anthropic::is_done(data),
+                        Provider::Google => google::is_done(data),
+                    };
+                    if is_done { break; }
+
+                    // Provider-specific token extraction
+                    let token = match provider_enum {
+                        Provider::OpenAI | Provider::Xai | Provider::OpenRouter => openai::extract_token(data),
+                        Provider::Anthropic => anthropic::extract_token(data),
+                        Provider::Google => google::extract_token(data),
+                    };
+                    if let Some(t) = token {
+                        if !t.is_empty() {
+                            on_token.send(t).map_err(|e| format!("Channel error: {}", e))?;
+                        }
+                    }
+                }
+                Err(e) => return Err(format!("Stream error: {}", e)),
+            }
+        }
+        Ok(())
+    }).await.map_err(|_| "Request timed out. Try again.".to_string())??;
 
     Ok(())
 }
 ```
 
-**Critical consideration: WS_EX_NOACTIVATE + keyboard input.**
-The macOS NSPanel approach allows `can_become_key_window = true` while being non-activating. On Windows, `WS_EX_NOACTIVATE` prevents the window from receiving keyboard focus entirely. The workaround is:
+**Note:** OpenAI, xAI, and OpenRouter share the same SSE format (OpenAI-compatible). This means 3 of 5 providers reuse the same extraction logic. Only Anthropic and Google need custom parsers.
 
-1. Set `WS_EX_NOACTIVATE` initially when the overlay is hidden
-2. On show: temporarily remove `WS_EX_NOACTIVATE`, call `SetForegroundWindow` to take focus, then use `SetFocus` on the webview
-3. On hide: restore `WS_EX_NOACTIVATE` and call `SetForegroundWindow` back to the previous terminal window
-
-This is more complex than macOS but achievable. The key insight: we do NOT need the overlay to remain non-activating while visible (the user needs to type). We need it to:
-- Not appear in taskbar or Alt+Tab (WS_EX_TOOLWINDOW handles this)
-- Stay on top (HWND_TOPMOST handles this)
-- Return focus to the terminal after dismiss (explicit `SetForegroundWindow(previous_hwnd)` handles this)
-
-**The overlay show/hide flow on Windows:**
-
-```
-Show:
-  1. Store previous HWND via GetForegroundWindow()
-  2. Position window on current monitor (same logic as macOS, Tauri API is cross-platform)
-  3. Remove WS_EX_NOACTIVATE temporarily
-  4. window.show() + window.set_focus()
-  5. Emit "overlay-shown" to frontend
-
-Hide:
-  1. window.hide()
-  2. Restore WS_EX_NOACTIVATE
-  3. SetForegroundWindow(previous_hwnd) to return focus to terminal
-```
-
-### 2. Frontmost App Detection (hotkey.rs)
-
-**macOS:** `NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier` via ObjC FFI
-
-**Windows:**
+### Keychain Changes
 
 ```rust
-#[cfg(target_os = "windows")]
-fn get_frontmost_pid() -> Option<i32> {
-    use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
-    use windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
+// commands/keychain.rs -- parameterized
 
-    unsafe {
-        let hwnd = GetForegroundWindow();
-        if hwnd.0 == 0 {
-            return None;
+const SERVICE: &str = "com.lakshmanturlapati.cmd-k";
+
+#[tauri::command]
+pub fn save_api_key(provider: String, key: String) -> Result<(), String> {
+    let account = format!("{}_api_key", provider);
+    let entry = Entry::new(SERVICE, &account)
+        .map_err(|e| format!("Keychain entry error: {}", e))?;
+    entry.set_password(&key)
+        .map_err(|e| format!("Failed to save to Keychain: {}", e))
+}
+
+#[tauri::command]
+pub fn get_api_key(provider: String) -> Result<Option<String>, String> {
+    let account = format!("{}_api_key", provider);
+    let entry = Entry::new(SERVICE, &account)
+        .map_err(|e| format!("Keychain entry error: {}", e))?;
+    match entry.get_password() {
+        Ok(key) => Ok(Some(key)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(format!("Failed to read: {}", e)),
+    }
+}
+
+#[tauri::command]
+pub fn delete_api_key(provider: String) -> Result<(), String> {
+    let account = format!("{}_api_key", provider);
+    let entry = Entry::new(SERVICE, &account)
+        .map_err(|e| format!("Keychain entry error: {}", e))?;
+    entry.delete_credential()
+        .map_err(|e| format!("Failed to delete: {}", e))
+}
+```
+
+**Migration safety:** `format!("{}_api_key", "xai")` produces `"xai_api_key"`, identical to the current hardcoded `ACCOUNT` constant. Existing xAI API keys remain accessible with zero migration.
+
+### Frontend Changes for Multi-Provider
+
+**Zustand store additions:**
+
+```typescript
+// New state in useOverlayStore:
+selectedProvider: string;                   // "openai" | "anthropic" | "google" | "xai" | "openrouter"
+setSelectedProvider: (p: string) => void;
+
+// Rename type: XaiModelWithMeta -> ModelInfo
+// (same shape: { id: string; label: string }, just generic name)
+```
+
+**Onboarding flow change:**
+
+```
+Current:  Step 1 (Accessibility) -> Step 2 (API Key) -> Step 3 (Model) -> Step 4 (Done)
+New:      Step 1 (Accessibility) -> Step 2 (Provider) -> Step 3 (API Key) -> Step 4 (Model) -> Step 5 (Done)
+```
+
+New component: `StepProviderSelect.tsx` -- card/radio selection of 5 providers. Sets `selectedProvider` in store. Persisted to Tauri store plugin.
+
+**Modified components:**
+- `StepApiKey.tsx` -- Dynamic label: "Enter your {Provider} API key". Pass `provider` to `validate_and_fetch_models` invoke.
+- `AccountTab.tsx` -- Show current provider name, dynamic label, pass `provider` to keychain invokes.
+- `submitQuery()` -- Add `provider: state.selectedProvider` to `stream_ai_response` invoke args.
+- `validate_and_fetch_models` IPC -- New signature: `invoke("validate_and_fetch_models", { provider, apiKey })`.
+
+**Provider selection persistence:** Use existing `tauri-plugin-store` with keys `"selected_provider"` and `"selected_model"`.
+
+### New IPC Command: validate_and_fetch_models (Provider-Aware)
+
+```rust
+// commands/providers/mod.rs (replaces commands/xai.rs)
+
+#[tauri::command]
+pub async fn validate_and_fetch_models(
+    provider: String,
+    api_key: String,
+) -> Result<Vec<ModelInfo>, String> {
+    let p = Provider::from_str(&provider)?;
+    match p {
+        Provider::OpenAI => openai::validate_and_fetch_models(&api_key).await,
+        Provider::Anthropic => anthropic::validate_and_fetch_models(&api_key).await,
+        Provider::Google => google::validate_and_fetch_models(&api_key).await,
+        Provider::Xai => xai::validate_and_fetch_models(&api_key).await,
+        Provider::OpenRouter => openrouter::validate_and_fetch_models(&api_key).await,
+    }
+}
+```
+
+---
+
+## Feature 2: WSL Terminal Context
+
+### Current Windows Terminal Detection Path
+
+```
+Hotkey fires -> capture HWND + PID
+  -> detect_app_context_windows(pid)
+    -> get_exe_name_for_pid(pid) -> "WindowsTerminal.exe"
+    -> is_known_terminal_exe() -> true
+    -> process::get_foreground_info(pid)
+      -> CreateToolhelp32Snapshot -> walk process tree
+      -> find shell child (powershell.exe, cmd.exe, bash.exe)
+      -> get_process_cwd(shell_pid) via PEB ReadProcessMemory
+    -> detect_full_with_hwnd() -> UIA text reading
+```
+
+### WSL Problem
+
+WSL shells run inside the WSL2 VM. When a user has a WSL tab in Windows Terminal:
+
+1. **Process tree:** Windows Terminal -> OpenConsole.exe -> wsl.exe -> (WSL namespace). The bash/zsh process inside WSL is NOT visible in the Win32 process tree. The ConPTY fallback in `process.rs` (line 798-823) finds shells parented by OpenConsole, but `wsl.exe` is not in `KNOWN_SHELL_EXES`.
+
+2. **PEB CWD:** Reading CWD from `wsl.exe`'s PEB returns the Windows-side launcher CWD, not the user's CWD inside WSL.
+
+3. **Shell type:** The process name is `wsl.exe`, not `bash` or `zsh`.
+
+### New Component: `terminal/wsl.rs`
+
+```rust
+// terminal/wsl.rs
+
+/// Detect if a process chain involves WSL
+pub fn is_wsl_process(exe_name: &str) -> bool {
+    matches!(exe_name.to_lowercase().as_str(), "wsl.exe" | "wslhost.exe")
+}
+
+/// Get WSL terminal context by shelling into WSL from the Windows side.
+/// Each command has an independent timeout to avoid blocking the overlay.
+pub fn get_wsl_context() -> Option<WslContext> {
+    // 1. Shell type: query default shell inside WSL
+    let shell_type = wsl_command(&["-e", "sh", "-c", "basename \"$SHELL\""], 200)?;
+
+    // 2. CWD: get working directory of the most recent user shell
+    //    Strategy: find the newest interactive shell PID, read its /proc/{pid}/cwd
+    let cwd = wsl_command(
+        &["-e", "sh", "-c",
+          "readlink /proc/$(ps -o pid= -t $(tty) 2>/dev/null | tail -1 | tr -d ' ')/cwd 2>/dev/null || pwd"],
+        300
+    );
+
+    Some(WslContext {
+        shell_type: Some(shell_type),
+        cwd,
+        running_process: None, // Could be extended later
+    })
+}
+
+/// Run a wsl.exe command with a hard timeout.
+/// Returns None on timeout or failure.
+fn wsl_command(args: &[&str], timeout_ms: u64) -> Option<String> {
+    use std::process::{Command, Stdio};
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    let mut child = Command::new("wsl.exe")
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .stdin(Stdio::null())
+        .spawn()
+        .ok()?;
+
+    let (tx, rx) = mpsc::channel();
+    let handle = std::thread::spawn(move || {
+        let output = child.wait_with_output();
+        let _ = tx.send(output);
+    });
+
+    match rx.recv_timeout(Duration::from_millis(timeout_ms)) {
+        Ok(Ok(output)) if output.status.success() => {
+            let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if text.is_empty() { None } else { Some(text) }
         }
-        let mut pid: u32 = 0;
-        GetWindowThreadProcessId(hwnd, Some(&mut pid));
-        if pid > 0 {
-            Some(pid as i32)
-        } else {
+        _ => {
+            // Timeout or failure -- don't leak the thread
+            drop(handle);
             None
         }
     }
 }
-```
 
-Additionally, store the HWND (not just PID) in AppState for focus restoration:
-
-```rust
-// New AppState field for Windows
-#[cfg(target_os = "windows")]
-pub previous_app_hwnd: Mutex<Option<isize>>,  // HWND as isize
-```
-
-**Confidence: HIGH** -- `GetForegroundWindow` + `GetWindowThreadProcessId` is the standard Windows approach, well-documented, stable API.
-
-### 3. Terminal Context: Process Inspection (terminal/process.rs)
-
-**macOS:** `libproc` FFI for CWD (`proc_pidinfo` PROC_PIDVNODEPATHINFO), process name (`proc_pidpath`), child PIDs (`proc_listchildpids`), plus `pgrep`/`ps` fallbacks.
-
-**Windows:**
-
-| Function | Windows API | Crate |
-|----------|------------|-------|
-| Get CWD of remote process | `NtQueryInformationProcess` + `ReadProcessMemory` to read PEB -> RTL_USER_PROCESS_PARAMS -> CurrentDirectory | `windows` crate (`Wdk::System::Threading`) |
-| Get process name | `GetModuleFileNameExW` or `QueryFullProcessImageNameW` | `windows` crate |
-| Get child PIDs | `CreateToolhelp32Snapshot` + `Process32Next` filtering by `th32ParentProcessID` | `windows` crate |
-| Get parent PID | `CreateToolhelp32Snapshot` + `Process32First/Next` | `windows` crate |
-
-**CWD reading is the hardest part.** On Windows, reading a remote process's CWD requires:
-1. `OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, pid)`
-2. `NtQueryInformationProcess(ProcessBasicInformation)` to get PEB address
-3. `ReadProcessMemory` to read PEB structure
-4. `ReadProcessMemory` to read `RTL_USER_PROCESS_PARAMS`
-5. `ReadProcessMemory` to read the `CurrentDirectory.DosPath` UNICODE_STRING
-
-**Alternative (simpler but slower):** Use the `sysinfo` crate which provides cross-platform process inspection. However, `sysinfo` does NOT expose CWD on Windows (the field is always empty). So the PEB approach is required.
-
-**Alternative fallback for CWD:** Shell-specific approaches:
-- PowerShell: `(Get-Process -Id $pid).Path` does not give CWD, but `$PWD` environment variable can be read from the process environment block
-- cmd.exe: The PEB approach works
-- For WSL processes: CWD must be translated from Linux paths to Windows paths via `/mnt/c/...`
-
-**Process tree walking on Windows:**
-The `CreateToolhelp32Snapshot` API is equivalent to macOS's `proc_listchildpids`. The approach is:
-1. Take a snapshot of all processes
-2. Iterate and filter by `th32ParentProcessID == target_pid`
-3. Walk the same shell detection logic (KNOWN_SHELLS check, MULTIPLEXERS, SHELL_WRAPPERS)
-
-Windows shell names differ:
-```rust
-const KNOWN_SHELLS_WINDOWS: &[&str] = &[
-    "powershell.exe", "pwsh.exe",  // PowerShell 5.1 and 7+
-    "cmd.exe",                      // Command Prompt
-    "bash.exe",                     // Git Bash / WSL
-    "wsl.exe",                      // WSL launcher
-    "zsh.exe", "fish.exe",          // Rare on Windows but possible via MSYS2
-    "nu.exe",                       // Nushell
-];
-```
-
-**Confidence: MEDIUM** -- The core APIs are well-documented, but reading remote process CWD via PEB is complex and may fail for elevated/protected processes. Needs thorough testing.
-
-### 4. Terminal Text Reading (terminal/ax_reader.rs)
-
-**macOS:** Accessibility API (`AXUIElement*`) to walk the AX tree and read `AXValue` from text areas.
-
-**Windows:** Microsoft UI Automation (UIA) API.
-
-**Approach:** Use the `uiautomation` crate (wrapper around Windows UIA COM API) or use the `windows` crate directly for `IUIAutomation` COM interface.
-
-```rust
-#[cfg(target_os = "windows")]
-mod windows_impl {
-    use uiautomation::UIAutomation;
-
-    pub fn read_terminal_text(app_pid: i32, _app_name: &str) -> Option<String> {
-        let automation = UIAutomation::new().ok()?;
-        let root = automation.get_root_element().ok()?;
-
-        // Find the terminal window by PID
-        let condition = automation.create_property_condition(
-            uiautomation::types::UIProperty::ProcessId,
-            app_pid.into(),
-        ).ok()?;
-
-        let element = root.find_first(
-            uiautomation::types::TreeScope::Children,
-            &condition,
-        ).ok()?;
-
-        // Walk to find text content
-        // Windows Terminal exposes UIA TextPattern
-        // PowerShell/cmd expose legacy console text via UIA
-        let text_pattern = element.get_text_pattern().ok()?;
-        let text = text_pattern.get_document_range().ok()?
-            .get_text(-1).ok()?;
-
-        if text.is_empty() { None } else { Some(text) }
-    }
+pub struct WslContext {
+    pub shell_type: Option<String>,
+    pub cwd: Option<String>,
+    pub running_process: Option<String>,
 }
 ```
 
-**Terminal-specific UIA patterns:**
-- **Windows Terminal:** Exposes `ITextProvider` (UIA Text Pattern) for reading terminal content
-- **PowerShell (conhost):** The console host exposes text via UIA, accessible through `ITextProvider`
-- **cmd.exe (conhost):** Same as PowerShell -- both use conhost which supports UIA
-- **Git Bash (mintty):** May have limited UIA support -- needs testing
-- **WSL terminals:** Depends on the host terminal (Windows Terminal provides UIA)
-
-**NVDA (screen reader) has confirmed that Windows Terminal and conhost support UIA text reading**, which validates this approach.
-
-**Confidence: MEDIUM** -- UIA text reading from Windows Terminal is proven (NVDA does it), but the exact Rust implementation path via `uiautomation` crate needs validation. The crate is actively maintained (latest release 2024) but less battle-tested than macOS AX API usage.
-
-### 5. Paste to Terminal (commands/paste.rs)
-
-**macOS:** AppleScript dispatch (iTerm2 `write text`, Terminal.app `keystroke`) + CGEventPost fallback (Cmd+V, Ctrl+U).
-
-**Windows:**
+### Integration Point: `terminal/mod.rs`
 
 ```rust
+// In detect_app_context_windows(), modify the process tree walk:
+
 #[cfg(target_os = "windows")]
-pub fn paste_to_terminal(app: AppHandle, command: String) -> Result<(), String> {
-    // 1. Write to Windows clipboard
-    clipboard_win::set_clipboard_string(&command)
-        .map_err(|e| format!("Clipboard error: {}", e))?;
+fn detect_app_context_windows(previous_app_pid: i32, _pre_captured_text: Option<String>) -> Option<AppContext> {
+    // ... existing exe detection ...
 
-    // 2. Restore focus to the terminal
-    let state = app.try_state::<AppState>()
-        .ok_or("AppState not found")?;
-    let hwnd = state.previous_app_hwnd.lock()
-        .map_err(|_| "mutex poisoned")?
-        .ok_or("no previous HWND")?;
+    // Walk process tree to find shell
+    let proc_info = process::get_foreground_info(previous_app_pid);
 
-    unsafe {
-        SetForegroundWindow(HWND(hwnd));
-        std::thread::sleep(Duration::from_millis(100));
+    // NEW: Check if process tree contains WSL
+    let has_wsl = check_for_wsl_in_tree(previous_app_pid);
 
-        // 3. Clear current line (Ctrl+U equivalent for PowerShell/cmd)
-        //    PowerShell: Escape key clears line
-        //    cmd.exe: Escape key clears line
-        //    Git Bash: Ctrl+U works (same as macOS)
-        send_key(VK_ESCAPE, &[])?;
-        std::thread::sleep(Duration::from_millis(50));
+    let terminal = if has_wsl {
+        // WSL session: shell into WSL for real context
+        match wsl::get_wsl_context() {
+            Some(wsl_ctx) => Some(TerminalContext {
+                shell_type: wsl_ctx.shell_type,
+                cwd: wsl_ctx.cwd,
+                visible_output: None, // UIA fills this later
+                running_process: wsl_ctx.running_process,
+            }),
+            None => {
+                // WSL detected but context reading failed
+                // Fall back to "bash" default so terminal mode is used
+                Some(TerminalContext {
+                    shell_type: Some("bash".to_string()),
+                    cwd: None,
+                    visible_output: None,
+                    running_process: None,
+                })
+            }
+        }
+    } else if has_shell {
+        // ... existing native Windows shell handling ...
+    };
 
-        // 4. Paste via Ctrl+V (universal on Windows)
-        send_key(VK_V, &[VK_CONTROL])?;
-    }
-
-    Ok(())
+    // ... rest unchanged (UIA text reading, app context assembly) ...
 }
 
-// SendInput helper for simulating keystrokes
-unsafe fn send_key(vk: VIRTUAL_KEY, modifiers: &[VIRTUAL_KEY]) -> Result<(), String> {
-    let mut inputs: Vec<INPUT> = Vec::new();
-
-    // Press modifiers
-    for &m in modifiers {
-        inputs.push(make_key_input(m, true));
-    }
-    // Press key
-    inputs.push(make_key_input(vk, true));
-    // Release key
-    inputs.push(make_key_input(vk, false));
-    // Release modifiers (reverse order)
-    for &m in modifiers.iter().rev() {
-        inputs.push(make_key_input(m, false));
-    }
-
-    let sent = SendInput(&inputs, std::mem::size_of::<INPUT>() as i32);
-    if sent as usize != inputs.len() {
-        return Err("SendInput failed".to_string());
-    }
-    Ok(())
+/// Check if the process tree rooted at pid contains wsl.exe or wslhost.exe
+fn check_for_wsl_in_tree(app_pid: i32) -> bool {
+    // Walk process tree looking for wsl.exe in the chain
+    // Uses existing CreateToolhelp32Snapshot infrastructure
+    // Also check ConPTY children (OpenConsole -> wsl.exe pattern)
 }
 ```
 
-**Terminal-specific paste behavior:**
-- **Windows Terminal:** Ctrl+V pastes (with bracketed paste mode in modern shells)
-- **PowerShell (conhost):** Right-click or Ctrl+V pastes
-- **cmd.exe:** Ctrl+V pastes (modern Windows), right-click pastes (legacy)
-- **Git Bash (mintty):** Shift+Insert or right-click pastes; Ctrl+V may not work. Need to detect mintty and use Shift+Insert instead
-- **WSL:** Depends on host terminal
+### detect_windows.rs Changes
 
-**Confirm command (Enter keystroke):** Same `SendInput` pattern with `VK_RETURN`.
+```rust
+// Add to KNOWN_TERMINAL_EXES:
+"wsl.exe",       // WSL direct launch
 
-**Confidence: HIGH** -- `SendInput` is the standard Windows approach for simulating keystrokes, well-documented. The clipboard API is straightforward.
+// Add to KNOWN_SHELL_EXES:
+// wsl.exe is NOT a shell, but it IS a process that hosts shells
+// Don't add it here -- instead detect it specially in wsl.rs
+```
 
-### 6. Permissions (commands/permissions.rs)
+### System Prompt for WSL
 
-**macOS:** Accessibility permission check via `AXIsProcessTrusted()` + probe fallback. Opens System Settings.
+The AI needs to know it should generate Linux commands, not Windows commands, when the user is in WSL.
 
-**Windows:** Windows does NOT have an equivalent global accessibility permission gate. UI Automation and `SendInput` work without special permissions for standard (non-elevated) processes.
+```rust
+// In commands/ai.rs, modify system prompt selection:
+
+// Detect WSL from context: CWD starts with "/" (Linux path) not "C:\" (Windows path)
+let is_wsl = ctx.terminal.as_ref()
+    .and_then(|t| t.cwd.as_ref())
+    .map(|cwd| cwd.starts_with('/'))
+    .unwrap_or(false);
+
+let system_prompt = if is_wsl {
+    // WSL: Linux commands even though running on Windows
+    TERMINAL_SYSTEM_PROMPT_TEMPLATE_WSL.replace("{shell_type}", shell_type)
+} else if is_terminal_mode {
+    TERMINAL_SYSTEM_PROMPT_TEMPLATE.replace("{shell_type}", shell_type)
+} else {
+    ASSISTANT_SYSTEM_PROMPT.to_string()
+};
+```
 
 ```rust
 #[cfg(target_os = "windows")]
-pub fn check_accessibility_permission() -> bool {
-    true  // No equivalent permission gate on Windows
-}
-
-#[cfg(target_os = "windows")]
-pub fn request_accessibility_permission(_prompt: bool) -> bool {
-    true  // No-op on Windows
-}
-
-#[cfg(target_os = "windows")]
-pub fn open_accessibility_settings() {
-    // No-op on Windows, or could open Windows Settings as a convenience
-}
+const TERMINAL_SYSTEM_PROMPT_TEMPLATE_WSL: &str =
+    "You are a terminal command generator for Linux (WSL on Windows). Given the user's task \
+     description and terminal context, output ONLY the exact command(s) to run. No explanations, \
+     no markdown, no code fences. Just the raw command(s). If multiple commands are needed, \
+     separate them with && or use pipes. Prefer common POSIX tools (grep, find, sed, awk). \
+     The user is running WSL (Windows Subsystem for Linux) with {shell_type} shell.";
 ```
 
-**However:** If CMD+K needs to read/write to elevated (admin) processes, the app itself may need to be elevated. This is an edge case -- most terminal sessions are user-level.
+### Supported WSL Hosts
 
-**Confidence: HIGH** -- Windows UI Automation and SendInput do not require special permissions for user-level processes.
+| Host | Detection | CWD/Shell Source | Visible Text |
+|------|-----------|-----------------|--------------|
+| Windows Terminal | ConPTY tree has wsl.exe child of OpenConsole | `wsl.exe -e` commands | UIA (works) |
+| VS Code Remote-WSL | Code.exe with wsl.exe in tree | `wsl.exe -e` commands | UIA (limited) |
+| Standalone wsl.exe | Direct wsl.exe as foreground process | `wsl.exe -e` commands | UIA on conhost |
+| Cursor | Same as VS Code pattern | `wsl.exe -e` commands | UIA (limited) |
 
-### 7. Terminal Detection (terminal/detect.rs)
+### Visible Output for WSL
 
-**macOS:** `NSRunningApplication` ObjC FFI for bundle ID and display name.
-
-**Windows:** No bundle IDs on Windows. Use executable path/name instead.
-
-```rust
-#[cfg(target_os = "windows")]
-pub fn get_bundle_id(pid: i32) -> Option<String> {
-    // On Windows, return the exe name as the "bundle ID equivalent"
-    // e.g., "WindowsTerminal.exe", "powershell.exe", "cmd.exe"
-    get_process_exe_name(pid)
-}
-
-#[cfg(target_os = "windows")]
-fn get_process_exe_name(pid: i32) -> Option<String> {
-    use windows::Win32::System::Threading::*;
-    use windows::Win32::System::ProcessStatus::*;
-
-    unsafe {
-        let handle = OpenProcess(
-            PROCESS_QUERY_LIMITED_INFORMATION,
-            false,
-            pid as u32,
-        ).ok()?;
-
-        let mut buf = [0u16; 260];
-        let len = GetModuleFileNameExW(handle, None, &mut buf);
-        CloseHandle(handle);
-
-        if len == 0 { return None; }
-
-        let path = String::from_utf16_lossy(&buf[..len as usize]);
-        std::path::Path::new(&path)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .map(|s| s.to_string())
-    }
-}
-```
-
-**Windows terminal identifiers (equivalent to macOS TERMINAL_BUNDLE_IDS):**
-
-```rust
-#[cfg(target_os = "windows")]
-pub const TERMINAL_EXE_NAMES: &[&str] = &[
-    "WindowsTerminal.exe",      // Windows Terminal
-    "powershell.exe",            // PowerShell 5.1
-    "pwsh.exe",                  // PowerShell 7+
-    "cmd.exe",                   // Command Prompt
-    "mintty.exe",                // Git Bash (MSYS2)
-    "ConEmu.exe",                // ConEmu
-    "ConEmu64.exe",
-    "Hyper.exe",                 // Hyper terminal
-    "Alacritty.exe",             // Alacritty
-    "wezterm-gui.exe",           // WezTerm
-    "kitty.exe",                 // kitty
-];
-
-#[cfg(target_os = "windows")]
-pub const IDE_EXE_NAMES: &[&str] = &[
-    "Code.exe",                  // VS Code
-    "Code - Insiders.exe",       // VS Code Insiders
-    "Cursor.exe",                // Cursor IDE
-];
-```
-
-**Window key format on Windows:** `"exe_name:shell_pid"` instead of `"bundle_id:shell_pid"`. Same concept, different identifier. The frontend does not parse window keys -- they are opaque strings used as HashMap keys.
-
-**Confidence: HIGH** -- Standard Win32 process inspection APIs.
-
-### 8. Browser Console Detection (terminal/browser.rs)
-
-**macOS:** AX API to walk windows and find DevTools title.
-
-**Windows:** UI Automation to enumerate windows and check titles.
-
-```rust
-#[cfg(target_os = "windows")]
-pub fn detect_console(app_pid: i32, _app_name: &str) -> (bool, Option<String>) {
-    // Use UI Automation to enumerate windows of the browser process
-    // Check window titles for "DevTools", "Developer Tools", etc.
-    // Same title-matching logic as macOS (is_devtools_title)
-    // If found, attempt to read text from UIA TextPattern
-    (false, None)  // Stub initially, implement after core features
-}
-```
-
-**This is lower priority than terminal context reading.** Browser console detection is a nice-to-have feature. The macOS implementation returns `(false, None)` for many cases already. Safe to stub initially and implement later.
-
-### 9. System Tray (commands/tray.rs)
-
-**Tauri's tray API is already cross-platform.** The existing `TrayIconBuilder` code works on both macOS and Windows. Adjustments needed:
-
-- **Icon format:** macOS uses template images (white icons on transparent). Windows uses colored `.ico` files. The `tauri.conf.json` already includes `icons/icon.ico`.
-- **Left-click behavior:** On macOS, `show_menu_on_left_click(false)` follows convention. On Windows, left-click typically shows the menu. Add a platform check:
-
-```rust
-let show_on_left = cfg!(target_os = "windows");
-builder = builder.show_menu_on_left_click(show_on_left);
-```
-
-- **`icon_as_template(true)`:** This is macOS-only (template rendering for menu bar). On Windows it is ignored.
-
-**Confidence: HIGH** -- Tauri's tray API abstracts platform differences well.
-
-### 10. Vibrancy / Visual Effects
-
-**macOS:** `window_vibrancy::apply_vibrancy()` with `NSVisualEffectMaterial::HudWindow`
-
-**Windows:** `window_vibrancy::apply_mica()` (Win11) or `window_vibrancy::apply_acrylic()` (Win10)
-
-```rust
-#[cfg(target_os = "windows")]
-{
-    // Try Mica first (Windows 11, cleaner look)
-    if let Err(_) = window_vibrancy::apply_mica(&window, None) {
-        // Fall back to Acrylic (Windows 10, slightly noisier)
-        let _ = window_vibrancy::apply_acrylic(&window, Some((18, 18, 18, 200)));
-    }
-}
-```
-
-The `window-vibrancy` crate (v0.5+) already supports both platforms. This is a matter of calling the right function per platform.
-
-**Confidence: HIGH** -- `window-vibrancy` is maintained by the Tauri team, cross-platform by design.
+UIA text reading from Windows Terminal already captures WSL terminal output correctly -- it reads what is displayed in the terminal regardless of whether the underlying session is native or WSL. No changes needed for visible output capture.
 
 ---
 
-## Cargo.toml Changes
+## Feature 3: Auto-Updater
 
-The keyring crate needs platform-conditional features:
+### Architecture
+
+Uses `tauri-plugin-updater` (official Tauri v2 plugin). The plugin checks a JSON manifest at a URL, compares versions, downloads the update, and installs it.
+
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `src-tauri/src/commands/updater.rs` | Rust IPC commands for check/install |
+| `src/components/UpdateBanner.tsx` | Non-blocking update notification in overlay |
+| `.github/workflows/release.yml` | Modified to generate `latest.json` manifest |
+
+### Cargo.toml Addition
 
 ```toml
 [dependencies]
-keyring = { version = "3" }
-
-[target.'cfg(target_os = "macos")'.dependencies]
-keyring = { version = "3", features = ["apple-native"] }
-tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2.1" }
-accessibility-sys = "0.2"
-core-foundation-sys = "0.8"
-
-[target.'cfg(target_os = "windows")'.dependencies]
-keyring = { version = "3", features = ["windows-native"] }
-windows = { version = "0.58", features = [
-    "Win32_UI_WindowsAndMessaging",
-    "Win32_UI_Input_KeyboardAndMouse",
-    "Win32_System_Threading",
-    "Win32_System_ProcessStatus",
-    "Win32_System_Diagnostics_ToolHelp",
-    "Win32_Foundation",
-] }
-clipboard-win = "5"
-uiautomation = "0.7"
+tauri-plugin-updater = "2"
 ```
 
-**Note:** `tauri-nspanel`, `accessibility-sys`, and `core-foundation-sys` are macOS-only dependencies. They must be moved to a `[target.'cfg(target_os = "macos")'.dependencies]` section to avoid compilation errors on Windows.
+### tauri.conf.json Addition
 
----
-
-## lib.rs Setup: Platform-Conditional Initialization
-
-```rust
-pub fn run() {
-    let mut builder = tauri::Builder::default()
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(tauri_plugin_positioner::init())
-        .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(tauri_plugin_http::init())
-        .manage(AppState::default());
-
-    // macOS-only: NSPanel plugin
-    #[cfg(target_os = "macos")]
-    {
-        builder = builder.plugin(tauri_nspanel::init());
+```json
+{
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/user/cmd-k/releases/latest/download/latest.json"
+      ],
+      "pubkey": "<generated-public-key>"
     }
-
-    builder
-        .setup(|app| {
-            let window = app.get_webview_window("main")
-                .expect("Window 'main' should exist");
-
-            #[cfg(target_os = "macos")]
-            setup_macos_overlay(app, &window)?;
-
-            #[cfg(target_os = "windows")]
-            setup_windows_overlay(app, &window)?;
-
-            // Tray setup is cross-platform
-            setup_tray(app)?;
-
-            // Hotkey registration is cross-platform (shortcut string differs)
-            let default_hotkey = if cfg!(target_os = "macos") {
-                "Super+K"
-            } else {
-                "Ctrl+K"
-            };
-            let app_handle = app.handle().clone();
-            if let Err(e) = register_hotkey(app_handle, default_hotkey.to_string()) {
-                eprintln!("Warning: Failed to register default hotkey: {}", e);
-            }
-
-            window.hide().ok();
-            Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![
-            // ... same command list, all commands use cfg internally
-        ])
-        .run(tauri::generate_context!())
-        .expect("error while running CMD+K application");
+  }
 }
 ```
 
----
+### Plugin Initialization (lib.rs)
 
-## Window Key Changes
+```rust
+// Add to builder chain in lib.rs:
+.plugin(tauri_plugin_updater::Builder::new().build())
+```
 
-The `compute_window_key` function in `hotkey.rs` works the same on both platforms conceptually. The key format shifts:
+This goes alongside the existing plugins (global-shortcut, positioner, store, http).
 
-- **macOS:** `"com.apple.Terminal:12345"` (bundle_id:shell_pid)
-- **Windows:** `"WindowsTerminal.exe:12345"` (exe_name:shell_pid)
+### Rust IPC Commands
 
-The frontend treats window keys as opaque strings. No frontend changes needed for this.
+```rust
+// commands/updater.rs
+use serde::Serialize;
+use tauri::AppHandle;
+use tauri_plugin_updater::UpdaterExt;
 
----
+#[derive(Serialize)]
+pub struct UpdateInfo {
+    pub version: String,
+    pub body: Option<String>,
+}
 
-## Frontend Changes
+/// Check if an update is available. Returns None if current version is latest.
+/// Non-blocking -- called on app launch as fire-and-forget.
+#[tauri::command]
+pub async fn check_for_update(app: AppHandle) -> Result<Option<UpdateInfo>, String> {
+    let updater = app.updater()
+        .map_err(|e| format!("Updater init error: {}", e))?;
 
-The React/Zustand frontend is **almost entirely platform-agnostic**. Changes needed:
+    match updater.check().await {
+        Ok(Some(update)) => Ok(Some(UpdateInfo {
+            version: update.version.clone(),
+            body: update.body.clone(),
+        })),
+        Ok(None) => Ok(None),
+        Err(e) => {
+            eprintln!("[updater] check failed: {}", e);
+            Ok(None) // Fail silently -- updates are non-critical
+        }
+    }
+}
 
-### 1. Default Hotkey Display
+/// Download and install the pending update.
+/// On macOS: replaces app bundle, prompts relaunch.
+/// On Windows: downloads installer, runs on next launch (passive install mode).
+#[tauri::command]
+pub async fn install_update(app: AppHandle) -> Result<(), String> {
+    let updater = app.updater()
+        .map_err(|e| format!("Updater error: {}", e))?;
 
-The settings UI shows the hotkey string. Default changes from "Cmd+K" to "Ctrl+K" on Windows. This is driven by the stored hotkey string from Rust, not hardcoded in React.
+    if let Some(update) = updater.check().await.map_err(|e| e.to_string())? {
+        update.download_and_install(|_, _| {}, || {}).await
+            .map_err(|e| format!("Install failed: {}", e))?;
+    }
+    Ok(())
+}
+```
 
-### 2. Onboarding Flow
+### Frontend Integration
 
-The macOS onboarding includes an "Accessibility Permission" step. On Windows, this step is not needed. The onboarding component should check via IPC:
+**App startup check (in App.tsx or equivalent setup):**
 
 ```typescript
-const hasAccessibilityStep = await invoke<boolean>("check_accessibility_permission");
-// On Windows, this returns true immediately, so the step is skipped
+// Fire-and-forget update check on mount
+useEffect(() => {
+    invoke<UpdateInfo | null>("check_for_update").then(info => {
+        if (info) {
+            useOverlayStore.getState().setUpdateAvailable(info);
+        }
+    }).catch(() => {}); // Silent fail
+}, []);
 ```
 
-The existing onboarding logic likely already handles `check_accessibility_permission() === true` as "permission granted, skip step."
+**Zustand store additions:**
 
-### 3. System Prompt
-
-`ai.rs` currently says "You are a terminal command generator for macOS." This should be platform-aware:
-
-```rust
-#[cfg(target_os = "macos")]
-const PLATFORM: &str = "macOS";
-#[cfg(target_os = "windows")]
-const PLATFORM: &str = "Windows";
-
-let system_prompt = format!(
-    "You are a terminal command generator for {}. Given the user's task description and terminal \
-     context, output ONLY the exact command(s) to run...",
-    PLATFORM
-);
+```typescript
+updateAvailable: UpdateInfo | null;
+setUpdateAvailable: (info: UpdateInfo | null) => void;
+isUpdating: boolean;
 ```
 
-### 4. Destructive Command Patterns
+**Update notification options (pick one):**
+1. **Tray menu entry:** "Update available: v0.2.7" in the system tray menu. Click triggers install. Least intrusive.
+2. **Banner in overlay:** Subtle bar at top of overlay when update is available. "Update available. [Install]"
+3. **Settings tab indicator:** Dot badge on settings tab. Update controls in settings.
 
-`safety.rs` patterns include macOS-specific commands (`diskutil erase`). Windows equivalents should be added:
+**Recommendation:** Tray menu entry (option 1) + settings tab indicator (option 3). The overlay should not be cluttered with update UI -- it is a focused command interface.
 
-```rust
-// Windows-specific destructive patterns (add to existing set)
-r"\bformat\s+[A-Za-z]:",          // format C:  (already present)
-r"\bRemove-Item\s+.*-Recurse",    // PowerShell rm -rf equivalent
-r"\bdel\s+/[sS]",                 // cmd.exe recursive delete
-r"\brd\s+/[sS]",                  // cmd.exe recursive rmdir
-r"\bReg\s+Delete\b",              // Registry deletion
-r"\bStop-Process\s+.*-Force",     // PowerShell kill -9 equivalent
-r"\bnet\s+stop\b",                // Stop Windows service
-r"\bdism\b",                       // DISM system image manipulation
-r"\bbcdedit\b",                   // Boot configuration
-```
+### CI/CD Changes for Auto-Updater
 
----
+The updater requires:
 
-## Data Flow: Overlay Show/Hide on Windows
+1. **Signing keypair generation:** Run `npx tauri signer generate -w ~/.tauri/cmd-k.key` to generate a private key. Store private key as CI secret `TAURI_SIGNING_PRIVATE_KEY`. Public key goes in `tauri.conf.json` `plugins.updater.pubkey`.
 
-```
-Ctrl+K pressed
-  -> hotkey handler fires (cross-platform, tauri_plugin_global_shortcut)
-  -> get_frontmost_pid():
-       [macOS] NSWorkspace -> processIdentifier
-       [Windows] GetForegroundWindow -> GetWindowThreadProcessId
-  -> store PID in AppState.previous_app_pid
-  -> [Windows only] store HWND in AppState.previous_app_hwnd
-  -> pre-capture AX/UIA text:
-       [macOS] ax_reader::read_focused_text_fast(pid)
-       [Windows] uia_reader::read_focused_text_fast(pid)
-  -> compute_window_key(pid, focused_cwd)
-  -> toggle_overlay():
-       [macOS] panel.show_and_make_key()
-       [Windows] remove WS_EX_NOACTIVATE, window.show(), window.set_focus()
-  -> frontend receives "overlay-shown" event
-  -> store.show() executes (identical on both platforms)
-  -> IPC calls: get_window_key, get_app_context (platform-specific Rust, same IPC interface)
-  -> user types query, submits
-  -> stream_ai_response (identical on both platforms)
-  -> paste_to_terminal:
-       [macOS] AppleScript/CGEventPost
-       [Windows] clipboard-win + SendInput(Ctrl+V)
-  -> focus restoration:
-       [macOS] panel.resign_key_window + panel.make_key_window
-       [Windows] SetForegroundWindow(previous_hwnd)
-```
+2. **Build with signing:** Set `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` env vars during `pnpm tauri build`. This produces `.sig` signature files alongside installers.
 
----
+3. **Generate latest.json manifest:** Post-build step assembles the manifest with version, URLs, and signatures.
 
-## Build System
+4. **Upload manifest to release:** Add `latest.json` to the GitHub Release artifacts.
 
-### Single Codebase, Platform-Conditional Compilation
+**Critical note on macOS DMG:** The current build uses a custom `scripts/build-dmg.sh` that produces a signed+notarized DMG outside of Tauri's build system. The updater plugin expects Tauri's built-in updater format. Two options:
 
-The existing project structure supports this. Rust's `cfg(target_os)` at compile time means:
-- **On macOS:** Only macOS code is compiled. `tauri-nspanel`, `accessibility-sys` dependencies are used.
-- **On Windows:** Only Windows code is compiled. `windows`, `clipboard-win`, `uiautomation` dependencies are used.
+- **Option A:** Switch macOS build to `pnpm tauri build` (produces .app.tar.gz with .sig), add custom signing/notarization as post-build step. The updater downloads the .tar.gz, not the DMG.
+- **Option B:** Keep custom DMG for distribution, generate .sig separately for the DMG. This requires verifying that the updater plugin can handle DMG format.
 
-### CI/CD: GitHub Actions Matrix
+**Recommendation:** Option A. Use `pnpm tauri build` for the updater-compatible format (.app.tar.gz + .sig). Keep the DMG as a separate distribution artifact for manual downloads. The updater uses the .tar.gz; the GitHub Release includes both the DMG (for first-time installs) and the .tar.gz + .sig (for updates).
+
+### Release Workflow Additions
 
 ```yaml
-strategy:
-  matrix:
-    include:
-      - os: macos-latest
-        target: aarch64-apple-darwin
-      - os: macos-latest
-        target: x86_64-apple-darwin
-      - os: windows-latest
-        target: x86_64-pc-windows-msvc
+# In release.yml, add after build steps:
+
+- name: Generate latest.json manifest
+  shell: bash
+  run: |
+    cat > latest.json << EOF
+    {
+      "version": "${{ env.VERSION }}",
+      "notes": "CMD+K ${{ github.ref_name }}",
+      "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+      "platforms": {
+        "darwin-universal": {
+          "url": "https://github.com/.../releases/download/${{ github.ref_name }}/CMD+K.app.tar.gz",
+          "signature": "$(cat CMD+K.app.tar.gz.sig)"
+        },
+        "windows-x86_64": {
+          "url": "https://github.com/.../releases/download/${{ github.ref_name }}/CMD+K-setup.exe",
+          "signature": "$(cat CMD+K-setup.exe.sig)"
+        }
+      }
+    }
+    EOF
+
+- name: Upload latest.json to release
+  # Upload alongside other artifacts
 ```
-
-Tauri provides `tauri-action` for building platform-specific installers:
-- macOS: `.dmg` (existing)
-- Windows: `.msi` or `.exe` installer via NSIS or WiX
-
-### Development
-
-Cross-compilation from macOS to Windows is possible but fragile. **Recommendation: develop and test Windows features on a Windows machine or VM.** Use CI for cross-platform build validation.
 
 ---
 
-## Suggested Build Order (Dependency-Driven)
+## Component Boundaries Summary
 
-### Phase 1: Build Infrastructure (no user-visible features)
+| Component | Responsibility | Status | Communicates With |
+|-----------|---------------|--------|-------------------|
+| `commands/providers/mod.rs` | Provider enum, ModelInfo, dispatch | **NEW** | ai.rs, keychain.rs |
+| `commands/providers/openai.rs` | OpenAI request/response handling | **NEW** | providers/mod.rs |
+| `commands/providers/anthropic.rs` | Anthropic request/response handling | **NEW** | providers/mod.rs |
+| `commands/providers/google.rs` | Google Gemini request/response handling | **NEW** | providers/mod.rs |
+| `commands/providers/xai.rs` | xAI request/response (from current ai.rs+xai.rs) | **NEW** (extracted) | providers/mod.rs |
+| `commands/providers/openrouter.rs` | OpenRouter request/response handling | **NEW** | providers/mod.rs |
+| `commands/ai.rs` | Stream orchestration, prompt building | **MODIFIED** | providers/, keychain |
+| `commands/xai.rs` | -- | **DELETED** (moved to providers/xai.rs) | -- |
+| `commands/keychain.rs` | Per-provider key storage | **MODIFIED** (add `provider` param) | providers/ |
+| `commands/updater.rs` | Update check and install IPC | **NEW** | tauri-plugin-updater |
+| `terminal/wsl.rs` | WSL detection and context via wsl.exe | **NEW** | terminal/mod.rs |
+| `terminal/mod.rs` | Detection orchestration | **MODIFIED** (add WSL branch) | wsl.rs |
+| `terminal/detect_windows.rs` | Exe classification | **MODIFIED** (add WSL patterns) | terminal/mod.rs |
+| `src/store/index.ts` | Zustand state | **MODIFIED** (add provider, update, rename types) | All frontend |
+| `StepProviderSelect.tsx` | Provider picker in onboarding | **NEW** | store |
+| `StepApiKey.tsx` | Dynamic provider-aware key input | **MODIFIED** | store, keychain |
+| `AccountTab.tsx` | Provider-aware key management | **MODIFIED** | store, keychain |
+| `UpdateBanner.tsx` or tray entry | Update notification | **NEW** | updater commands |
+| `lib.rs` | Plugin initialization | **MODIFIED** (add updater plugin) | -- |
+| `Cargo.toml` | Dependencies | **MODIFIED** (add tauri-plugin-updater) | -- |
+| `tauri.conf.json` | Updater config | **MODIFIED** (add plugins.updater) | -- |
+| `.github/workflows/release.yml` | CI/CD | **MODIFIED** (signing, latest.json) | -- |
 
-1. **Cargo.toml restructure** -- Move macOS-only dependencies to `[target.'cfg(target_os = "macos")']`, add Windows dependencies
-2. **lib.rs conditional setup** -- Split `setup()` into `setup_macos_overlay()` and `setup_windows_overlay()`
-3. **Compile gate:** `cargo build --target x86_64-pc-windows-msvc` must pass with stubs
+---
 
-### Phase 2: Overlay Window on Windows
-
-4. **Window HWND manipulation** -- `WS_EX_TOOLWINDOW`, `HWND_TOPMOST`, vibrancy (Mica/Acrylic)
-5. **Show/hide cycle** -- Focus management, `WS_EX_NOACTIVATE` toggle
-6. **Hotkey: `get_frontmost_pid` Windows implementation** -- `GetForegroundWindow` + `GetWindowThreadProcessId`
-7. **Store HWND for focus restoration**
-
-### Phase 3: Terminal Context on Windows
-
-8. **`terminal/detect.rs` Windows implementation** -- Process exe name detection, terminal/IDE classification
-9. **`terminal/process.rs` Windows implementation** -- Process tree walking via `CreateToolhelp32Snapshot`, CWD via PEB reading
-10. **`terminal/ax_reader.rs` -> `terminal/uia_reader.rs`** -- UI Automation text reading from Windows Terminal/conhost
-
-### Phase 4: Paste and Input Simulation
-
-11. **`commands/paste.rs` Windows implementation** -- Clipboard + `SendInput(Ctrl+V)`
-12. **Line clearing** -- `SendInput(VK_ESCAPE)` for PowerShell/cmd, `SendInput(Ctrl+U)` for bash
-
-### Phase 5: Polish and Platform-Specific UI
-
-13. **Permissions: stub Windows implementation** (always returns true)
-14. **Onboarding flow adaptation** (skip accessibility step)
-15. **AI system prompt: platform awareness** ("You are a terminal command generator for Windows...")
-16. **Safety patterns: add Windows-specific destructive commands**
-17. **Tray icon adjustments** (left-click behavior, icon format)
-18. **Default hotkey: Ctrl+K on Windows**
-
-### Phase 6: Integration Testing
-
-19. **End-to-end testing** on Windows: Windows Terminal, PowerShell, cmd.exe, Git Bash
-20. **WSL terminal support** (stretch goal)
-21. **Windows installer** (NSIS or WiX via Tauri)
-
-### Dependency Graph
+## Data Flow: Complete Provider Request Lifecycle
 
 ```
-Phase 1 (Cargo.toml + lib.rs)
-    |
-    +---> Phase 2 (Overlay window)
-    |         |
-    |         +---> Phase 4 (Paste, needs HWND from Phase 2)
-    |
-    +---> Phase 3 (Terminal context, independent of overlay)
-    |         |
-    |         +---> Phase 5 (Polish, depends on Phase 3 for terminal detection)
-    |
-    +---> Phase 6 (Integration, depends on all above)
+User types query -> submitQuery(query) in Zustand store
+  |
+  v
+Read selectedProvider and selectedModel from store
+  |
+  v
+invoke("stream_ai_response", { provider, query, model, contextJson, history, onToken })
+  |
+  v
+[Rust] ai.rs::stream_ai_response
+  |-- Provider::from_str(provider) -> Provider::Anthropic (example)
+  |-- Read "anthropic_api_key" from keychain
+  |-- Build system prompt (WSL-aware if CWD starts with "/")
+  |-- anthropic::build_body(model, system_prompt, messages)
+  |     -> { model, system: "...", messages: [...], max_tokens: 1024, stream: true }
+  |-- anthropic::headers(api_key)
+  |     -> [("x-api-key", key), ("anthropic-version", "2023-06-01"), ...]
+  |-- POST to "https://api.anthropic.com/v1/messages"
+  |-- SSE loop:
+  |     for each event:
+  |       anthropic::is_done(data)? -> break
+  |       anthropic::extract_token(data) -> "content_block_delta".delta.text
+  |       on_token.send(token)
+  |
+  v
+[Frontend] onToken callback -> set({ streamingText: fullText })
+  |
+  v
+Stream complete -> update turnHistory, persist to Rust history, check destructive
 ```
-
-Phases 2 and 3 can be developed in parallel since they are independent.
 
 ---
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Trait-Based Platform Abstraction
+### Anti-Pattern 1: URL-Only Provider Switching
+**What:** Parameterize just the endpoint URL and keep the same request body / SSE parsing.
+**Why bad:** Anthropic uses `x-api-key` header (not `Authorization: Bearer`), requires `max_tokens`, puts system prompt outside messages, and has completely different SSE events (`content_block_delta` not `choices[0].delta`). Google uses query param auth and different response structure. Would break 2 of 5 providers.
+**Instead:** Per-provider `build_body()`, `headers()`, `extract_token()`, `is_done()` functions.
 
-**What:** Define a `PlatformBackend` trait with methods like `get_frontmost_pid()`, `read_terminal_text()`, etc., and implement it for macOS and Windows.
+### Anti-Pattern 2: WSL Detection via Environment Variables
+**What:** Reading `$WSL_DISTRO_NAME` or checking `/proc/version` to detect WSL.
+**Why bad:** Those are only available INSIDE the WSL namespace. The Rust code runs on the Windows side and cannot read WSL-internal environment variables.
+**Instead:** Detect WSL by examining the Windows process tree for `wsl.exe` / `wslhost.exe`, then shell into WSL via `wsl.exe -e` commands for context.
 
-**Why wrong:** Adds an abstraction layer that the codebase does not need. There are only two platforms, the public function signatures are already identical, and `cfg(target_os)` gives zero runtime overhead. Trait objects add vtable dispatch. The existing codebase successfully uses `cfg` -- changing patterns mid-project creates inconsistency.
+### Anti-Pattern 3: Blocking Update Check on Launch
+**What:** Synchronous network call to check for updates during app startup.
+**Why bad:** The overlay must appear instantly on hotkey press. A slow/failed network request would block the main thread and delay the first overlay show.
+**Instead:** Fire-and-forget async update check. Store result. Show notification on next overlay open or in tray menu.
 
-**Do this instead:** Continue using `cfg(target_os)` with platform submodules, exactly as already done in `ax_reader.rs`, `process.rs`, etc.
+### Anti-Pattern 4: Single API Key Slot
+**What:** One keychain entry that changes based on the selected provider.
+**Why bad:** Users may want multiple providers configured and switch without re-entering keys. A single slot forces key re-entry on every provider switch.
+**Instead:** Per-provider keychain entries (`openai_api_key`, `anthropic_api_key`, etc.). All can exist simultaneously.
 
-### Anti-Pattern 2: Windows-First Development on macOS
-
-**What:** Write all Windows code on a macOS machine, relying on `cargo check --target x86_64-pc-windows-msvc` to validate.
-
-**Why wrong:** `cargo check` verifies syntax and type checking but cannot run the code. Windows API calls have subtle behavioral differences (HWND focus semantics, SendInput timing, UIA tree structure) that only manifest at runtime. GPU terminal UIA support varies between terminals.
-
-**Do this instead:** Use a Windows machine or VM for development and testing. Use macOS CI to verify macOS builds are not broken by the changes.
-
-### Anti-Pattern 3: Shimming NSPanel Behavior with a Tauri Plugin
-
-**What:** Write a Windows Tauri plugin that replicates NSPanel's non-activating panel behavior.
-
-**Why wrong:** The macOS NSPanel behavior (non-activating + keyboard input) has no direct Win32 equivalent. Attempting to replicate it creates a maintenance burden. The Windows UX for overlay apps (PowerToys Run, Windows PowerToys, etc.) uses a different pattern: take focus, then return focus on dismiss.
-
-**Do this instead:** Accept that Windows overlay behavior differs slightly. Take focus on show, return focus on hide. This matches user expectations on Windows.
-
-### Anti-Pattern 4: Using `sysinfo` Crate for CWD
-
-**What:** Use the `sysinfo` crate's `Process::cwd()` method for reading remote process CWD on Windows.
-
-**Why wrong:** `sysinfo` returns an empty string for CWD on Windows. The CWD field is not implemented on Windows in sysinfo.
-
-**Do this instead:** Read CWD from the Process Environment Block (PEB) using `NtQueryInformationProcess` + `ReadProcessMemory`, or shell-specific fallback methods.
+### Anti-Pattern 5: Abstract Trait Object for Providers
+**What:** `Box<dyn AiProvider>` with dynamic dispatch.
+**Why bad:** Async methods require boxing futures. Only 5 fixed variants. Enum match gives exhaustiveness checking at compile time. No runtime allocation. Simpler error messages.
+**Instead:** `Provider` enum with `match` dispatch.
 
 ---
 
-## New Components Summary
+## Build Order (Dependency-Driven)
 
-| Component | Platform | Purpose |
-|-----------|----------|---------|
-| `terminal/uia_reader.rs` | Windows | UI Automation text reading (replaces AX reader) |
-| `terminal/process_win.rs` or inline `windows` mod | Windows | Process tree walking + CWD via PEB |
-| `terminal/detect_win.rs` or inline `windows` mod | Windows | Exe name detection, terminal classification |
-| `commands/paste_win.rs` or inline `windows` mod | Windows | Clipboard + SendInput paste |
-| `commands/hotkey_win.rs` or inline `windows` mod | Windows | GetForegroundWindow + HWND storage |
+### Phase 1: Provider Abstraction (Rust-side only)
+1. Create `commands/providers/` module with Provider enum
+2. Implement xai.rs provider (extract from current ai.rs + xai.rs)
+3. Implement openai.rs provider (near-identical to xAI, same SSE format)
+4. Implement anthropic.rs provider (most divergent -- different everything)
+5. Implement google.rs provider (different auth and response format)
+6. Implement openrouter.rs provider (identical to OpenAI format)
+7. Refactor `commands/ai.rs` to accept `provider` parameter and delegate
+8. Refactor `commands/keychain.rs` to accept `provider` parameter
+9. Delete `commands/xai.rs`
+10. **Backward compatibility:** Default to "xai" if provider param is missing (transitional)
 
-All of these can be either separate files or `mod windows { }` blocks inside existing files, following the `ax_reader.rs` pattern.
+### Phase 2: Frontend Multi-Provider
+1. Add `selectedProvider` to Zustand store, persist to Tauri store
+2. Rename `XaiModelWithMeta` -> `ModelInfo` throughout frontend
+3. Create `StepProviderSelect.tsx` onboarding step
+4. Update `StepApiKey.tsx` for dynamic provider labels
+5. Update `AccountTab.tsx` for provider-aware key management
+6. Update `submitQuery()` to pass `provider` in invoke calls
+7. Update `validate_and_fetch_models` invoke to pass `provider`
+8. Remove "xai" default -- require explicit provider selection
+
+### Phase 3: WSL Terminal Context (independent of Phases 1-2)
+1. Create `terminal/wsl.rs` with `is_wsl_process()` and `get_wsl_context()`
+2. Add WSL detection helper (`check_for_wsl_in_tree`) using existing snapshot infrastructure
+3. Integrate WSL branch into `detect_app_context_windows()`
+4. Add WSL system prompt template to `commands/ai.rs`
+5. Test: Windows Terminal WSL tab, VS Code Remote-WSL, standalone `wsl.exe`, Cursor
+
+### Phase 4: Auto-Updater (independent of Phases 1-3)
+1. Generate signing keypair (`npx tauri signer generate`)
+2. Add public key to `tauri.conf.json` updater config
+3. Add `tauri-plugin-updater` to Cargo.toml and plugin chain in lib.rs
+4. Create `commands/updater.rs` with check/install IPC commands
+5. Modify CI workflow: add signing env vars, generate `.sig` files, build `latest.json`
+6. Add update notification (tray menu entry + settings indicator)
+7. Wire async update check into app startup
+
+### Dependency Graph
+
+```
+Phase 1 (Provider Rust)
+    |
+    +---> Phase 2 (Provider Frontend -- depends on Phase 1 IPC)
+
+Phase 3 (WSL -- independent, can run in parallel with 1+2)
+
+Phase 4 (Auto-updater -- independent, can run in parallel with all)
+```
+
+**Phases 3 and 4 can be developed in parallel with each other and with Phase 2.** Phase 2 depends on Phase 1 completing first (frontend needs the new Rust IPC signatures).
 
 ---
 
 ## Sources
 
-- [window-vibrancy crate](https://github.com/tauri-apps/window-vibrancy) -- Windows Acrylic/Mica support (HIGH confidence)
-- [uiautomation-rs crate](https://github.com/leexgone/uiautomation-rs) -- Windows UI Automation wrapper (MEDIUM confidence)
-- [keyring crate](https://github.com/open-source-cooperative/keyring-rs) -- Cross-platform credential storage including Windows Credential Manager (HIGH confidence)
-- [Windows SendInput documentation](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput) -- Keyboard simulation (HIGH confidence)
-- [GetForegroundWindow documentation](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getforegroundwindow) -- Active window detection (HIGH confidence)
-- [NtQueryInformationProcess documentation](https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntqueryinformationprocess) -- Remote process PEB/CWD reading (MEDIUM confidence)
-- [WS_EX_NOACTIVATE behavior](https://devblogs.microsoft.com/oldnewthing/20240919-00/?p=110283) -- Non-activating window caveats (HIGH confidence)
-- [NVDA UIA console support](https://github.com/nvaccess/nvda/pull/9614) -- Validates UIA text reading from Windows Terminal (MEDIUM confidence)
-- [Tauri v2 Window Customization](https://v2.tauri.app/learn/window-customization/) -- Tauri window configuration (HIGH confidence)
-- [clipboard-win crate](https://crates.io/crates/clipboard-win) -- Windows clipboard operations (HIGH confidence)
-- [Tauri v2 System Tray](https://v2.tauri.app/learn/system-tray/) -- Cross-platform tray API (HIGH confidence)
-- [Windows Extended Window Styles](https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles) -- WS_EX flags reference (HIGH confidence)
-- Codebase analysis: `src-tauri/src/` -- all existing modules reviewed for platform coupling
-
----
-
-*Architecture research for: CMD+K v0.2.1 Windows platform support*
-*Researched: 2026-03-01*
+- Codebase analysis: `src-tauri/src/commands/ai.rs` -- current xAI-hardcoded streaming (lines 8, 259, 307-308)
+- Codebase analysis: `src-tauri/src/commands/keychain.rs` -- current single-account key storage
+- Codebase analysis: `src-tauri/src/commands/xai.rs` -- xAI-specific model validation
+- Codebase analysis: `src-tauri/src/terminal/mod.rs` -- detection orchestration with WSL gap
+- Codebase analysis: `src-tauri/src/terminal/process.rs` -- Windows process tree walk, ConPTY fallback
+- Codebase analysis: `src-tauri/src/terminal/detect_windows.rs` -- Windows exe classification (no WSL entries)
+- Codebase analysis: `src/store/index.ts` -- Zustand state with xAI-specific types
+- Codebase analysis: `src/components/Onboarding/StepApiKey.tsx` -- xAI-hardcoded labels
+- Codebase analysis: `.github/workflows/release.yml` -- current CI pipeline for updater integration
+- Architecture inference: Provider API differences (OpenAI, Anthropic, Google Gemini SSE formats) -- MEDIUM confidence, verify against current API docs during implementation
+- Architecture inference: WSL process tree model (ConPTY -> OpenConsole -> wsl.exe) -- MEDIUM confidence, verify via runtime testing on Windows
+- Architecture inference: tauri-plugin-updater v2 setup and latest.json format -- MEDIUM confidence, verify against current plugin documentation during implementation
