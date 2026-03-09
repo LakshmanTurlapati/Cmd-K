@@ -115,10 +115,29 @@ pub fn detect_full_with_hwnd(
         #[allow(unused_mut)]
         let mut result = detect_app_context(previous_app_pid, pre_captured_text);
 
-        // Windows: if we have a terminal context but no visible_output, try UIA
+        // Windows: window title WSL detection + UIA text reading
         #[cfg(target_os = "windows")]
         if let Some(ref mut ctx) = result {
             if let Some(ref mut terminal) = ctx.terminal {
+                // Step 0: Window title WSL detection (fast, < 1ms)
+                // VS Code/Cursor Remote-WSL shows "[WSL: Ubuntu]" in the window title.
+                // This is the FASTEST and most reliable WSL signal for IDE terminals.
+                if let Some(hwnd) = previous_hwnd {
+                    if !terminal.is_wsl {
+                        if let Some(title) = detect_windows::get_window_title(hwnd) {
+                            if detect_windows::detect_wsl_from_title(&title) {
+                                eprintln!("[detect_full_with_hwnd] WSL detected from window title: {}", &title);
+                                terminal.is_wsl = true;
+                                // For Remote-WSL, the process tree shell (cmd.exe) is wrong.
+                                // Get Linux shell and CWD via WSL subprocess as initial values.
+                                // UIA text inference will override these if it finds better data.
+                                terminal.cwd = process::get_wsl_cwd().or(terminal.cwd.take());
+                                terminal.shell_type = process::get_wsl_shell().or(terminal.shell_type.take());
+                            }
+                        }
+                    }
+                }
+
                 if terminal.visible_output.is_none() {
                     if let Some(hwnd) = previous_hwnd {
                         let uia_text = uia_reader::read_terminal_text_windows(hwnd)

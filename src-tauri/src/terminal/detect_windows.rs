@@ -13,7 +13,9 @@ use windows_sys::Win32::System::Threading::{
     OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
 };
 #[cfg(target_os = "windows")]
-use windows_sys::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
+use windows_sys::Win32::UI::WindowsAndMessaging::{
+    GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId,
+};
 
 /// Known standalone terminal emulator executables on Windows.
 pub const KNOWN_TERMINAL_EXES: &[&str] = &[
@@ -156,4 +158,49 @@ pub fn clean_exe_name(exe: &str) -> String {
         "wsl.exe" => "WSL".to_string(),
         _ => exe.trim_end_matches(".exe").to_string(),
     }
+}
+
+/// Read the window title text via Win32 GetWindowTextW.
+/// Fast (< 1ms), no UIA overhead.
+#[cfg(target_os = "windows")]
+pub fn get_window_title(hwnd: isize) -> Option<String> {
+    unsafe {
+        let len = GetWindowTextLengthW(hwnd as _);
+        if len <= 0 {
+            return None;
+        }
+        let mut buf = vec![0u16; (len + 1) as usize];
+        let copied = GetWindowTextW(hwnd as _, buf.as_mut_ptr(), buf.len() as i32);
+        if copied <= 0 {
+            return None;
+        }
+        Some(String::from_utf16_lossy(&buf[..copied as usize]))
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn get_window_title(_hwnd: isize) -> Option<String> {
+    None
+}
+
+/// Detect WSL from VS Code/Cursor window title.
+/// Remote-WSL mode shows "[WSL: Ubuntu]" or "[WSL: Debian]" etc. in the title bar.
+/// Example title: "file.rs - project [WSL: Ubuntu] - Visual Studio Code"
+pub fn detect_wsl_from_title(title: &str) -> bool {
+    title.contains("[WSL:")
+}
+
+/// Extract WSL distro name from window title if present.
+/// "[WSL: Ubuntu]" -> Some("Ubuntu")
+pub fn extract_wsl_distro_from_title(title: &str) -> Option<String> {
+    if let Some(start) = title.find("[WSL: ") {
+        let after = &title[start + 6..];
+        if let Some(end) = after.find(']') {
+            let distro = after[..end].trim();
+            if !distro.is_empty() {
+                return Some(distro.to_string());
+            }
+        }
+    }
+    None
 }
