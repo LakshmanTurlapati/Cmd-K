@@ -130,11 +130,10 @@ pub fn get_foreground_info(terminal_pid: i32) -> ProcessInfo {
         let mut wsl = detect_wsl_in_ancestry(shell_pid);
 
         // Check 2: wsl.exe as a CHILD of the shell process (VS Code WSL terminal)
-        // VS Code WSL terminal: Code.exe → cmd.exe → wsl.exe → bash (in Linux VM)
-        // detect_wsl_in_ancestry walks UP and misses this because wsl.exe is below cmd.exe.
-        // This is safe — only checks children of the specific selected shell, not all 16+ wsl.exe system-wide.
         if !wsl {
             let children = get_child_pids(shell_pid);
+            eprintln!("[process] shell pid {} children: {:?}", shell_pid,
+                children.iter().map(|&c| (c, get_process_name(c))).collect::<Vec<_>>());
             for &child in &children {
                 if let Some(name) = get_process_name(child) {
                     if name.eq_ignore_ascii_case("wsl") {
@@ -144,6 +143,12 @@ pub fn get_foreground_info(terminal_pid: i32) -> ProcessInfo {
                     }
                 }
             }
+        }
+
+        // Check 3: scan ALL wsl.exe under app for diagnostic visibility
+        if !wsl {
+            eprintln!("[process] WSL diagnostic: scanning all wsl.exe under app tree...");
+            scan_wsl_processes_diagnostic(shell_pid);
         }
 
         wsl
@@ -925,6 +930,64 @@ fn find_running_process(shell_pid: i32, shell_name: &Option<String>) -> Option<S
         }
     }
     None
+}
+
+/// Diagnostic: find ALL wsl.exe processes and log their parent chain.
+/// Helps debug VS Code WSL terminal detection by showing where wsl.exe lives.
+#[cfg(target_os = "windows")]
+fn scan_wsl_processes_diagnostic(_shell_pid: i32) {
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
+    };
+
+    unsafe {
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if snapshot == INVALID_HANDLE_VALUE {
+            return;
+        }
+
+        let mut parent_map: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
+        let mut exe_map: std::collections::HashMap<u32, String> = std::collections::HashMap::new();
+        let mut wsl_pids: Vec<u32> = Vec::new();
+
+        let mut entry: PROCESSENTRY32W = std::mem::zeroed();
+        entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+
+        if Process32FirstW(snapshot, &mut entry) != 0 {
+            loop {
+                parent_map.insert(entry.th32ProcessID, entry.th32ParentProcessID);
+                let name_len = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
+                let name = String::from_utf16_lossy(&entry.szExeFile[..name_len]);
+                if name.eq_ignore_ascii_case("wsl.exe") {
+                    wsl_pids.push(entry.th32ProcessID);
+                }
+                exe_map.insert(entry.th32ProcessID, name);
+                if Process32NextW(snapshot, &mut entry) == 0 {
+                    break;
+                }
+            }
+        }
+        CloseHandle(snapshot);
+
+        eprintln!("[process] WSL diagnostic: found {} wsl.exe processes total", wsl_pids.len());
+        for &wsl_pid in &wsl_pids {
+            // Build parent chain for this wsl.exe
+            let mut chain = Vec::new();
+            let mut current = wsl_pid;
+            for _ in 0..10 {
+                let name = exe_map.get(&current).cloned().unwrap_or_else(|| "?".to_string());
+                chain.push(format!("{}({})", name, current));
+                match parent_map.get(&current) {
+                    Some(&ppid) if ppid > 1 && ppid != current => current = ppid,
+                    _ => break,
+                }
+            }
+            chain.reverse();
+            eprintln!("[process] WSL diagnostic: wsl.exe {} chain: {}", wsl_pid, chain.join(" → "));
+        }
+    }
 }
 
 /// Detect if wsl.exe is in the process ancestry of the given PID.
