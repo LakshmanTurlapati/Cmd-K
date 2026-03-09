@@ -107,7 +107,7 @@ Plans:
   3. User can read visible terminal output from WSL sessions for AI context
   4. User asking for a command in a WSL session gets a Linux command (not a Windows command)
   5. Destructive Linux command patterns (rm -rf, systemctl, etc.) are applied when the user is in a WSL session
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 - [ ] 23-01-PLAN.md — WSL detection in process tree, Linux CWD/shell reading, secret filtering
@@ -161,5 +161,5 @@ Recommended order: 21 -> 22 -> 23 -> 24
 | 20. CI/CD Pipeline | v0.2.4 | 2/2 | Complete | 2026-03-04 |
 | 21. Provider Abstraction Layer | 2/2 | Complete    | 2026-03-09 | - |
 | 22. Multi-Provider Frontend | v0.2.6 | Complete    | 2026-03-09 | 2026-03-09 |
-| 23. WSL Terminal Context | v0.2.6 | 0/2 | Planning complete | - |
+| 23. WSL Terminal Context | 1/2 | In Progress|  | - |
 | 24. Auto-Updater | v0.2.6 | 0/TBD | Not started | - |

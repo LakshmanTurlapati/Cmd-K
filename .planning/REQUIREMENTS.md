@@ -32,16 +32,16 @@ Requirements for multi-provider AI, WSL terminal context, and auto-updater.
 
 ### WSL Terminal Context
 
-- [ ] **WSLT-01**: CMD+K detects WSL sessions in Windows Terminal
-- [ ] **WSLT-02**: CMD+K detects WSL sessions in VS Code Remote-WSL terminals
-- [ ] **WSLT-03**: CMD+K detects WSL sessions in Cursor Remote-WSL terminals
-- [ ] **WSLT-04**: CMD+K detects standalone wsl.exe console sessions
-- [ ] **WSLT-05**: CMD+K reads the current working directory from WSL sessions
-- [ ] **WSLT-06**: CMD+K detects the shell type (bash, zsh, fish) in WSL sessions
-- [ ] **WSLT-07**: CMD+K reads visible terminal output from WSL sessions
+- [x] **WSLT-01**: CMD+K detects WSL sessions in Windows Terminal
+- [x] **WSLT-02**: CMD+K detects WSL sessions in VS Code Remote-WSL terminals
+- [x] **WSLT-03**: CMD+K detects WSL sessions in Cursor Remote-WSL terminals
+- [x] **WSLT-04**: CMD+K detects standalone wsl.exe console sessions
+- [x] **WSLT-05**: CMD+K reads the current working directory from WSL sessions
+- [x] **WSLT-06**: CMD+K detects the shell type (bash, zsh, fish) in WSL sessions
+- [x] **WSLT-07**: CMD+K reads visible terminal output from WSL sessions
 - [ ] **WSLT-08**: AI generates Linux commands when user is in a WSL session
 - [ ] **WSLT-09**: Linux destructive command patterns are applied in WSL sessions
-- [ ] **WSLT-10**: WSL distro name is shown in the context badge (e.g., "bash (WSL: Ubuntu)")
+- [x] **WSLT-10**: WSL distro name is shown in the context badge (e.g., "bash (WSL: Ubuntu)")
 
 ### Auto-Updater
 
@@ -93,16 +93,16 @@ Requirements for multi-provider AI, WSL terminal context, and auto-updater.
 | PFUI-05 | Phase 22 | Complete |
 | ORTR-01 | Phase 22 | Complete |
 | ORTR-02 | Phase 22 | Complete |
-| WSLT-01 | Phase 23 | Pending |
-| WSLT-02 | Phase 23 | Pending |
-| WSLT-03 | Phase 23 | Pending |
-| WSLT-04 | Phase 23 | Pending |
-| WSLT-05 | Phase 23 | Pending |
-| WSLT-06 | Phase 23 | Pending |
-| WSLT-07 | Phase 23 | Pending |
+| WSLT-01 | Phase 23 | Complete |
+| WSLT-02 | Phase 23 | Complete |
+| WSLT-03 | Phase 23 | Complete |
+| WSLT-04 | Phase 23 | Complete |
+| WSLT-05 | Phase 23 | Complete |
+| WSLT-06 | Phase 23 | Complete |
+| WSLT-07 | Phase 23 | Complete |
 | WSLT-08 | Phase 23 | Pending |
 | WSLT-09 | Phase 23 | Pending |
-| WSLT-10 | Phase 23 | Pending |
+| WSLT-10 | Phase 23 | Complete |
 | UPDT-01 | Phase 24 | Pending |
 | UPDT-02 | Phase 24 | Pending |
 | UPDT-03 | Phase 24 | Pending |

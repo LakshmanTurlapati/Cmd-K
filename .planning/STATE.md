@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: executing
-stopped_at: Phase 23 context gathered
-last_updated: "2026-03-09T09:29:16.879Z"
-last_activity: 2026-03-09 -- Phase 22 plan 02 complete (settings provider switching and tier-grouped models)
+stopped_at: Phase 23 plan 01 complete
+last_updated: "2026-03-09T09:59:54Z"
+last_activity: 2026-03-09 -- Phase 23 plan 01 complete (WSL detection and Linux context reading)
 progress:
   total_phases: 4
   completed_phases: 2
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-08)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Phase 22 -- Multi-Provider Frontend
+**Current focus:** Phase 23 -- WSL Terminal Context
 
 ## Current Position
 
-Phase: 22 (second of 4 in v0.2.6) -- Multi-Provider Frontend
-Plan: 2 of 2 (plan 02 complete)
+Phase: 23 (third of 4 in v0.2.6) -- WSL Terminal Context
+Plan: 1 of 2 (plan 01 complete)
 Status: In Progress
-Last activity: 2026-03-09 -- Phase 22 plan 02 complete (settings provider switching and tier-grouped models)
+Last activity: 2026-03-09 -- Phase 23 plan 01 complete (WSL detection and Linux context reading)
 
-Progress: [██████████] 100%
+Progress: [█████-----] 50%
 
 ## Performance Metrics
 
@@ -47,7 +47,7 @@ Progress: [██████████] 100%
 |-------|-------|-------|----------|
 | 21. Provider Abstraction | 2/2 | 8min | 4min |
 | 22. Multi-Provider Frontend | 2/2 | 6min | 3min |
-| 23. WSL Terminal Context | -- | -- | -- |
+| 23. WSL Terminal Context | 1/2 | 7min | 7min |
 | 24. Auto-Updater | -- | -- | -- |
 
 ## Accumulated Context
@@ -67,6 +67,9 @@ All prior decisions archived in PROJECT.md Key Decisions table.
 - [22-02] Provider dropdown checks stored keys on open for green checkmarks (keychain lookup, no API validation)
 - [22-02] Tier sections render only when models exist for that tier; OpenRouter models appear in All Models only
 - [22-02] Per-provider model memory checked before default auto-select logic on provider switch
+- [23-01] Separate detect_wsl_in_ancestry function with own snapshot rather than changing find_shell_by_ancestry signature
+- [23-01] UIA-inferred Linux CWD overrides wsl.exe subprocess CWD (subprocess returns home dir, not active shell CWD)
+- [23-01] Conservative secret filtering: only clearly identifiable credential formats, no broad patterns
 
 ### Pending Todos
 
@@ -78,6 +81,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-09T09:29:16.864Z
-Stopped at: Phase 23 context gathered
-Resume file: .planning/phases/23-wsl-terminal-context/23-CONTEXT.md
+Last session: 2026-03-09T09:59:54Z
+Stopped at: Phase 23 plan 01 complete (WSL detection and Linux context reading)
+Resume file: .planning/phases/23-wsl-terminal-context/23-02-PLAN.md
