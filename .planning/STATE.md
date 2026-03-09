@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
-status: completed
-stopped_at: Completed 23.1-01-PLAN.md (SUMMARY created)
-last_updated: "2026-03-09T16:16:59.805Z"
-last_activity: 2026-03-09 -- Phase 23.1-02 complete (IDE-aware shell priority, wsl.exe removed from KNOWN_TERMINAL_EXES)
+status: Moving to Phase 24
+stopped_at: Phase 24 context gathered
+last_updated: "2026-03-09T17:00:37.949Z"
+last_activity: 2026-03-09 -- Phase 23.1 closed with known gap (IDE terminal type detection faulty)
 progress:
   total_phases: 5
   completed_phases: 3
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-08)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Phase 23.1 -- VS Code WSL Terminal Tab Detection via UIA
+**Current focus:** Phase 24 -- Auto-Updater
 
 ## Current Position
 
-Phase: 23.1 (gap closure) -- VS Code WSL Terminal Tab Detection via UIA
-Plan: 02 complete (all plans done)
-Status: Phase 23.1 complete
-Last activity: 2026-03-09 -- Phase 23.1-02 complete (IDE-aware shell priority, wsl.exe removed from KNOWN_TERMINAL_EXES)
+Phase: 24 -- Auto-Updater (next up)
+Plan: not yet planned
+Status: Moving to Phase 24
+Last activity: 2026-03-09 -- Phase 23.1 closed with known gap (IDE terminal type detection faulty)
 
 Progress: [██████████] 100%
 
@@ -90,10 +90,11 @@ None.
 
 ### Blockers/Concerns
 
+- Phase 23.1 KNOWN GAP: IDE terminal type detection faulty — always detects cmd.exe instead of active shell in VS Code. Will revisit later.
 - Phase 24 (Auto-Updater): Ed25519 signing keypair MUST be generated and added to CI secrets before the first updater-enabled release ships. If missed, those users can never auto-update.
 
 ## Session Continuity
 
-Last session: 2026-03-09T16:16:59.790Z
-Stopped at: Completed 23.1-01-PLAN.md (SUMMARY created)
-Resume file: None
+Last session: 2026-03-09T17:00:37.930Z
+Stopped at: Phase 24 context gathered
+Resume file: .planning/phases/24-auto-updater/24-CONTEXT.md
