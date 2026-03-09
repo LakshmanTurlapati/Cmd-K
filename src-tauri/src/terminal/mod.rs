@@ -484,8 +484,8 @@ fn detect_app_context_windows(previous_app_pid: i32, _pre_captured_text: Option<
 /// Infer shell type from visible terminal text.
 /// "PS C:\>" or "PS>" patterns -> powershell, "C:\>" without PS -> cmd, "$" prompt -> bash, "#" prompt -> bash (root).
 fn infer_shell_from_text(text: &str) -> &'static str {
-    // Check last few lines for prompt patterns
-    for line in text.lines().rev().take(10) {
+    // Check ALL lines — UIA text can have prompts at the top and UI chrome at the bottom
+    for line in text.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with("PS ") || trimmed.starts_with("PS>") {
             return "powershell";
@@ -535,18 +535,19 @@ fn infer_shell_from_text(text: &str) -> &'static str {
 /// - Linux-specific paths like /home/, /root/, /var/, /etc/, /usr/, /tmp/, /opt/
 #[cfg(target_os = "windows")]
 fn detect_wsl_from_text(text: &str) -> bool {
+    eprintln!("[detect_wsl_from_text] scanning {} bytes of UIA text", text.len());
     let linux_paths = ["/home/", "/root/", "/var/", "/etc/", "/usr/", "/tmp/", "/opt/"];
 
     // Check for Linux paths anywhere in text
     for lp in &linux_paths {
         if text.contains(lp) {
-            eprintln!("[detect_wsl_from_text] WSL detected from UIA text: Linux path {}", lp);
+            eprintln!("[detect_wsl_from_text] WSL detected: Linux path {}", lp);
             return true;
         }
     }
 
-    // Check last 15 lines for prompt patterns
-    for line in text.lines().rev().take(15) {
+    // Check ALL lines — UIA text can have prompts at top and UI chrome at bottom
+    for line in text.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
@@ -558,9 +559,10 @@ fn detect_wsl_from_text(text: &str) -> bool {
             if before_colon.contains('@') {
                 let after_colon = &trimmed[colon_pos + 1..];
                 let path_part = after_colon
-                    .trim_end_matches(|c: char| c == '$' || c == '#' || c == ' ');
+                    .trim_end_matches(|c: char| c == '$' || c == '#' || c == ' ')
+                    .trim();
                 if path_part.starts_with('/') || path_part.starts_with('~') {
-                    eprintln!("[detect_wsl_from_text] WSL detected from UIA text: user@host:path prompt");
+                    eprintln!("[detect_wsl_from_text] WSL detected: user@host:path prompt '{}'", trimmed);
                     return true;
                 }
             }
@@ -575,13 +577,14 @@ fn detect_wsl_from_text(text: &str) -> bool {
                     && (trimmed.ends_with('$') || trimmed.ends_with('#')
                         || trimmed.contains("$ ") || trimmed.contains("# "))
                 {
-                    eprintln!("[detect_wsl_from_text] WSL detected from UIA text: user@host prompt with $ or #");
+                    eprintln!("[detect_wsl_from_text] WSL detected: user@host prompt with $ or #: '{}'", trimmed);
                     return true;
                 }
             }
         }
     }
 
+    eprintln!("[detect_wsl_from_text] no WSL patterns found");
     false
 }
 
@@ -589,7 +592,8 @@ fn detect_wsl_from_text(text: &str) -> bool {
 /// Looks for common prompt patterns: user@host:/path$ or user@host:/path #
 #[cfg(target_os = "windows")]
 fn infer_linux_cwd_from_text(text: &str) -> Option<String> {
-    for line in text.lines().rev().take(10) {
+    // Check ALL lines — UIA text can have prompts at top and UI chrome at bottom
+    for line in text.lines() {
         let trimmed = line.trim();
         // Pattern: user@host:/absolute/path$ or user@host:/path #
         if let Some(colon_pos) = trimmed.find(':') {
