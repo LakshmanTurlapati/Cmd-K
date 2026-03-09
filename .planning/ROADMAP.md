@@ -61,6 +61,7 @@
 - [x] **Phase 21: Provider Abstraction Layer** - Rust backend with provider enum, per-provider streaming, parameterized keychain, and v0.2.4 migration (completed 2026-03-09)
 - [x] **Phase 22: Multi-Provider Frontend** - Provider selection in onboarding and settings, model picker, OpenRouter integration (completed 2026-03-09)
 - [x] **Phase 23: WSL Terminal Context** - Detect WSL sessions, read CWD/shell/output, generate Linux commands, apply Linux safety patterns (completed 2026-03-09)
+- [x] **Phase 23.1: VS Code WSL Terminal Tab Detection** - Window title and focused-element UIA detection for VS Code/Cursor Remote-WSL terminals, IDE-aware shell priority (completed 2026-03-09)
 - [ ] **Phase 24: Auto-Updater** - Check on launch, tray notification, signed updates, CI/CD manifest generation
 
 ## Phase Details
@@ -114,6 +115,23 @@ Plans:
 - [ ] 23-02-PLAN.md — WSL system prompt, safety awareness, frontend badge
 - [ ] 23-03-PLAN.md — Gap closure: UIA text-based WSL detection (fixes WSL 2 detection failure)
 
+### Phase 23.1: VS Code WSL terminal tab detection via UIA (INSERTED)
+
+**Goal:** VS Code and Cursor Remote-WSL terminals are correctly detected as WSL sessions using window title and focused-element UIA strategies
+**Requirements**: WSLT-02, WSLT-03, WSLT-05, WSLT-06
+**Depends on:** Phase 23
+**Success Criteria** (what must be TRUE):
+  1. VS Code Remote-WSL terminal triggers WSL detection via window title "[WSL: distro]" pattern
+  2. Cursor Remote-WSL terminal triggers WSL detection via same window title mechanism
+  3. VS Code WSL terminal shows Linux CWD and bash/zsh shell type (not Windows path or cmd)
+  4. UIA text reading for VS Code uses focused-element sub-tree to reduce noise from UI chrome
+  5. Non-WSL VS Code terminals are not affected (no false positives)
+**Plans:** 2/2 plans complete
+
+Plans:
+- [x] 23.1-01-PLAN.md — Window title WSL detection, focused-element UIA strategy, end-to-end verification
+- [x] 23.1-02-PLAN.md — IDE-aware shell priority, wsl.exe removal from KNOWN_TERMINAL_EXES
+
 ### Phase 24: Auto-Updater
 **Goal**: Users are notified of new versions and can update with one click without forced restarts
 **Depends on**: Phase 21 (independent of Phases 22-23; can run after Phase 21 or in parallel)
@@ -134,7 +152,7 @@ Plans:
 
 **Execution Order:**
 Phases 21 and 22 are sequential (22 depends on 21). Phases 23 and 24 are independent of each other and can follow Phase 21.
-Recommended order: 21 -> 22 -> 23 -> 24
+Recommended order: 21 -> 22 -> 23 -> 23.1 -> 24
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -160,7 +178,8 @@ Recommended order: 21 -> 22 -> 23 -> 24
 | 18. Draggable Overlay Positioning | v0.2.4 | 1/1 | Complete | 2026-03-03 |
 | 19. Exhaustive Destructive Patterns | v0.2.4 | 1/1 | Complete | 2026-03-04 |
 | 20. CI/CD Pipeline | v0.2.4 | 2/2 | Complete | 2026-03-04 |
-| 21. Provider Abstraction Layer | 2/2 | Complete    | 2026-03-09 | - |
-| 22. Multi-Provider Frontend | v0.2.6 | Complete    | 2026-03-09 | 2026-03-09 |
-| 23. WSL Terminal Context | 2/2 | Complete    | 2026-03-09 | - |
+| 21. Provider Abstraction Layer | v0.2.6 | Complete | Complete | 2026-03-09 |
+| 22. Multi-Provider Frontend | v0.2.6 | Complete | Complete | 2026-03-09 |
+| 23. WSL Terminal Context | v0.2.6 | Complete | Complete | 2026-03-09 |
+| 23.1. VS Code WSL Terminal Tab Detection | 2/2 | Complete   | 2026-03-09 | 2026-03-09 |
 | 24. Auto-Updater | v0.2.6 | 0/TBD | Not started | - |

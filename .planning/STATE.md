@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: completed
-stopped_at: Phase 23 complete (WSL Terminal Context)
-last_updated: "2026-03-09T10:10:32.705Z"
-last_activity: 2026-03-09 -- Phase 23 plan 02 complete (AI prompt wiring and WSL badge)
+stopped_at: Completed 23.1-01-PLAN.md (SUMMARY created)
+last_updated: "2026-03-09T16:16:59.805Z"
+last_activity: 2026-03-09 -- Phase 23.1-02 complete (IDE-aware shell priority, wsl.exe removed from KNOWN_TERMINAL_EXES)
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 9
+  completed_plans: 8
   percent: 100
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-08)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Phase 23 -- WSL Terminal Context
+**Current focus:** Phase 23.1 -- VS Code WSL Terminal Tab Detection via UIA
 
 ## Current Position
 
-Phase: 23 (third of 4 in v0.2.6) -- WSL Terminal Context
-Plan: 2 of 2 (phase complete)
-Status: Phase 23 Complete
-Last activity: 2026-03-09 -- Phase 23 plan 02 complete (AI prompt wiring and WSL badge)
+Phase: 23.1 (gap closure) -- VS Code WSL Terminal Tab Detection via UIA
+Plan: 02 complete (all plans done)
+Status: Phase 23.1 complete
+Last activity: 2026-03-09 -- Phase 23.1-02 complete (IDE-aware shell priority, wsl.exe removed from KNOWN_TERMINAL_EXES)
 
 Progress: [██████████] 100%
 
@@ -48,6 +48,7 @@ Progress: [██████████] 100%
 | 21. Provider Abstraction | 2/2 | 8min | 4min |
 | 22. Multi-Provider Frontend | 2/2 | 6min | 3min |
 | 23. WSL Terminal Context | 2/2 | 10min | 5min |
+| 23.1 VS Code WSL Tab Detection | 2/2 | 3min | 1.5min |
 | 24. Auto-Updater | -- | -- | -- |
 
 ## Accumulated Context
@@ -73,10 +74,19 @@ All prior decisions archived in PROJECT.md Key Decisions table.
 - [23-02] WSL prompt is Windows-only (cfg guard); default shell "bash" for WSL instead of "zsh"
 - [23-02] WSL badge at priority 0 in resolveBadge overrides shell type display
 - [23-02] No safety.rs changes -- existing DESTRUCTIVE_PATTERNS already covers Linux commands
+- [23.1-02] Deprioritize cmd.exe (not exclude) in IDE mode -- cmd.exe still selected when only shell type
+- [23.1-02] wsl.exe removed from KNOWN_TERMINAL_EXES -- WSL detection uses window title and UIA text instead
+- [23.1-02] Interactive shell preference (powershell, pwsh, bash, zsh, fish) applies only to IDE terminals
+- [Phase 23.1]: Removed try_focused_subtree -- VS Code doesn't expose xterm.js UIA tree without screen reader mode
+- [Phase 23.1]: Pivoted to multi-signal WSL detection: window title + full tree walk + CWD path style + shell child detection
 
 ### Pending Todos
 
 None.
+
+### Roadmap Evolution
+
+- Phase 23.1 inserted after Phase 23: VS Code WSL terminal tab detection via UIA (URGENT)
 
 ### Blockers/Concerns
 
@@ -84,6 +94,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-09T10:04:57Z
-Stopped at: Phase 23 complete (WSL Terminal Context)
-Resume file: .planning/phases/24-auto-updater/
+Last session: 2026-03-09T16:16:59.790Z
+Stopped at: Completed 23.1-01-PLAN.md (SUMMARY created)
+Resume file: None
