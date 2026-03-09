@@ -62,7 +62,7 @@
 - [x] **Phase 22: Multi-Provider Frontend** - Provider selection in onboarding and settings, model picker, OpenRouter integration (completed 2026-03-09)
 - [x] **Phase 23: WSL Terminal Context** - Detect WSL sessions, read CWD/shell/output, generate Linux commands, apply Linux safety patterns (completed 2026-03-09)
 - [x] **Phase 23.1: VS Code WSL Terminal Tab Detection** - Window title and focused-element UIA detection for VS Code/Cursor Remote-WSL terminals, IDE-aware shell priority (completed 2026-03-09)
-- [ ] **Phase 24: Auto-Updater** - Check on launch, tray notification, signed updates, CI/CD manifest generation
+- [x] **Phase 24: Auto-Updater** - Check on launch, tray notification, signed updates, CI/CD manifest generation (completed 2026-03-09)
 
 ## Phase Details
 
@@ -145,8 +145,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 24-01-PLAN.md — Updater plugin config, update state machine, background checker, tray menu integration, install-on-quit
-- [ ] 24-02-PLAN.md — CI/CD pipeline: signing env vars, updater artifact generation, latest.json assembly
+- [x] 24-01-PLAN.md — Updater plugin config, update state machine, background checker, tray menu integration, install-on-quit
+- [x] 24-02-PLAN.md — CI/CD pipeline: signing env vars, updater artifact generation, latest.json assembly
 
 ## Progress
 
@@ -182,4 +182,4 @@ Recommended order: 21 -> 22 -> 23 -> 23.1 -> 24
 | 22. Multi-Provider Frontend | v0.2.6 | Complete | Complete | 2026-03-09 |
 | 23. WSL Terminal Context | v0.2.6 | Complete | Complete | 2026-03-09 |
 | 23.1. VS Code WSL Terminal Tab Detection | 2/2 | Complete   | 2026-03-09 | 2026-03-09 |
-| 24. Auto-Updater | v0.2.6 | 0/2 | Planning complete | - |
+| 24. Auto-Updater | v0.2.6 | 2/2 | Complete | 2026-03-09 |

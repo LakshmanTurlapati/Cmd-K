@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-03-08)
 
 ## Current Position
 
-Phase: 24 -- Auto-Updater (next up)
-Plan: not yet planned
-Status: Moving to Phase 24
-Last activity: 2026-03-09 -- Phase 23.1 closed with known gap (IDE terminal type detection faulty)
+Phase: 24 -- Auto-Updater
+Plan: 2 of 2
+Status: Plan 24-02 complete
+Last activity: 2026-03-09 -- Plan 24-02 complete (CI/CD updater artifacts and latest.json)
 
 Progress: [██████████] 100%
 
@@ -49,7 +49,7 @@ Progress: [██████████] 100%
 | 22. Multi-Provider Frontend | 2/2 | 6min | 3min |
 | 23. WSL Terminal Context | 2/2 | 10min | 5min |
 | 23.1 VS Code WSL Tab Detection | 2/2 | 3min | 1.5min |
-| 24. Auto-Updater | -- | -- | -- |
+| 24. Auto-Updater | 2/2 | 2min | 1min |
 
 ## Accumulated Context
 
@@ -79,6 +79,9 @@ All prior decisions archived in PROJECT.md Key Decisions table.
 - [23.1-02] Interactive shell preference (powershell, pwsh, bash, zsh, fish) applies only to IDE terminals
 - [Phase 23.1]: Removed try_focused_subtree -- VS Code doesn't expose xterm.js UIA tree without screen reader mode
 - [Phase 23.1]: Pivoted to multi-signal WSL detection: window title + full tree walk + CWD path style + shell child detection
+- [24-02] Heredoc-based latest.json assembly in release job rather than external script
+- [24-02] Both darwin-aarch64 and darwin-x86_64 point to same universal .app.tar.gz
+- [24-02] Windows .sig renamed alongside .exe to maintain filename consistency
 
 ### Pending Todos
 
@@ -95,6 +98,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-09T17:00:37.930Z
-Stopped at: Phase 24 context gathered
-Resume file: .planning/phases/24-auto-updater/24-CONTEXT.md
+Last session: 2026-03-09T17:22:30Z
+Stopped at: Completed 24-02-PLAN.md
+Resume file: .planning/phases/24-auto-updater/24-02-SUMMARY.md
