@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useOverlayStore } from "@/store";
 import { AccountTab } from "./AccountTab";
@@ -16,6 +17,21 @@ export function SettingsPanel() {
   const settingsTab = useOverlayStore((s) => s.settingsTab);
   const setSettingsTab = useOverlayStore((s) => s.setSettingsTab);
   const setMode = useOverlayStore((s) => s.setMode);
+
+  // Arrow key tab navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tabIds = TABS.map((t) => t.id) as string[];
+      const currentIndex = tabIds.indexOf(settingsTab);
+      if (e.key === "ArrowRight" && currentIndex < tabIds.length - 1) {
+        setSettingsTab(tabIds[currentIndex + 1]);
+      } else if (e.key === "ArrowLeft" && currentIndex > 0) {
+        setSettingsTab(tabIds[currentIndex - 1]);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [settingsTab, setSettingsTab]);
 
   return (
     <div className="flex flex-col gap-0 w-full">

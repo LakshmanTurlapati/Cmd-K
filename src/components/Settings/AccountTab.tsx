@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Eye, EyeOff, Check, X, Loader2, AlertCircle } from "lucide-react";
-import { useOverlayStore, ModelWithMeta } from "@/store";
+import { Store } from "@tauri-apps/plugin-store";
+import { Eye, EyeOff, Check, X, Loader2, AlertCircle, ChevronDown } from "lucide-react";
+import { useOverlayStore, PROVIDERS, ModelWithMeta } from "@/store";
 
 export function AccountTab() {
   const apiKeyStatus = useOverlayStore((s) => s.apiKeyStatus);
@@ -10,28 +11,42 @@ export function AccountTab() {
   const setApiKeyLast4 = useOverlayStore((s) => s.setApiKeyLast4);
   const setModels = useOverlayStore((s) => s.setModels);
   const selectedProvider = useOverlayStore((s) => s.selectedProvider);
+  const setSelectedProvider = useOverlayStore((s) => s.setSelectedProvider);
 
   const [inputValue, setInputValue] = useState("");
   const [revealed, setRevealed] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [providerHasKey, setProviderHasKey] = useState<Record<string, boolean>>({});
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const providerRef = useRef(selectedProvider);
 
-  // On mount: check for existing stored key and validate it
+  // Keep providerRef in sync
   useEffect(() => {
+    providerRef.current = selectedProvider;
+  }, [selectedProvider]);
+
+  // On mount / provider change: check for existing stored key and validate it
+  useEffect(() => {
+    const currentProvider = selectedProvider;
     const checkStoredKey = async () => {
       try {
-        const key = await invoke<string | null>("get_api_key", { provider: selectedProvider });
+        const key = await invoke<string | null>("get_api_key", { provider: currentProvider });
+        if (providerRef.current !== currentProvider) return;
         if (key) {
           setApiKeyLast4(key.slice(-4));
           setApiKeyStatus("validating");
           try {
-            await invoke("validate_api_key", { provider: selectedProvider, apiKey: key });
+            await invoke("validate_api_key", { provider: currentProvider, apiKey: key });
+            if (providerRef.current !== currentProvider) return;
             const models = await invoke<ModelWithMeta[]>(
               "fetch_models",
-              { provider: selectedProvider, apiKey: key }
+              { provider: currentProvider, apiKey: key }
             );
+            if (providerRef.current !== currentProvider) return;
             setApiKeyStatus("valid");
             setModels(models);
           } catch {
+            if (providerRef.current !== currentProvider) return;
             setApiKeyStatus("invalid");
           }
         }
@@ -43,6 +58,24 @@ export function AccountTab() {
     checkStoredKey();
   }, [selectedProvider]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Check which providers have stored keys when dropdown opens
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const checkKeys = async () => {
+      const result: Record<string, boolean> = {};
+      for (const p of PROVIDERS) {
+        try {
+          const key = await invoke<string | null>("get_api_key", { provider: p.id });
+          result[p.id] = !!key;
+        } catch {
+          result[p.id] = false;
+        }
+      }
+      setProviderHasKey(result);
+    };
+    checkKeys();
+  }, [dropdownOpen]);
+
   // Debounced validation when user types
   useEffect(() => {
     if (debounceRef.current) {
@@ -53,19 +86,23 @@ export function AccountTab() {
       return;
     }
 
+    const currentProvider = selectedProvider;
     debounceRef.current = setTimeout(async () => {
       setApiKeyStatus("validating");
       try {
-        await invoke("validate_api_key", { provider: selectedProvider, apiKey: inputValue });
+        await invoke("validate_api_key", { provider: currentProvider, apiKey: inputValue });
+        if (providerRef.current !== currentProvider) return;
         const models = await invoke<ModelWithMeta[]>(
           "fetch_models",
-          { provider: selectedProvider, apiKey: inputValue }
+          { provider: currentProvider, apiKey: inputValue }
         );
-        await invoke("save_api_key", { provider: selectedProvider, key: inputValue });
+        if (providerRef.current !== currentProvider) return;
+        await invoke("save_api_key", { provider: currentProvider, key: inputValue });
         setApiKeyStatus("valid");
         setModels(models);
         setApiKeyLast4(inputValue.slice(-4));
       } catch (err) {
+        if (providerRef.current !== currentProvider) return;
         const errStr = typeof err === "string" ? err : String(err);
         if (errStr.includes("invalid_key") || errStr.includes("invalid key")) {
           setApiKeyStatus("invalid");
@@ -94,13 +131,78 @@ export function AccountTab() {
     setInputValue("");
   };
 
+  const handleProviderSelect = async (providerId: string) => {
+    if (providerId === selectedProvider) {
+      setDropdownOpen(false);
+      return;
+    }
+    setSelectedProvider(providerId);
+    // Persist to settings.json
+    try {
+      const store = await Store.load("settings.json");
+      await store.set("selectedProvider", providerId);
+      await store.save();
+    } catch {
+      // Non-fatal
+    }
+    // Reset API key state for new provider
+    setApiKeyStatus("unknown");
+    setApiKeyLast4("");
+    setInputValue("");
+    setModels([]);
+    setDropdownOpen(false);
+    // The useEffect on [selectedProvider] will re-trigger checkStoredKey automatically
+  };
+
+  const currentProviderName = PROVIDERS.find((p) => p.id === selectedProvider)?.name ?? selectedProvider;
+
   const placeholder =
     inputValue.length === 0 && apiKeyLast4
       ? `****...${apiKeyLast4}`
-      : "Paste your xAI API key";
+      : `Paste your ${currentProviderName} API key`;
 
   return (
     <div className="flex flex-col gap-3">
+      {/* Provider dropdown */}
+      <div className="flex flex-col gap-1.5">
+        <p className="text-white/40 text-xs uppercase tracking-wider">
+          Provider
+        </p>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setDropdownOpen((o) => !o)}
+            className="w-full flex items-center justify-between bg-white/8 border border-white/10 rounded-lg px-3 py-2 text-sm text-white cursor-default"
+          >
+            <span>{currentProviderName}</span>
+            <ChevronDown size={14} className="text-white/40" />
+          </button>
+          {dropdownOpen && (
+            <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-[#2a2a2c]/95 backdrop-blur-xl border border-white/10 rounded-lg overflow-hidden">
+              {PROVIDERS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => handleProviderSelect(p.id)}
+                  className={[
+                    "w-full flex items-center justify-between px-3 py-2 text-sm transition-colors cursor-default",
+                    p.id === selectedProvider
+                      ? "text-white bg-white/10"
+                      : "text-white/70 hover:bg-white/8",
+                  ].join(" ")}
+                >
+                  <span>{p.name}</span>
+                  {providerHasKey[p.id] && (
+                    <Check size={14} className="text-green-400" />
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* API Key */}
       <div className="flex flex-col gap-1.5">
         <p className="text-white/40 text-xs uppercase tracking-wider">
           API Key
