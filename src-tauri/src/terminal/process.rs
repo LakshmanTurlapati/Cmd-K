@@ -835,21 +835,8 @@ fn find_shell_by_ancestry(app_pid: i32, _focused_cwd: Option<&str>) -> Option<i3
             return None;
         }
 
-        // Prefer wsl.exe over cmd.exe when both are descendants.
-        // VS Code spawns internal cmd.exe processes alongside the WSL terminal's wsl.exe.
-        // Without this preference, cmd.exe (often higher PID) would shadow wsl.exe.
-        let has_wsl = descendant_shells.iter().any(|(_, name)| name.eq_ignore_ascii_case("wsl.exe"));
-        let candidates = if has_wsl && descendant_shells.len() > 1 {
-            eprintln!("[process] preferring wsl.exe over other shells for WSL terminal detection");
-            descendant_shells.iter()
-                .filter(|(_, name)| name.eq_ignore_ascii_case("wsl.exe"))
-                .collect::<Vec<_>>()
-        } else {
-            descendant_shells.iter().collect::<Vec<_>>()
-        };
-
         // Pick the most recently spawned (highest PID) shell
-        candidates.iter()
+        descendant_shells.iter()
             .max_by_key(|(pid, _)| *pid)
             .map(|(pid, _)| *pid as i32)
     }
