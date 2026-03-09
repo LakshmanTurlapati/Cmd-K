@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 23-wsl-terminal-context
 source: [23-01-SUMMARY.md, 23-02-SUMMARY.md]
 started: 2026-03-09T11:10:00Z
@@ -68,7 +68,14 @@ skipped: 7
   reason: "User reported: WSL detection fails in both VS Code (finds cmd.exe instead of wsl.exe) and Windows Terminal (no shell found, defaults to powershell). detect_wsl_in_ancestry never called. WSL 2 processes run in VM and are invisible in Windows process tree. UIA text shows Linux prompt 'parzival@Parzival: ~' but is inferred as powershell instead of bash/WSL."
   severity: blocker
   test: 1
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "Three compounding failures: (1) detect_wsl_in_ancestry walks Windows process tree but WSL 2 processes are in Hyper-V VM, invisible to CreateToolhelp32Snapshot. (2) UIA-based WSL inference in detect_full_with_hwnd is gated by if terminal.is_wsl which is already false — circular dependency. (3) infer_shell_from_text has no pattern for user@host:path Linux prompts, defaults to powershell."
+  artifacts:
+    - path: "src-tauri/src/terminal/process.rs"
+      issue: "detect_wsl_in_ancestry (line 913) structurally cannot find WSL 2 sessions"
+    - path: "src-tauri/src/terminal/mod.rs"
+      issue: "Circular is_wsl guard at line 129; missing Linux prompt pattern in infer_shell_from_text (line 479); hardcoded powershell fallback at line 456"
+  missing:
+    - "UIA text-based WSL detection as primary mechanism (detect_wsl_from_text recognizing user@host: patterns)"
+    - "Linux prompt pattern (user@host:path) in infer_shell_from_text"
+    - "Remove circular is_wsl guard — run UIA WSL detection unconditionally"
+  debug_session: ".planning/debug/wsl-detection-failure.md"
