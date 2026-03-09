@@ -63,18 +63,10 @@ fn read_terminal_text_inner(hwnd: isize) -> Result<Option<String>, String> {
         }
     }
 
-    // Strategy 2: Focused sub-tree (VS Code/Cursor terminal)
-    // Looks for List control type (xterm.js accessibility tree) and reads only that sub-tree.
-    // This avoids capturing menu, sidebar, editor, and status bar text.
-    if let Ok(text) = try_focused_subtree(&automation, &element) {
-        if !text.is_empty() {
-            eprintln!("[uia_reader] using focused sub-tree text ({} bytes)", text.len());
-            let truncated = truncate_text(&text, TEXT_BUF_SIZE);
-            return Ok(Some(truncated));
-        }
-    }
-
-    // Strategy 3: Full tree walk (fallback for all other terminals)
+    // Strategy 2: Full tree walk (VS Code/Cursor and other terminals)
+    // For VS Code, this captures all UI text including any terminal content.
+    // WSL detection patterns in detect_wsl_from_text are specific enough to
+    // avoid false positives from menu/sidebar/editor text.
     if let Ok(text) = try_walk_children(&automation, &element) {
         if !text.is_empty() {
             let truncated = truncate_text(&text, TEXT_BUF_SIZE);
@@ -160,88 +152,6 @@ fn try_walk_children(
     Ok(text_parts.join("\n"))
 }
 
-/// Try to read terminal text from the focused element's sub-tree.
-///
-/// For VS Code/Cursor (Electron apps), the full UIA tree includes menus, sidebar,
-/// editor content, and status bar alongside terminal text. This function attempts
-/// to narrow the read by:
-/// 1. Finding child elements that are List control type (xterm.js accessibility tree)
-/// 2. Reading Name properties only from the largest List sub-tree
-///
-/// Returns Err if no terminal-like sub-tree is found (caller falls back to
-/// try_walk_children for full-tree scan).
-#[cfg(target_os = "windows")]
-fn try_focused_subtree(
-    automation: &UIAutomation,
-    root: &uiautomation::UIElement,
-) -> Result<String, String> {
-    use uiautomation::types::UIProperty;
-
-    // Strategy: Find List control type elements (xterm.js accessibility tree).
-    // xterm.js renders terminal rows as list items inside a list container.
-    // Filter to lists that have substantial text content (terminal output, not a dropdown menu).
-    let list_condition = automation
-        .create_property_condition(
-            UIProperty::ControlType,
-            (uiautomation::types::ControlType::List as i32).into(),
-            None,
-        )
-        .map_err(|e| format!("create list condition failed: {}", e))?;
-
-    let lists = root
-        .find_all(TreeScope::Descendants, &list_condition)
-        .map_err(|e| format!("find list elements failed: {}", e))?;
-
-    if lists.is_empty() {
-        return Err("No List control found in UIA tree".to_string());
-    }
-
-    eprintln!("[uia_reader] try_focused_subtree: found {} List elements", lists.len());
-
-    // Collect text from ALL List elements (not just the largest).
-    // VS Code has multiple Lists: Explorer sidebar, terminal (xterm.js), etc.
-    // We concatenate all of them so detect_wsl_from_text can find WSL patterns
-    // regardless of which List contains the terminal output.
-    let mut all_text_parts: Vec<String> = Vec::new();
-    let mut total_len = 0usize;
-
-    let true_condition = automation
-        .create_true_condition()
-        .map_err(|e| format!("create_true_condition failed: {}", e))?;
-
-    for list in &lists {
-        if total_len >= TEXT_BUF_SIZE {
-            break;
-        }
-
-        if let Ok(children) = list.find_all(TreeScope::Descendants, &true_condition) {
-            for child in children {
-                if total_len >= TEXT_BUF_SIZE {
-                    break;
-                }
-                if let Ok(name) = child.get_name() {
-                    if !name.is_empty() && name.len() > 1 {
-                        total_len += name.len();
-                        all_text_parts.push(name);
-                    }
-                }
-            }
-        }
-    }
-
-    if all_text_parts.is_empty() || total_len < 20 {
-        return Err(format!(
-            "List elements found but insufficient text ({} bytes)",
-            total_len
-        ));
-    }
-
-    eprintln!(
-        "[uia_reader] try_focused_subtree: extracted {} bytes from {} List elements",
-        total_len, lists.len()
-    );
-    Ok(all_text_parts.join("\n"))
-}
 
 /// Reject UIA text that's clearly window chrome (title bar buttons), not terminal content.
 /// VS Code sometimes returns "Title\nMinimize\nRestore\nClose" from TextPattern.

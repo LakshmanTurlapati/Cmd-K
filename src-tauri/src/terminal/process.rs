@@ -123,9 +123,31 @@ pub fn get_foreground_info(terminal_pid: i32) -> ProcessInfo {
     // Check if a foreground process is running inside the shell (e.g., node, python)
     let running_process = find_running_process(shell_pid, &shell_name);
 
-    // Detect WSL session on Windows by checking if wsl.exe is in the process ancestry
+    // Detect WSL session on Windows
     #[cfg(target_os = "windows")]
-    let is_wsl = detect_wsl_in_ancestry(shell_pid);
+    let is_wsl = {
+        // Check 1: wsl.exe in the process ancestry (existing)
+        let mut wsl = detect_wsl_in_ancestry(shell_pid);
+
+        // Check 2: wsl.exe as a CHILD of the shell process (VS Code WSL terminal)
+        // VS Code WSL terminal: Code.exe → cmd.exe → wsl.exe → bash (in Linux VM)
+        // detect_wsl_in_ancestry walks UP and misses this because wsl.exe is below cmd.exe.
+        // This is safe — only checks children of the specific selected shell, not all 16+ wsl.exe system-wide.
+        if !wsl {
+            let children = get_child_pids(shell_pid);
+            for &child in &children {
+                if let Some(name) = get_process_name(child) {
+                    if name.eq_ignore_ascii_case("wsl") {
+                        eprintln!("[process] WSL detected: wsl.exe (pid {}) is child of shell pid {}", child, shell_pid);
+                        wsl = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        wsl
+    };
     #[cfg(not(target_os = "windows"))]
     let is_wsl = false;
 
