@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Store } from "@tauri-apps/plugin-store";
-import { useOverlayStore, XaiModelWithMeta } from "@/store";
+import { useOverlayStore, ModelWithMeta } from "@/store";
 import { useKeyboard } from "@/hooks/useKeyboard";
 import { useWindowAutoSize } from "@/hooks/useWindowAutoSize";
 import { useDrag } from "@/hooks/useDrag";
@@ -72,12 +72,14 @@ function App() {
 
           // Check if API key already exists (edge case: user saved key then closed)
           try {
-            const existingKey = await invoke<string | null>("get_api_key");
+            const provider = useOverlayStore.getState().selectedProvider;
+            const existingKey = await invoke<string | null>("get_api_key", { provider });
             if (existingKey) {
               // Validate existing key and pre-populate store state
-              const models = await invoke<XaiModelWithMeta[]>(
-                "validate_and_fetch_models",
-                { apiKey: existingKey }
+              await invoke("validate_api_key", { provider, apiKey: existingKey });
+              const models = await invoke<ModelWithMeta[]>(
+                "fetch_models",
+                { provider, apiKey: existingKey }
               );
               setApiKeyStatus("valid");
               setModels(models);
@@ -107,12 +109,14 @@ function App() {
 
           // Onboarding done -- load API key status and models for settings panel
           try {
-            const existingKey = await invoke<string | null>("get_api_key");
+            const provider2 = useOverlayStore.getState().selectedProvider;
+            const existingKey = await invoke<string | null>("get_api_key", { provider: provider2 });
             if (existingKey) {
               setApiKeyLast4(existingKey.slice(-4));
-              const models = await invoke<XaiModelWithMeta[]>(
-                "validate_and_fetch_models",
-                { apiKey: existingKey }
+              await invoke("validate_api_key", { provider: provider2, apiKey: existingKey });
+              const models = await invoke<ModelWithMeta[]>(
+                "fetch_models",
+                { provider: provider2, apiKey: existingKey }
               );
               setApiKeyStatus("valid");
               setModels(models);

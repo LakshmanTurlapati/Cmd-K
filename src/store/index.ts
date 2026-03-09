@@ -3,10 +3,14 @@ import { invoke, Channel } from "@tauri-apps/api/core";
 
 export type OverlayMode = "command" | "onboarding" | "settings";
 
-export interface XaiModelWithMeta {
+export interface ModelWithMeta {
   id: string;
   label: string;
+  tier: string;
 }
+
+/** @deprecated Use ModelWithMeta instead. Kept for backward compatibility during migration. */
+export type XaiModelWithMeta = ModelWithMeta;
 
 export interface TerminalContext {
   shell_type: string | null;
@@ -82,7 +86,8 @@ interface OverlayState {
   apiKeyStatus: "unknown" | "validating" | "valid" | "invalid" | "error";
   apiKeyLast4: string;
   selectedModel: string | null;
-  availableModels: XaiModelWithMeta[];
+  selectedProvider: string;
+  availableModels: ModelWithMeta[];
 
   // Settings panel
   settingsTab: string;
@@ -136,7 +141,8 @@ interface OverlayState {
     status: "unknown" | "validating" | "valid" | "invalid" | "error"
   ) => void;
   setApiKeyLast4: (last4: string) => void;
-  setModels: (models: XaiModelWithMeta[]) => void;
+  setSelectedProvider: (provider: string) => void;
+  setModels: (models: ModelWithMeta[]) => void;
   setSelectedModel: (model: string) => void;
   setSettingsTab: (tab: string) => void;
 
@@ -192,6 +198,7 @@ export const useOverlayStore = create<OverlayState>((set) => ({
 
   apiKeyStatus: "unknown",
   apiKeyLast4: "",
+  selectedProvider: "xai",
   selectedModel: null,
   availableModels: [],
 
@@ -376,7 +383,8 @@ export const useOverlayStore = create<OverlayState>((set) => ({
 
   setApiKeyLast4: (last4: string) => set({ apiKeyLast4: last4 }),
 
-  setModels: (models: XaiModelWithMeta[]) => set({ availableModels: models }),
+  setSelectedProvider: (provider) => set({ selectedProvider: provider }),
+  setModels: (models: ModelWithMeta[]) => set({ availableModels: models }),
 
   setSelectedModel: (model: string) => set({ selectedModel: model }),
 
@@ -473,6 +481,7 @@ export const useOverlayStore = create<OverlayState>((set) => ({
         };
 
         await invoke("stream_ai_response", {
+          provider: state.selectedProvider,
           query,
           model: selectedModel,
           contextJson,

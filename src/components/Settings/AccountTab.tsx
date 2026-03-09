@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Eye, EyeOff, Check, X, Loader2, AlertCircle } from "lucide-react";
-import { useOverlayStore, XaiModelWithMeta } from "@/store";
+import { useOverlayStore, ModelWithMeta } from "@/store";
 
 export function AccountTab() {
   const apiKeyStatus = useOverlayStore((s) => s.apiKeyStatus);
@@ -9,6 +9,7 @@ export function AccountTab() {
   const setApiKeyStatus = useOverlayStore((s) => s.setApiKeyStatus);
   const setApiKeyLast4 = useOverlayStore((s) => s.setApiKeyLast4);
   const setModels = useOverlayStore((s) => s.setModels);
+  const selectedProvider = useOverlayStore((s) => s.selectedProvider);
 
   const [inputValue, setInputValue] = useState("");
   const [revealed, setRevealed] = useState(false);
@@ -18,14 +19,15 @@ export function AccountTab() {
   useEffect(() => {
     const checkStoredKey = async () => {
       try {
-        const key = await invoke<string | null>("get_api_key");
+        const key = await invoke<string | null>("get_api_key", { provider: selectedProvider });
         if (key) {
           setApiKeyLast4(key.slice(-4));
           setApiKeyStatus("validating");
           try {
-            const models = await invoke<XaiModelWithMeta[]>(
-              "validate_and_fetch_models",
-              { apiKey: key }
+            await invoke("validate_api_key", { provider: selectedProvider, apiKey: key });
+            const models = await invoke<ModelWithMeta[]>(
+              "fetch_models",
+              { provider: selectedProvider, apiKey: key }
             );
             setApiKeyStatus("valid");
             setModels(models);
@@ -39,7 +41,7 @@ export function AccountTab() {
     };
 
     checkStoredKey();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedProvider]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounced validation when user types
   useEffect(() => {
@@ -54,11 +56,12 @@ export function AccountTab() {
     debounceRef.current = setTimeout(async () => {
       setApiKeyStatus("validating");
       try {
-        const models = await invoke<XaiModelWithMeta[]>(
-          "validate_and_fetch_models",
-          { apiKey: inputValue }
+        await invoke("validate_api_key", { provider: selectedProvider, apiKey: inputValue });
+        const models = await invoke<ModelWithMeta[]>(
+          "fetch_models",
+          { provider: selectedProvider, apiKey: inputValue }
         );
-        await invoke("save_api_key", { key: inputValue });
+        await invoke("save_api_key", { provider: selectedProvider, key: inputValue });
         setApiKeyStatus("valid");
         setModels(models);
         setApiKeyLast4(inputValue.slice(-4));
@@ -81,7 +84,7 @@ export function AccountTab() {
 
   const handleDelete = async () => {
     try {
-      await invoke("delete_api_key");
+      await invoke("delete_api_key", { provider: selectedProvider });
     } catch {
       // Best-effort delete
     }
