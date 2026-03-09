@@ -75,7 +75,7 @@
   3. Existing v0.2.4 users upgrading see their xAI API key preserved automatically with xAI as default provider
   4. User can validate any provider's API key and see a provider-specific success or error message
   5. User can generate a command and see it stream in real-time from any of the 5 providers
-**Plans:** 2/2 plans complete
+**Plans:** 3 plans (2 complete + 1 gap closure)
 
 Plans:
 - [ ] 21-01-PLAN.md — Provider enum, 3 streaming adapters, parameterized keychain, v0.2.4 migration
@@ -91,7 +91,7 @@ Plans:
   3. User can pick a model from a dropdown that shows only models for their selected provider, grouped by capability tier (Fast, Balanced, Most Capable)
   4. User can switch providers without losing their conversation history
   5. User with an OpenRouter API key can access models from multiple providers through a single key, with the model list filtered to chat-capable models
-**Plans:** 2/2 plans complete
+**Plans:** 3 plans (2 complete + 1 gap closure)
 
 Plans:
 - [ ] 22-01-PLAN.md — Provider selection in onboarding + store foundation (StepProviderSelect, 5-step wizard, provider-aware text, App.tsx startup loading)
@@ -107,11 +107,12 @@ Plans:
   3. User can read visible terminal output from WSL sessions for AI context
   4. User asking for a command in a WSL session gets a Linux command (not a Windows command)
   5. Destructive Linux command patterns (rm -rf, systemctl, etc.) are applied when the user is in a WSL session
-**Plans:** 2/2 plans complete
+**Plans:** 3 plans (2 complete + 1 gap closure)
 
 Plans:
 - [ ] 23-01-PLAN.md — WSL detection in process tree, Linux CWD/shell reading, secret filtering
 - [ ] 23-02-PLAN.md — WSL system prompt, safety awareness, frontend badge
+- [ ] 23-03-PLAN.md — Gap closure: UIA text-based WSL detection (fixes WSL 2 detection failure)
 
 ### Phase 24: Auto-Updater
 **Goal**: Users are notified of new versions and can update with one click without forced restarts
