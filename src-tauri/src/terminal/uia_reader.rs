@@ -54,9 +54,10 @@ fn read_terminal_text_inner(hwnd: isize) -> Result<Option<String>, String> {
         .element_from_handle(Handle::from(hwnd))
         .map_err(|e| format!("element_from_handle failed: {}", e))?;
 
-    // Try to get text via TextPattern first (most reliable for terminals)
+    // Try to get text via TextPattern first (most reliable for terminals).
+    // Reject if it looks like VS Code window chrome (short text with "Minimize"/"Close").
     if let Ok(text) = try_text_pattern(&element) {
-        if !text.is_empty() {
+        if !text.is_empty() && !is_window_chrome(&text) {
             let truncated = truncate_text(&text, TEXT_BUF_SIZE);
             return Ok(Some(truncated));
         }
@@ -197,18 +198,21 @@ fn try_focused_subtree(
 
     eprintln!("[uia_reader] try_focused_subtree: found {} List elements", lists.len());
 
-    // Among List elements, find the one with the most text content.
-    // The terminal's xterm accessibility tree will have many rows of text.
-    let mut best_text = String::new();
-    let mut best_len = 0usize;
+    // Collect text from ALL List elements (not just the largest).
+    // VS Code has multiple Lists: Explorer sidebar, terminal (xterm.js), etc.
+    // We concatenate all of them so detect_wsl_from_text can find WSL patterns
+    // regardless of which List contains the terminal output.
+    let mut all_text_parts: Vec<String> = Vec::new();
+    let mut total_len = 0usize;
 
     let true_condition = automation
         .create_true_condition()
         .map_err(|e| format!("create_true_condition failed: {}", e))?;
 
     for list in &lists {
-        let mut text_parts: Vec<String> = Vec::new();
-        let mut total_len = 0usize;
+        if total_len >= TEXT_BUF_SIZE {
+            break;
+        }
 
         if let Ok(children) = list.find_all(TreeScope::Descendants, &true_condition) {
             for child in children {
@@ -218,30 +222,32 @@ fn try_focused_subtree(
                 if let Ok(name) = child.get_name() {
                     if !name.is_empty() && name.len() > 1 {
                         total_len += name.len();
-                        text_parts.push(name);
+                        all_text_parts.push(name);
                     }
                 }
             }
         }
-
-        if total_len > best_len {
-            best_len = total_len;
-            best_text = text_parts.join("\n");
-        }
     }
 
-    if best_text.is_empty() || best_len < 20 {
+    if all_text_parts.is_empty() || total_len < 20 {
         return Err(format!(
             "List elements found but insufficient text ({} bytes)",
-            best_len
+            total_len
         ));
     }
 
     eprintln!(
-        "[uia_reader] try_focused_subtree: extracted {} bytes from terminal List element",
-        best_len
+        "[uia_reader] try_focused_subtree: extracted {} bytes from {} List elements",
+        total_len, lists.len()
     );
-    Ok(best_text)
+    Ok(all_text_parts.join("\n"))
+}
+
+/// Reject UIA text that's clearly window chrome (title bar buttons), not terminal content.
+/// VS Code sometimes returns "Title\nMinimize\nRestore\nClose" from TextPattern.
+#[cfg(target_os = "windows")]
+fn is_window_chrome(text: &str) -> bool {
+    text.len() < 200 && text.contains("Minimize") && text.contains("Close")
 }
 
 /// Truncate text to a maximum byte size, splitting on a newline boundary.
