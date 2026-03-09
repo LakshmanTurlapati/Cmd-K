@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: executing
-stopped_at: Completed 22-02-PLAN.md
-last_updated: "2026-03-09T08:57:21.279Z"
+stopped_at: Phase 23 context gathered
+last_updated: "2026-03-09T09:29:16.879Z"
 last_activity: 2026-03-09 -- Phase 22 plan 02 complete (settings provider switching and tier-grouped models)
 progress:
   total_phases: 4
@@ -78,6 +78,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-09T08:53:01Z
-Stopped at: Completed 22-02-PLAN.md
-Resume file: .planning/phases/22-multi-provider-frontend/22-02-SUMMARY.md
+Last session: 2026-03-09T09:29:16.864Z
+Stopped at: Phase 23 context gathered
+Resume file: .planning/phases/23-wsl-terminal-context/23-CONTEXT.md
