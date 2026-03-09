@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v0.2.6
 milestone_name: Multi-Provider, WSL & Auto-Update
-status: defining_requirements
-last_updated: "2026-03-08"
+status: ready_to_plan
+last_updated: "2026-03-09"
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -18,47 +18,41 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-08)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Defining requirements for v0.2.6
+**Current focus:** Phase 21 -- Provider Abstraction Layer
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-08 — Milestone v0.2.6 started
+Phase: 21 (first of 4 in v0.2.6) -- Provider Abstraction Layer
+Plan: --
+Status: Ready to plan
+Last activity: 2026-03-09 -- Roadmap created for v0.2.6
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
-**v0.1.0 Summary:**
-- Total phases: 8
-- Total plans: 21
-- Timeline: 8 days (2026-02-21 to 2026-02-28)
-- Codebase: 4,042 LOC Rust + 2,868 LOC TypeScript
+**Prior Milestones:**
+- v0.1.0: 8 phases, 21 plans, 8 days
+- v0.1.1: 3 phases, 6 plans, 2 days
+- v0.2.1: 7 phases, 11 plans, 3 days
+- v0.2.4: 4 phases, 5 plans, 2 days
+- Cumulative: 22 phases, 43 plans, 15 days
 
-**v0.1.1 Summary:**
-- Total phases: 3 (Phases 8-10)
-- Total plans: 6
-- Timeline: 2 days (2026-02-28 to 2026-03-01)
-- Git: 32 commits, 47 files changed, 4,637 insertions
+**v0.2.6:**
 
-**v0.2.1 Summary:**
-- Total phases: 7 (11-16, 01-merge)
-- Total plans: 6 GSD + 5 windows-branch
-- Timeline: 3 days (2026-03-01 to 2026-03-03)
-- Git: 30 commits, 48 files changed, 4,734 insertions
-
-**v0.2.4 Summary:**
-- Total phases: 4 (17-20)
-- Total plans: 5
-- Timeline: 2 days (2026-03-03 to 2026-03-04)
-- Git: 30 commits, 41 files changed, 3,528 insertions
-- Codebase: 6,121 LOC Rust
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| 21. Provider Abstraction | -- | -- | -- |
+| 22. Multi-Provider Frontend | -- | -- | -- |
+| 23. WSL Terminal Context | -- | -- | -- |
+| 24. Auto-Updater | -- | -- | -- |
 
 ## Accumulated Context
 
 ### Decisions
 
-All decisions archived in PROJECT.md Key Decisions table.
+All prior decisions archived in PROJECT.md Key Decisions table.
+No new decisions yet for v0.2.6.
 
 ### Pending Todos
 
@@ -66,9 +60,10 @@ None.
 
 ### Blockers/Concerns
 
-None.
+- Phase 24 (Auto-Updater): Ed25519 signing keypair MUST be generated and added to CI secrets before the first updater-enabled release ships. If missed, those users can never auto-update.
 
 ## Session Continuity
 
-Last session: 2026-03-08 (Milestone v0.2.6 started)
-Stopped at: Defining requirements
+Last session: 2026-03-09
+Stopped at: Roadmap created for v0.2.6, ready to plan Phase 21
+Resume file: None

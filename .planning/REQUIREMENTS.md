@@ -72,51 +72,51 @@ Requirements for multi-provider AI, WSL terminal context, and auto-updater.
 | Proxy/relay server for API calls | Adds infrastructure cost, privacy concerns, maintenance burden |
 | Forced auto-update | Breaks user trust, enterprise users need version pinning |
 | WSL file system browsing | Out of scope for a command overlay |
-| Full WSL process tree walking | Slow, unnecessary — wsl.exe -e commands suffice |
-| Auto-select "best" provider | Users have strong preferences — let them choose explicitly |
+| Full WSL process tree walking | Slow, unnecessary -- wsl.exe -e commands suffice |
+| Auto-select "best" provider | Users have strong preferences -- let them choose explicitly |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PROV-01 | — | Pending |
-| PROV-02 | — | Pending |
-| PROV-03 | — | Pending |
-| PROV-04 | — | Pending |
-| PROV-05 | — | Pending |
-| PROV-06 | — | Pending |
-| PROV-07 | — | Pending |
-| PFUI-01 | — | Pending |
-| PFUI-02 | — | Pending |
-| PFUI-03 | — | Pending |
-| PFUI-04 | — | Pending |
-| PFUI-05 | — | Pending |
-| ORTR-01 | — | Pending |
-| ORTR-02 | — | Pending |
-| WSLT-01 | — | Pending |
-| WSLT-02 | — | Pending |
-| WSLT-03 | — | Pending |
-| WSLT-04 | — | Pending |
-| WSLT-05 | — | Pending |
-| WSLT-06 | — | Pending |
-| WSLT-07 | — | Pending |
-| WSLT-08 | — | Pending |
-| WSLT-09 | — | Pending |
-| WSLT-10 | — | Pending |
-| UPDT-01 | — | Pending |
-| UPDT-02 | — | Pending |
-| UPDT-03 | — | Pending |
-| UPDT-04 | — | Pending |
-| UPDT-05 | — | Pending |
-| UPDT-06 | — | Pending |
-| UPDT-07 | — | Pending |
-| UPDT-08 | — | Pending |
+| PROV-01 | Phase 21 | Pending |
+| PROV-02 | Phase 21 | Pending |
+| PROV-03 | Phase 21 | Pending |
+| PROV-04 | Phase 21 | Pending |
+| PROV-05 | Phase 21 | Pending |
+| PROV-06 | Phase 21 | Pending |
+| PROV-07 | Phase 21 | Pending |
+| PFUI-01 | Phase 22 | Pending |
+| PFUI-02 | Phase 22 | Pending |
+| PFUI-03 | Phase 22 | Pending |
+| PFUI-04 | Phase 22 | Pending |
+| PFUI-05 | Phase 22 | Pending |
+| ORTR-01 | Phase 22 | Pending |
+| ORTR-02 | Phase 22 | Pending |
+| WSLT-01 | Phase 23 | Pending |
+| WSLT-02 | Phase 23 | Pending |
+| WSLT-03 | Phase 23 | Pending |
+| WSLT-04 | Phase 23 | Pending |
+| WSLT-05 | Phase 23 | Pending |
+| WSLT-06 | Phase 23 | Pending |
+| WSLT-07 | Phase 23 | Pending |
+| WSLT-08 | Phase 23 | Pending |
+| WSLT-09 | Phase 23 | Pending |
+| WSLT-10 | Phase 23 | Pending |
+| UPDT-01 | Phase 24 | Pending |
+| UPDT-02 | Phase 24 | Pending |
+| UPDT-03 | Phase 24 | Pending |
+| UPDT-04 | Phase 24 | Pending |
+| UPDT-05 | Phase 24 | Pending |
+| UPDT-06 | Phase 24 | Pending |
+| UPDT-07 | Phase 24 | Pending |
+| UPDT-08 | Phase 24 | Pending |
 
 **Coverage:**
 - v0.2.6 requirements: 32 total
-- Mapped to phases: 0
-- Unmapped: 32 (pending roadmap creation)
+- Mapped to phases: 32
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-08*
-*Last updated: 2026-03-08 after initial definition*
+*Last updated: 2026-03-09 after roadmap creation*

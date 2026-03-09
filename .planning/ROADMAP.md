@@ -6,6 +6,7 @@
 - v0.1.1 Command History & Follow-ups -- Phases 8-10 (shipped 2026-03-01) | [Archive](milestones/v0.1.1-ROADMAP.md)
 - v0.2.1 Windows Support -- Phases 11-16, 01-merge (shipped 2026-03-03) | [Archive](milestones/v0.2.1-ROADMAP.md)
 - v0.2.4 Overlay UX, Safety & CI/CD -- Phases 17-20 (shipped 2026-03-04) | [Archive](milestones/v0.2.4-ROADMAP.md)
+- v0.2.6 Multi-Provider, WSL & Auto-Update -- Phases 21-24 (in progress)
 
 ## Phases
 
@@ -55,7 +56,84 @@
 
 </details>
 
+### v0.2.6 Multi-Provider, WSL & Auto-Update (In Progress)
+
+- [ ] **Phase 21: Provider Abstraction Layer** - Rust backend with provider enum, per-provider streaming, parameterized keychain, and v0.2.4 migration
+- [ ] **Phase 22: Multi-Provider Frontend** - Provider selection in onboarding and settings, model picker, OpenRouter integration
+- [ ] **Phase 23: WSL Terminal Context** - Detect WSL sessions, read CWD/shell/output, generate Linux commands, apply Linux safety patterns
+- [ ] **Phase 24: Auto-Updater** - Check on launch, tray notification, signed updates, CI/CD manifest generation
+
+## Phase Details
+
+### Phase 21: Provider Abstraction Layer
+**Goal**: Users can generate commands from any of the 5 supported AI providers with correct streaming, key storage, and error handling
+**Depends on**: Phase 20 (v0.2.4 shipped baseline)
+**Requirements**: PROV-01, PROV-02, PROV-03, PROV-04, PROV-05, PROV-06, PROV-07
+**Success Criteria** (what must be TRUE):
+  1. User can select a provider (OpenAI, Anthropic, Google Gemini, xAI, OpenRouter) and the selection persists across app restarts
+  2. User can store and retrieve a separate API key per provider using the platform keychain
+  3. Existing v0.2.4 users upgrading see their xAI API key preserved automatically with xAI as default provider
+  4. User can validate any provider's API key and see a provider-specific success or error message
+  5. User can generate a command and see it stream in real-time from any of the 5 providers
+**Plans**: TBD
+
+Plans:
+- [ ] 21-01: TBD
+- [ ] 21-02: TBD
+
+### Phase 22: Multi-Provider Frontend
+**Goal**: Users can discover, select, and switch providers through polished onboarding and settings UI
+**Depends on**: Phase 21 (backend IPC signatures must be stable)
+**Requirements**: PFUI-01, PFUI-02, PFUI-03, PFUI-04, PFUI-05, ORTR-01, ORTR-02
+**Success Criteria** (what must be TRUE):
+  1. New user can pick their preferred provider during first-run onboarding and proceed to API key entry
+  2. User can switch providers in the settings Account tab and the overlay immediately uses the new provider
+  3. User can pick a model from a dropdown that shows only models for their selected provider, grouped by capability tier (Fast, Balanced, Most Capable)
+  4. User can switch providers without losing their conversation history
+  5. User with an OpenRouter API key can access models from multiple providers through a single key, with the model list filtered to chat-capable models
+**Plans**: TBD
+
+Plans:
+- [ ] 22-01: TBD
+- [ ] 22-02: TBD
+
+### Phase 23: WSL Terminal Context
+**Goal**: Users in WSL sessions get the same context-aware command generation experience as native terminal users
+**Depends on**: Phase 21 (independent of Phase 22; can run after Phase 21 or in parallel with Phase 22)
+**Requirements**: WSLT-01, WSLT-02, WSLT-03, WSLT-04, WSLT-05, WSLT-06, WSLT-07, WSLT-08, WSLT-09, WSLT-10
+**Success Criteria** (what must be TRUE):
+  1. User in a WSL session (Windows Terminal, VS Code Remote-WSL, Cursor Remote-WSL, or standalone wsl.exe) triggers CMD+K and the app detects it as a WSL session
+  2. User sees their Linux CWD and shell type (bash, zsh, fish) in the context badge, with the WSL distro name displayed (e.g., "bash (WSL: Ubuntu)")
+  3. User can read visible terminal output from WSL sessions for AI context
+  4. User asking for a command in a WSL session gets a Linux command (not a Windows command)
+  5. Destructive Linux command patterns (rm -rf, systemctl, etc.) are applied when the user is in a WSL session
+**Plans**: TBD
+
+Plans:
+- [ ] 23-01: TBD
+- [ ] 23-02: TBD
+
+### Phase 24: Auto-Updater
+**Goal**: Users are notified of new versions and can update with one click without forced restarts
+**Depends on**: Phase 21 (independent of Phases 22-23; can run after Phase 21 or in parallel)
+**Requirements**: UPDT-01, UPDT-02, UPDT-03, UPDT-04, UPDT-05, UPDT-06, UPDT-07, UPDT-08
+**Success Criteria** (what must be TRUE):
+  1. User launches the app and it checks for updates silently without blocking the UI
+  2. User sees an "Update Available" indicator in the tray menu when a new version exists, and can dismiss it until next launch
+  3. User can download and install the update with one click from the tray, with the update applied on next app launch (no forced restart)
+  4. Updates are cryptographically signed (Ed25519) and verified before installation
+  5. CI/CD pipeline produces signed update artifacts and a latest.json manifest alongside existing release artifacts
+**Plans**: TBD
+
+Plans:
+- [ ] 24-01: TBD
+- [ ] 24-02: TBD
+
 ## Progress
+
+**Execution Order:**
+Phases 21 and 22 are sequential (22 depends on 21). Phases 23 and 24 are independent of each other and can follow Phase 21.
+Recommended order: 21 -> 22 -> 23 -> 24
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -81,3 +159,7 @@
 | 18. Draggable Overlay Positioning | v0.2.4 | 1/1 | Complete | 2026-03-03 |
 | 19. Exhaustive Destructive Patterns | v0.2.4 | 1/1 | Complete | 2026-03-04 |
 | 20. CI/CD Pipeline | v0.2.4 | 2/2 | Complete | 2026-03-04 |
+| 21. Provider Abstraction Layer | v0.2.6 | 0/TBD | Not started | - |
+| 22. Multi-Provider Frontend | v0.2.6 | 0/TBD | Not started | - |
+| 23. WSL Terminal Context | v0.2.6 | 0/TBD | Not started | - |
+| 24. Auto-Updater | v0.2.6 | 0/TBD | Not started | - |
