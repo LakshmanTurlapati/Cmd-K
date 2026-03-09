@@ -30,7 +30,6 @@ pub const KNOWN_TERMINAL_EXES: &[&str] = &[
     "mintty.exe",
     "hyper.exe",
     "conhost.exe",
-    "wsl.exe",
 ];
 
 /// Known IDE executables with integrated terminals.
@@ -155,7 +154,6 @@ pub fn clean_exe_name(exe: &str) -> String {
         "kitty.exe" => "kitty".to_string(),
         "mintty.exe" => "mintty".to_string(),
         "hyper.exe" => "Hyper".to_string(),
-        "wsl.exe" => "WSL".to_string(),
         _ => exe.trim_end_matches(".exe").to_string(),
     }
 }
