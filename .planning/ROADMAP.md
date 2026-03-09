@@ -75,11 +75,11 @@
   3. Existing v0.2.4 users upgrading see their xAI API key preserved automatically with xAI as default provider
   4. User can validate any provider's API key and see a provider-specific success or error message
   5. User can generate a command and see it stream in real-time from any of the 5 providers
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 21-01: TBD
-- [ ] 21-02: TBD
+- [ ] 21-01-PLAN.md — Provider enum, 3 streaming adapters, parameterized keychain, v0.2.4 migration
+- [ ] 21-02-PLAN.md — Per-provider key validation, model fetching, frontend IPC updates
 
 ### Phase 22: Multi-Provider Frontend
 **Goal**: Users can discover, select, and switch providers through polished onboarding and settings UI
@@ -159,7 +159,7 @@ Recommended order: 21 -> 22 -> 23 -> 24
 | 18. Draggable Overlay Positioning | v0.2.4 | 1/1 | Complete | 2026-03-03 |
 | 19. Exhaustive Destructive Patterns | v0.2.4 | 1/1 | Complete | 2026-03-04 |
 | 20. CI/CD Pipeline | v0.2.4 | 2/2 | Complete | 2026-03-04 |
-| 21. Provider Abstraction Layer | v0.2.6 | 0/TBD | Not started | - |
+| 21. Provider Abstraction Layer | v0.2.6 | 0/2 | Not started | - |
 | 22. Multi-Provider Frontend | v0.2.6 | 0/TBD | Not started | - |
 | 23. WSL Terminal Context | v0.2.6 | 0/TBD | Not started | - |
 | 24. Auto-Updater | v0.2.6 | 0/TBD | Not started | - |
