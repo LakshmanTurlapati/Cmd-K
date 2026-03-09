@@ -36,7 +36,7 @@
       "endpoints": [
         "https://github.com/LakshmanTurlapati/Cmd-K/releases/latest/download/latest.json"
       ],
-      "pubkey": "UPDATER_PUBKEY_PLACEHOLDER",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEU5NENFQTFDQjJGNTlFNDMKUldSRG52V3lIT3BNNlI5eXlxUmtaU0NHcGt5ckZnb0xzOTFCZ0NQRzd0eUptTW05RDNPdFY1NTcK",
       "windows": {
         "installMode": "passive"
       }
