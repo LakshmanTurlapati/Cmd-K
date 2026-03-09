@@ -1,5 +1,6 @@
 mod commands;
 mod state;
+#[allow(dead_code)]
 mod terminal;
 
 use commands::{
@@ -15,6 +16,7 @@ use commands::{
     window::{hide_overlay, show_overlay, set_overlay_position},
     models::{validate_api_key, fetch_models},
 };
+use commands::updater;
 use state::AppState;
 use tauri::Manager;
 use tauri_plugin_store::StoreExt;
@@ -74,6 +76,7 @@ fn migrate_v024_api_key(app: &tauri::App) {
 }
 
 pub fn run() {
+    #[allow(unused_mut)]
     let mut builder = tauri::Builder::default();
 
     // NSPanel plugin for floating overlay above fullscreen apps (macOS only)
@@ -91,8 +94,12 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         // HTTP plugin for Rust-side AI API calls (API keys stay off the JS layer)
         .plugin(tauri_plugin_http::init())
+        // Updater plugin for auto-update lifecycle (check, download, verify, install)
+        .plugin(tauri_plugin_updater::Builder::new().build())
         // Shared application state
         .manage(AppState::default())
+        // Update state (separate from AppState; Update is not Default)
+        .manage(updater::create_update_state())
         .setup(|app| {
             // CRITICAL: Set ActivationPolicy::Accessory FIRST before any window operations.
             // This:
@@ -222,6 +229,9 @@ pub fn run() {
             // Window is configured as `visible: false` in tauri.conf.json,
             // but ensure it's hidden in case the config is overridden
             window.hide().ok();
+
+            // Spawn background update checker (non-blocking: checks on launch + every 24h)
+            updater::spawn_update_checker(app.handle().clone());
 
             Ok(())
         })

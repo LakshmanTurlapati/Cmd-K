@@ -2,6 +2,36 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Mutex;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
+/// Update lifecycle status, drives tray menu text.
+#[derive(Debug, Clone)]
+pub enum UpdateStatus {
+    /// No update activity -- menu shows "Check for Updates..."
+    Idle,
+    /// Actively checking for updates -- menu shows "Checking for Updates..."
+    Checking,
+    /// Update found -- menu shows "Update Available (vX.Y.Z)"
+    Available(String),
+    /// Downloading update -- menu shows "Downloading vX.Y.Z..."
+    Downloading(String),
+    /// Downloaded and ready -- menu shows "Update Ready (restart to apply)"
+    Ready(String),
+    /// Auto-check disabled by user -- menu shows "Check for Updates..."
+    Disabled,
+}
+
+/// Managed state for the auto-updater, separate from AppState because
+/// `tauri_plugin_updater::Update` is not `Default`.
+pub struct UpdateState {
+    /// Current update lifecycle status
+    pub status: Mutex<UpdateStatus>,
+    /// The pending update object (needed for install)
+    pub pending_update: Mutex<Option<tauri_plugin_updater::Update>>,
+    /// Downloaded update bytes (needed for install)
+    pub pending_bytes: Mutex<Option<Vec<u8>>>,
+    /// Reference to the tray menu item for text updates
+    pub menu_item: Mutex<Option<tauri::menu::MenuItem<tauri::Wry>>>,
+}
+
 /// Maximum number of history entries per window key.
 /// Increased from 7 to 50 to match the configurable turn limit slider max (5-50).
 /// Memory impact is negligible (~100KB per window at 50 entries).

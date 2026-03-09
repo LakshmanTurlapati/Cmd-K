@@ -8,5 +8,6 @@ pub mod providers;
 pub mod safety;
 pub mod terminal;
 pub mod tray;
+pub mod updater;
 pub mod window;
 pub mod models;

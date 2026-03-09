@@ -25,6 +25,7 @@
     {
       "identifier": "http:default",
       "allow": [{ "url": "https://api.x.ai/**" }]
-    }
+    },
+    "updater:default"
   ]
 }
