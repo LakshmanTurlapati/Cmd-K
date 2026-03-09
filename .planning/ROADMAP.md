@@ -161,5 +161,5 @@ Recommended order: 21 -> 22 -> 23 -> 24
 | 20. CI/CD Pipeline | v0.2.4 | 2/2 | Complete | 2026-03-04 |
 | 21. Provider Abstraction Layer | 2/2 | Complete    | 2026-03-09 | - |
 | 22. Multi-Provider Frontend | v0.2.6 | Complete    | 2026-03-09 | 2026-03-09 |
-| 23. WSL Terminal Context | 2/2 | Complete   | 2026-03-09 | - |
+| 23. WSL Terminal Context | 2/2 | Complete    | 2026-03-09 | - |
 | 24. Auto-Updater | v0.2.6 | 0/TBD | Not started | - |

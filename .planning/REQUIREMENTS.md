@@ -41,7 +41,7 @@ Requirements for multi-provider AI, WSL terminal context, and auto-updater.
 - [x] **WSLT-07**: CMD+K reads visible terminal output from WSL sessions
 - [x] **WSLT-08**: AI generates Linux commands when user is in a WSL session
 - [x] **WSLT-09**: Linux destructive command patterns are applied in WSL sessions
-- [x] **WSLT-10**: WSL distro name is shown in the context badge (e.g., "bash (WSL: Ubuntu)")
+- [x] **WSLT-10**: WSL context badge shows "WSL" label when user is in a WSL session
 
 ### Auto-Updater
 
