@@ -1,12 +1,13 @@
 import { Store } from "@tauri-apps/plugin-store";
 import { useOverlayStore } from "@/store";
 import { isWindows } from "@/utils/platform";
+import { StepProviderSelect } from "./StepProviderSelect";
 import { StepAccessibility } from "./StepAccessibility";
 import { StepApiKey } from "./StepApiKey";
 import { StepModelSelect } from "./StepModelSelect";
 import { StepDone } from "./StepDone";
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 5;
 
 export function OnboardingWizard() {
   const onboardingStep = useOverlayStore((s) => s.onboardingStep);
@@ -26,9 +27,9 @@ export function OnboardingWizard() {
 
   const handleNext = async () => {
     let nextStep = onboardingStep + 1;
-    // Skip Accessibility step (index 2) on Windows — not required
-    if (isWindows() && nextStep === 2) {
-      nextStep = 3;
+    // Skip Accessibility step (index 3) on Windows — not required
+    if (isWindows() && nextStep === 3) {
+      nextStep = 4;
     }
     setOnboardingStep(nextStep);
     await persistStep(nextStep);
@@ -46,7 +47,7 @@ export function OnboardingWizard() {
     setMode("command");
   };
 
-  const stepLabels = ["API Key", "Model", "Accessibility", "Done"];
+  const stepLabels = ["Provider", "API Key", "Model", "Accessibility", "Done"];
 
   return (
     <div className="flex flex-col gap-4">
@@ -117,14 +118,15 @@ export function OnboardingWizard() {
 
       {/* Step content */}
       <div className="flex flex-col">
-        {onboardingStep === 0 && <StepApiKey onNext={handleNext} />}
-        {onboardingStep === 1 && <StepModelSelect onNext={handleNext} />}
-        {onboardingStep === 2 && <StepAccessibility onNext={handleNext} />}
-        {onboardingStep === 3 && <StepDone onComplete={handleComplete} />}
+        {onboardingStep === 0 && <StepProviderSelect onNext={handleNext} />}
+        {onboardingStep === 1 && <StepApiKey onNext={handleNext} />}
+        {onboardingStep === 2 && <StepModelSelect onNext={handleNext} />}
+        {onboardingStep === 3 && <StepAccessibility onNext={handleNext} />}
+        {onboardingStep === 4 && <StepDone onComplete={handleComplete} />}
       </div>
 
       {/* Skip link for steps 0-2 */}
-      {onboardingStep < 3 && (
+      {onboardingStep < 4 && (
         <div className="flex justify-center">
           <button
             type="button"

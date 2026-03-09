@@ -54,9 +54,30 @@ function App() {
     const checkOnboarding = async () => {
       try {
         const store = await Store.load("settings.json");
+
+        // Load selectedProvider and selectedModels map BEFORE API key checks
+        const savedProvider = await store.get<string>("selectedProvider");
+        if (savedProvider) {
+          useOverlayStore.getState().setSelectedProvider(savedProvider);
+        }
+        const savedModels = await store.get<Record<string, string>>("selectedModels");
+        if (savedModels) {
+          useOverlayStore.getState().setSelectedModels(savedModels);
+        }
+
         const onboardingComplete = await store.get<boolean>("onboardingComplete");
         if (!onboardingComplete) {
-          const onboardingStep = (await store.get<number>("onboardingStep")) ?? 0;
+          let onboardingStep = (await store.get<number>("onboardingStep")) ?? 0;
+
+          // Handle v0.2.4 upgrade: old 4-step wizard had no Provider step at index 0.
+          // If no savedProvider, user was on old wizard -- reset to step 0 (provider select).
+          // If savedProvider exists, old step indices need +1 offset for the new Provider step.
+          if (!savedProvider && onboardingStep > 0) {
+            onboardingStep = 0;
+          } else if (savedProvider && onboardingStep > 0) {
+            // Already on new wizard or provider was somehow set -- keep step as-is
+            // (the +1 shift is only needed if the step was saved by old code)
+          }
 
           // Load persisted destructive detection preference
           const destructiveEnabled = await store.get<boolean>("destructiveDetectionEnabled");
@@ -84,10 +105,10 @@ function App() {
               setApiKeyStatus("valid");
               setModels(models);
               setApiKeyLast4(existingKey.slice(-4));
-              // API Key is now step 0. If step was on API key step or earlier, advance past it.
+              // API Key is now step 1. If step was on API key step or earlier, advance past it.
               const effectiveStep =
-                onboardingStep <= 0
-                  ? 1  // skip past API key step since key exists
+                onboardingStep <= 1
+                  ? 2  // skip past API key step since key exists
                   : onboardingStep;
               openOnboarding(effectiveStep);
             } else {
@@ -124,9 +145,16 @@ function App() {
           } catch {
             // Non-fatal: settings panel will show current status
           }
-          // Load persisted model selection
-          const savedModel = await store.get<string>("selectedModel");
-          if (savedModel) setSelectedModel(savedModel);
+
+          // Load per-provider model for the active provider from the map
+          const activeProvider = useOverlayStore.getState().selectedProvider;
+          if (savedModels && activeProvider && savedModels[activeProvider]) {
+            setSelectedModel(savedModels[activeProvider]);
+          } else {
+            // Fall back to legacy single selectedModel
+            const savedModel = await store.get<string>("selectedModel");
+            if (savedModel) setSelectedModel(savedModel);
+          }
 
           // Load persisted destructive detection preference
           const destructiveEnabled = await store.get<boolean>("destructiveDetectionEnabled");

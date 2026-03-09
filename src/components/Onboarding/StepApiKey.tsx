@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Eye, EyeOff, Check, X, Loader2, AlertCircle } from "lucide-react";
-import { useOverlayStore, ModelWithMeta } from "@/store";
+import { useOverlayStore, ModelWithMeta, PROVIDERS } from "@/store";
 
 interface StepApiKeyProps {
   onNext: () => void;
@@ -18,24 +18,38 @@ export function StepApiKey({ onNext }: StepApiKeyProps) {
   const [inputValue, setInputValue] = useState("");
   const [revealed, setRevealed] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const providerRef = useRef(selectedProvider);
 
-  // On mount: check if a key already exists
+  const providerName =
+    PROVIDERS.find((p) => p.id === selectedProvider)?.name ?? selectedProvider;
+
+  // On mount or provider change: check if a key already exists
   useEffect(() => {
+    providerRef.current = selectedProvider;
+    // Reset key state when provider changes
+    setApiKeyStatus("unknown");
+    setApiKeyLast4("");
+    setInputValue("");
+
     const checkStoredKey = async () => {
       try {
         const key = await invoke<string | null>("get_api_key", { provider: selectedProvider });
+        if (providerRef.current !== selectedProvider) return;
         if (key) {
           setApiKeyLast4(key.slice(-4));
           setApiKeyStatus("validating");
           try {
             await invoke("validate_api_key", { provider: selectedProvider, apiKey: key });
+            if (providerRef.current !== selectedProvider) return;
             const models = await invoke<ModelWithMeta[]>(
               "fetch_models",
               { provider: selectedProvider, apiKey: key }
             );
+            if (providerRef.current !== selectedProvider) return;
             setApiKeyStatus("valid");
             setModels(models);
           } catch {
+            if (providerRef.current !== selectedProvider) return;
             setApiKeyStatus("invalid");
           }
         }
@@ -57,19 +71,24 @@ export function StepApiKey({ onNext }: StepApiKeyProps) {
       return;
     }
 
+    const capturedProvider = selectedProvider;
     debounceRef.current = setTimeout(async () => {
+      if (providerRef.current !== capturedProvider) return;
       setApiKeyStatus("validating");
       try {
-        await invoke("validate_api_key", { provider: selectedProvider, apiKey: inputValue });
+        await invoke("validate_api_key", { provider: capturedProvider, apiKey: inputValue });
+        if (providerRef.current !== capturedProvider) return;
         const models = await invoke<ModelWithMeta[]>(
           "fetch_models",
-          { provider: selectedProvider, apiKey: inputValue }
+          { provider: capturedProvider, apiKey: inputValue }
         );
-        await invoke("save_api_key", { provider: selectedProvider, key: inputValue });
+        if (providerRef.current !== capturedProvider) return;
+        await invoke("save_api_key", { provider: capturedProvider, key: inputValue });
         setApiKeyStatus("valid");
         setModels(models);
         setApiKeyLast4(inputValue.slice(-4));
       } catch (err) {
+        if (providerRef.current !== capturedProvider) return;
         const errStr = typeof err === "string" ? err : String(err);
         if (errStr.includes("invalid_key") || errStr.includes("invalid key")) {
           setApiKeyStatus("invalid");
@@ -89,7 +108,7 @@ export function StepApiKey({ onNext }: StepApiKeyProps) {
   const placeholder =
     inputValue.length === 0 && apiKeyLast4
       ? `****...${apiKeyLast4}`
-      : "Paste your xAI API key";
+      : `Paste your ${providerName} API key`;
 
   const canProceed = apiKeyStatus === "valid";
 
@@ -97,7 +116,7 @@ export function StepApiKey({ onNext }: StepApiKeyProps) {
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
         <p className="text-white/60 text-sm">
-          Enter your xAI API key to enable AI-powered commands.
+          Enter your {providerName} API key to enable AI-powered commands.
         </p>
 
         {/* Input row */}

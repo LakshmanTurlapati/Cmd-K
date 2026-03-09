@@ -1,4 +1,4 @@
-import { useOverlayStore } from "@/store";
+import { useOverlayStore, PROVIDERS } from "@/store";
 import { displayModifier } from "@/utils/platform";
 
 interface StepDoneProps {
@@ -8,6 +8,10 @@ interface StepDoneProps {
 export function StepDone({ onComplete }: StepDoneProps) {
   const currentHotkey = useOverlayStore((s) => s.currentHotkey);
   const selectedModel = useOverlayStore((s) => s.selectedModel);
+  const selectedProvider = useOverlayStore((s) => s.selectedProvider);
+
+  const providerName =
+    PROVIDERS.find((p) => p.id === selectedProvider)?.name ?? selectedProvider;
 
   const formatHotkey = (hotkey: string) => {
     return hotkey
@@ -32,6 +36,15 @@ export function StepDone({ onComplete }: StepDoneProps) {
       </div>
 
       <div className="flex flex-col gap-2 bg-white/5 rounded-lg p-3 border border-white/8">
+        <div className="flex items-center justify-between">
+          <span className="text-white/40 text-xs uppercase tracking-wider">
+            Provider
+          </span>
+          <span className="text-white/80 text-sm font-mono">
+            {providerName}
+          </span>
+        </div>
+        <div className="h-px bg-white/8" />
         <div className="flex items-center justify-between">
           <span className="text-white/40 text-xs uppercase tracking-wider">
             Hotkey
