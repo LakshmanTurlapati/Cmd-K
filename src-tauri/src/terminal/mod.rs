@@ -175,6 +175,19 @@ pub fn detect_full_with_hwnd(
                         terminal.visible_output = uia_text;
                     }
                 }
+
+                // Final fallback: detect WSL from CWD path style
+                // Catches cases where CWD is \\wsl$\..., \\wsl.localhost\..., or /home/...
+                if !terminal.is_wsl {
+                    if let Some(ref cwd) = terminal.cwd {
+                        if detect_wsl_from_cwd(cwd) {
+                            eprintln!("[detect_full_with_hwnd] WSL detected from CWD path style: {}", cwd);
+                            terminal.is_wsl = true;
+                            terminal.cwd = process::get_wsl_cwd().or(terminal.cwd.take());
+                            terminal.shell_type = process::get_wsl_shell().or(terminal.shell_type.take());
+                        }
+                    }
+                }
             }
         }
 
@@ -450,7 +463,17 @@ fn detect_app_context_windows(previous_app_pid: i32, _pre_captured_text: Option<
     let has_shell = proc_info.shell_type.is_some() || proc_info.cwd.is_some();
 
     let terminal = if has_shell {
-        let is_wsl = proc_info.is_wsl;
+        let mut is_wsl = proc_info.is_wsl;
+
+        // Fallback: detect WSL from CWD path style (\\wsl$\..., \\wsl.localhost\..., /home/...)
+        if !is_wsl {
+            if let Some(ref cwd) = proc_info.cwd {
+                if detect_wsl_from_cwd(cwd) {
+                    eprintln!("[detect_app_context_windows] WSL detected from CWD path style: {}", cwd);
+                    is_wsl = true;
+                }
+            }
+        }
 
         // Strip ".exe" from shell_type if present (e.g., "powershell.exe" -> "powershell")
         let shell_type = proc_info.shell_type.map(|s| {
@@ -498,6 +521,16 @@ fn detect_app_context_windows(previous_app_pid: i32, _pre_captured_text: Option<
         console_last_line: None,
         visible_text: None,
     })
+}
+
+/// Detect WSL from CWD path style.
+/// WSL UNC paths: \\wsl$\Ubuntu\... or \\wsl.localhost\Ubuntu\...
+/// Linux absolute paths: /home/... (if CWD was set from WSL subprocess)
+#[cfg(target_os = "windows")]
+fn detect_wsl_from_cwd(cwd: &str) -> bool {
+    cwd.starts_with("\\\\wsl$\\")
+        || cwd.starts_with("\\\\wsl.localhost\\")
+        || cwd.starts_with("/")
 }
 
 /// Infer shell type from visible terminal text.
