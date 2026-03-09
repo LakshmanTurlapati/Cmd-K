@@ -1,11 +1,9 @@
-use eventsource_stream::Eventsource;
-use futures_util::StreamExt;
 use serde::Deserialize;
-use tauri_plugin_http::reqwest;
 
-// Keychain constants must match keychain.rs exactly
+use super::providers::{self, AdapterKind, Provider};
+
+// Keychain service name -- must match keychain.rs
 const SERVICE: &str = "com.lakshmanturlapati.cmd-k";
-const ACCOUNT: &str = "xai_api_key";
 
 /// System prompt for terminal mode on macOS: strict command-only output.
 /// Placeholder {shell_type} is replaced at runtime.
@@ -163,29 +161,36 @@ fn build_user_message(query: &str, ctx: &AppContextView, is_follow_up: bool) -> 
 
 /// Stream AI response tokens to the frontend via a Tauri IPC Channel.
 ///
-/// - Reads the xAI API key from macOS Keychain (never accepted from frontend).
+/// - Accepts a `provider` parameter to dispatch to the correct streaming adapter.
+/// - Reads the API key from the OS Keychain using the provider's account name.
 /// - Determines terminal vs assistant mode from context_json.
 /// - Builds the system prompt (two modes) and user message with context.
 /// - Includes session history (pre-capped by frontend via configurable turnLimit) in the messages array.
-/// - POSTs to xAI /v1/chat/completions with stream:true.
-/// - Parses SSE chunks via eventsource-stream and forwards each token via on_token.
-/// - Hard 10-second timeout wraps the SSE streaming loop.
+/// - Dispatches to the appropriate adapter based on provider.adapter_kind().
 #[tauri::command]
 pub async fn stream_ai_response(
+    provider: Provider,
     query: String,
     model: String,
     context_json: String,
     history: Vec<ChatMessage>,
     on_token: tauri::ipc::Channel<String>,
 ) -> Result<(), String> {
-    eprintln!("[ai] stream_ai_response called, model={}", model);
+    eprintln!(
+        "[ai] stream_ai_response called, provider={}, model={}",
+        provider.display_name(),
+        model
+    );
 
-    // 1. Read API key from Keychain
-    let entry = keyring::Entry::new(SERVICE, ACCOUNT)
+    // 1. Read API key from Keychain using provider-specific account name
+    let entry = keyring::Entry::new(SERVICE, provider.keychain_account())
         .map_err(|e| format!("Keyring error: {}", e))?;
-    let api_key = entry
-        .get_password()
-        .map_err(|_| "No API key configured. Open Settings to add one.".to_string())?;
+    let api_key = entry.get_password().map_err(|_| {
+        format!(
+            "No {} API key configured. Open Settings to add one.",
+            provider.display_name()
+        )
+    })?;
 
     // 2. Parse the context JSON into a lightweight view struct
     let ctx: AppContextView = serde_json::from_str(&context_json).unwrap_or_else(|e| {
@@ -218,7 +223,14 @@ pub async fn stream_ai_response(
         ASSISTANT_SYSTEM_PROMPT.to_string()
     };
 
-    eprintln!("[ai] mode={}", if is_terminal_mode { "terminal" } else { "assistant" });
+    eprintln!(
+        "[ai] mode={}",
+        if is_terminal_mode {
+            "terminal"
+        } else {
+            "assistant"
+        }
+    );
 
     // 4. Build the user message with context (follow-ups omit terminal context)
     let is_follow_up = !history.is_empty();
@@ -247,85 +259,49 @@ pub async fn stream_ai_response(
 
     eprintln!("[ai] messages count={}", messages.len());
 
-    // 6. Build request body
-    let body = serde_json::json!({
-        "model": model,
-        "messages": messages,
-        "stream": true,
-        "temperature": 0.1
-    })
-    .to_string();
+    // 6. Dispatch to the correct adapter based on provider
+    let timeout = tokio::time::Duration::from_secs(provider.default_timeout_secs());
 
-    // 7. Make the HTTP request
-    let client = reqwest::Client::new();
-    let response = client
-        .post("https://api.x.ai/v1/chat/completions")
-        .header("Authorization", format!("Bearer {}", api_key))
-        .header("Content-Type", "application/json")
-        .body(body)
-        .send()
-        .await
-        .map_err(|e| format!("Network error: {}", e))?;
-
-    // 8. Check HTTP status before streaming
-    let status = response.status().as_u16();
-    eprintln!("[ai] HTTP status={}", status);
-
-    match status {
-        200 => {
-            // Proceed to SSE streaming below
+    match provider.adapter_kind() {
+        AdapterKind::OpenAICompat => {
+            providers::openai_compat::stream(
+                &provider, &api_key, &model, messages, &on_token, timeout,
+            )
+            .await
         }
-        401 => {
-            return Err(
-                "Authentication failed. Check your API key in Settings.".to_string(),
-            );
+        AdapterKind::Anthropic => {
+            // Anthropic: system prompt is a top-level field, not in messages array
+            let non_system_messages: Vec<_> = messages
+                .iter()
+                .filter(|m| m["role"].as_str() != Some("system"))
+                .cloned()
+                .collect();
+            providers::anthropic::stream(
+                &api_key,
+                &model,
+                &system_prompt,
+                non_system_messages,
+                &on_token,
+                timeout,
+            )
+            .await
         }
-        429 => {
-            return Err(
-                "Rate limit exceeded. Please wait a moment and try again.".to_string(),
-            );
+        AdapterKind::Gemini => {
+            // Gemini: system prompt via systemInstruction, not in messages
+            let non_system_messages: Vec<_> = messages
+                .iter()
+                .filter(|m| m["role"].as_str() != Some("system"))
+                .cloned()
+                .collect();
+            providers::gemini::stream(
+                &api_key,
+                &model,
+                &system_prompt,
+                non_system_messages,
+                &on_token,
+                timeout,
+            )
+            .await
         }
-        _ => {
-            return Err(format!("API error ({}). Try again.", status));
-        }
-    }
-
-    // 9. Parse SSE stream with 10-second hard timeout
-    let mut stream = response.bytes_stream().eventsource();
-    let timeout_duration = tokio::time::Duration::from_secs(10);
-
-    let result = tokio::time::timeout(timeout_duration, async {
-        while let Some(event) = stream.next().await {
-            match event {
-                Ok(event) => {
-                    let data = event.data;
-                    // Check for [DONE] sentinel BEFORE attempting JSON parse
-                    if data == "[DONE]" {
-                        eprintln!("[ai] received [DONE], stream complete");
-                        break;
-                    }
-                    if let Ok(chunk) = serde_json::from_str::<serde_json::Value>(&data) {
-                        if let Some(token) = chunk["choices"][0]["delta"]["content"].as_str() {
-                            if !token.is_empty() {
-                                on_token
-                                    .send(token.to_string())
-                                    .map_err(|e| format!("Channel error: {}", e))?;
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    return Err(format!("Stream error: {}", e));
-                }
-            }
-        }
-        Ok::<(), String>(())
-    })
-    .await;
-
-    match result {
-        Ok(Ok(())) => Ok(()),
-        Ok(Err(e)) => Err(e),
-        Err(_) => Err("Request timed out. Try again.".to_string()),
     }
 }

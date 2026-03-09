@@ -17,6 +17,7 @@ use commands::{
 };
 use state::AppState;
 use tauri::Manager;
+use tauri_plugin_store::StoreExt;
 
 #[cfg(target_os = "macos")]
 use tauri_nspanel::{
@@ -38,6 +39,40 @@ tauri_nspanel::tauri_panel! {
     }
 }
 
+/// Migrate v0.2.4 users: if an xAI API key exists in the keychain but no provider
+/// is set in settings.json, set the default provider to "xai". The keychain entry
+/// itself uses the same account name ("xai_api_key") in both old and new format,
+/// so no key copy is needed.
+fn migrate_v024_api_key(app: &tauri::App) {
+    // Check if the old xAI key exists in the keychain
+    let has_xai_key = match keyring::Entry::new("com.lakshmanturlapati.cmd-k", "xai_api_key") {
+        Ok(entry) => entry.get_password().is_ok(),
+        Err(_) => false,
+    };
+
+    if !has_xai_key {
+        return;
+    }
+
+    // Open or create the settings store
+    let store = match app.store("settings.json") {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("[migration] Failed to open settings store: {}", e);
+            return;
+        }
+    };
+
+    // If provider is already set, migration was already done (or user configured manually)
+    if store.get("provider").is_some() {
+        return;
+    }
+
+    // Set default provider to xAI for upgrading users
+    store.set("provider", serde_json::json!("xai"));
+    eprintln!("[migration] v0.2.4 xAI key found, set default provider to xAI");
+}
+
 pub fn run() {
     let mut builder = tauri::Builder::default();
 
@@ -54,7 +89,7 @@ pub fn run() {
         .plugin(tauri_plugin_positioner::init())
         // Store plugin for persistent config (hotkey preference, API key, etc.)
         .plugin(tauri_plugin_store::Builder::default().build())
-        // HTTP plugin for Rust-side xAI API calls (bearer token stays off the JS layer)
+        // HTTP plugin for Rust-side AI API calls (API keys stay off the JS layer)
         .plugin(tauri_plugin_http::init())
         // Shared application state
         .manage(AppState::default())
@@ -158,6 +193,9 @@ pub fn run() {
                     }
                 }
             }
+
+            // Migrate v0.2.4 users: set default provider if xAI key exists
+            migrate_v024_api_key(app);
 
             // Set up menu bar tray icon with K.png branding
             setup_tray(app)?;

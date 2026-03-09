@@ -1,11 +1,12 @@
 use keyring::Entry;
 
+use super::providers::Provider;
+
 const SERVICE: &str = "com.lakshmanturlapati.cmd-k";
-const ACCOUNT: &str = "xai_api_key";
 
 #[tauri::command]
-pub fn save_api_key(key: String) -> Result<(), String> {
-    let entry = Entry::new(SERVICE, ACCOUNT)
+pub fn save_api_key(provider: Provider, key: String) -> Result<(), String> {
+    let entry = Entry::new(SERVICE, provider.keychain_account())
         .map_err(|e| format!("Keychain entry error: {}", e))?;
     entry
         .set_password(&key)
@@ -13,8 +14,8 @@ pub fn save_api_key(key: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn get_api_key() -> Result<Option<String>, String> {
-    let entry = Entry::new(SERVICE, ACCOUNT)
+pub fn get_api_key(provider: Provider) -> Result<Option<String>, String> {
+    let entry = Entry::new(SERVICE, provider.keychain_account())
         .map_err(|e| format!("Keychain entry error: {}", e))?;
     match entry.get_password() {
         Ok(key) => Ok(Some(key)),
@@ -24,8 +25,8 @@ pub fn get_api_key() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-pub fn delete_api_key() -> Result<(), String> {
-    let entry = Entry::new(SERVICE, ACCOUNT)
+pub fn delete_api_key(provider: Provider) -> Result<(), String> {
+    let entry = Entry::new(SERVICE, provider.keychain_account())
         .map_err(|e| format!("Keychain entry error: {}", e))?;
     entry
         .delete_credential()
