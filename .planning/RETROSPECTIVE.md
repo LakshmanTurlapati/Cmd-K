@@ -43,6 +43,50 @@
 
 ---
 
+## Milestone: v0.2.6 -- Multi-Provider, WSL & Auto-Update
+
+**Shipped:** 2026-03-09
+**Phases:** 5 | **Plans:** 10
+
+### What Was Built
+- Provider abstraction layer with 3 streaming adapters covering 5 AI providers (OpenAI, Anthropic, Gemini, xAI, OpenRouter)
+- Provider-aware onboarding and settings UI with tier-grouped model lists and per-provider model memory
+- WSL terminal context detection via process ancestry walking for Windows Terminal, VS Code, Cursor, and standalone wsl.exe
+- VS Code WSL detection using multi-signal approach: window title patterns, UIA tree walking, CWD path style, shell priority
+- Auto-updater with background checks, tray state machine, install-on-quit, and Ed25519 signing
+- CI/CD updater pipeline generating .sig files and latest.json manifest
+
+### What Worked
+- Provider abstraction with enum dispatch and 3 adapters for 5 providers was clean and minimal
+- Tier-grouped model lists (Fast/Balanced/Most Capable) gave consistent UX across all providers
+- Process ancestry walking for WSL detection worked reliably across all 4 host terminal types
+- Install-on-quit pattern for auto-updater avoided forced restart UX
+- Entire milestone (5 phases, 10 plans) completed in a single day
+
+### What Was Inefficient
+- v0.2.6 tag initially pointed to docs-only commit -- code changes were uncommitted when tagged, requiring tag recreation
+- Phase 23.1 was inserted urgently for VS Code WSL detection but left a known gap (cmd.exe detection)
+- try_focused_subtree approach for VS Code UIA was abandoned mid-phase when xterm.js proved inaccessible without screen reader mode
+
+### Patterns Established
+- Enum dispatch for compile-time-known provider routing (no trait objects needed)
+- Multi-signal detection pattern: window title + UIA + CWD path + shell priority for IDE terminal identification
+- UpdateState as separate Tauri managed state when plugin types don't implement Default
+- Heredoc-based JSON assembly in CI for structured artifacts without external tools
+
+### Key Lessons
+1. Always commit code changes before tagging a release -- docs commits alone don't include working tree changes
+2. Multi-signal detection (title + UIA + path + shell) is more robust than relying on any single heuristic for IDE terminals
+3. OpenRouter as meta-provider provides excellent onboarding UX -- one key for all providers
+4. Scrollable model lists with max-height prevent layout overflow when provider has many models
+
+### Cost Observations
+- Model mix: primarily opus for execution
+- All 10 plans completed in under 30 minutes total execution time
+- Notable: Phase 23.1 pivot (abandoning UIA focused-subtree) cost minimal time due to rapid signal-based fallback
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -53,9 +97,12 @@
 | v0.1.1 | 3 | 6 | Fast follow-up, focused scope |
 | v0.2.1 | 7 | 11 | Cross-platform port, parallel branch work |
 | v0.2.4 | 4 | 5 | UX polish + infra, yolo mode with plan-check |
+| v0.2.6 | 5 | 10 | Multi-provider + WSL + auto-update, single-day milestone |
 
 ### Top Lessons (Verified Across Milestones)
 
 1. Small focused phases execute faster and produce cleaner commits than large multi-concern phases
 2. Capture-before-show pattern applies everywhere: get context before changing state
 3. In-memory state with no disk persistence is almost always the right v1 choice for transient preferences
+4. Always commit code changes before tagging -- verified by v0.2.6 tag recreation incident
+5. Multi-signal detection is more robust than single-heuristic approaches for complex environments (IDE terminals, WSL)
