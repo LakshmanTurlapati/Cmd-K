@@ -9,32 +9,38 @@ pub struct ModelWithMeta {
     pub id: String,
     pub label: String,
     pub tier: String, // "fast", "balanced", "capable", or "" for uncategorized
+    /// Price per 1 million input tokens (USD). None for models without known pricing.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_price_per_m: Option<f64>,
+    /// Price per 1 million output tokens (USD). None for models without known pricing.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_price_per_m: Option<f64>,
 }
 
 /// Hardcoded curated model list per provider with tier tags.
 fn curated_models(provider: &Provider) -> Vec<ModelWithMeta> {
     match provider {
         Provider::OpenAI => vec![
-            ModelWithMeta { id: "gpt-4o".into(), label: "GPT-4o".into(), tier: "balanced".into() },
-            ModelWithMeta { id: "gpt-4o-mini".into(), label: "GPT-4o Mini".into(), tier: "fast".into() },
-            ModelWithMeta { id: "gpt-4.1".into(), label: "GPT-4.1".into(), tier: "capable".into() },
-            ModelWithMeta { id: "gpt-4.1-mini".into(), label: "GPT-4.1 Mini".into(), tier: "fast".into() },
-            ModelWithMeta { id: "gpt-4.1-nano".into(), label: "GPT-4.1 Nano".into(), tier: "fast".into() },
+            ModelWithMeta { id: "gpt-4o".into(), label: "GPT-4o".into(), tier: "balanced".into(), input_price_per_m: Some(2.50), output_price_per_m: Some(10.00) },
+            ModelWithMeta { id: "gpt-4o-mini".into(), label: "GPT-4o Mini".into(), tier: "fast".into(), input_price_per_m: Some(0.15), output_price_per_m: Some(0.60) },
+            ModelWithMeta { id: "gpt-4.1".into(), label: "GPT-4.1".into(), tier: "capable".into(), input_price_per_m: Some(2.00), output_price_per_m: Some(8.00) },
+            ModelWithMeta { id: "gpt-4.1-mini".into(), label: "GPT-4.1 Mini".into(), tier: "fast".into(), input_price_per_m: Some(0.40), output_price_per_m: Some(1.60) },
+            ModelWithMeta { id: "gpt-4.1-nano".into(), label: "GPT-4.1 Nano".into(), tier: "fast".into(), input_price_per_m: Some(0.10), output_price_per_m: Some(0.40) },
         ],
         Provider::Anthropic => vec![
-            ModelWithMeta { id: "claude-sonnet-4-20250514".into(), label: "Claude Sonnet 4".into(), tier: "balanced".into() },
-            ModelWithMeta { id: "claude-haiku-3-5-20241022".into(), label: "Claude 3.5 Haiku".into(), tier: "fast".into() },
-            ModelWithMeta { id: "claude-opus-4-20250514".into(), label: "Claude Opus 4".into(), tier: "capable".into() },
+            ModelWithMeta { id: "claude-sonnet-4-20250514".into(), label: "Claude Sonnet 4".into(), tier: "balanced".into(), input_price_per_m: Some(3.00), output_price_per_m: Some(15.00) },
+            ModelWithMeta { id: "claude-haiku-3-5-20241022".into(), label: "Claude 3.5 Haiku".into(), tier: "fast".into(), input_price_per_m: Some(0.80), output_price_per_m: Some(4.00) },
+            ModelWithMeta { id: "claude-opus-4-20250514".into(), label: "Claude Opus 4".into(), tier: "capable".into(), input_price_per_m: Some(15.00), output_price_per_m: Some(75.00) },
         ],
         Provider::Gemini => vec![
-            ModelWithMeta { id: "gemini-2.0-flash".into(), label: "Gemini 2.0 Flash".into(), tier: "fast".into() },
-            ModelWithMeta { id: "gemini-2.5-pro-preview-06-05".into(), label: "Gemini 2.5 Pro".into(), tier: "capable".into() },
-            ModelWithMeta { id: "gemini-2.5-flash-preview-05-20".into(), label: "Gemini 2.5 Flash".into(), tier: "balanced".into() },
+            ModelWithMeta { id: "gemini-2.0-flash".into(), label: "Gemini 2.0 Flash".into(), tier: "fast".into(), input_price_per_m: Some(0.10), output_price_per_m: Some(0.40) },
+            ModelWithMeta { id: "gemini-2.5-pro-preview-06-05".into(), label: "Gemini 2.5 Pro".into(), tier: "capable".into(), input_price_per_m: Some(1.25), output_price_per_m: Some(10.00) },
+            ModelWithMeta { id: "gemini-2.5-flash-preview-05-20".into(), label: "Gemini 2.5 Flash".into(), tier: "balanced".into(), input_price_per_m: Some(0.15), output_price_per_m: Some(3.50) },
         ],
         Provider::XAI => vec![
-            ModelWithMeta { id: "grok-3".into(), label: "Grok 3".into(), tier: "balanced".into() },
-            ModelWithMeta { id: "grok-3-mini".into(), label: "Grok 3 Mini".into(), tier: "fast".into() },
-            ModelWithMeta { id: "grok-4".into(), label: "Grok 4".into(), tier: "capable".into() },
+            ModelWithMeta { id: "grok-3".into(), label: "Grok 3".into(), tier: "balanced".into(), input_price_per_m: Some(3.00), output_price_per_m: Some(15.00) },
+            ModelWithMeta { id: "grok-3-mini".into(), label: "Grok 3 Mini".into(), tier: "fast".into(), input_price_per_m: Some(0.30), output_price_per_m: Some(0.50) },
+            ModelWithMeta { id: "grok-4".into(), label: "Grok 4".into(), tier: "capable".into(), input_price_per_m: Some(6.00), output_price_per_m: Some(18.00) },
         ],
         Provider::OpenRouter => vec![],
     }
@@ -241,6 +247,8 @@ async fn fetch_api_models(
                     label: m.id.clone(),
                     id: m.id,
                     tier: String::new(),
+                    input_price_per_m: None,
+                    output_price_per_m: None,
                 })
                 .collect())
         }
@@ -278,6 +286,8 @@ async fn fetch_api_models(
                         label: id.clone(),
                         id,
                         tier: String::new(),
+                        input_price_per_m: None,
+                        output_price_per_m: None,
                     }
                 })
                 .collect())
@@ -304,6 +314,8 @@ async fn fetch_api_models(
                             label: m.id.clone(),
                             id: m.id,
                             tier: String::new(),
+                            input_price_per_m: None,
+                            output_price_per_m: None,
                         })
                         .collect())
                 }
@@ -321,6 +333,8 @@ async fn fetch_api_models(
                         label: id.to_string(),
                         id: id.to_string(),
                         tier: String::new(),
+                        input_price_per_m: None,
+                        output_price_per_m: None,
                     })
                     .collect())
                 }
@@ -347,6 +361,8 @@ async fn fetch_api_models(
                     label: m.id.clone(),
                     id: m.id,
                     tier: String::new(),
+                    input_price_per_m: None,
+                    output_price_per_m: None,
                 })
                 .collect())
         }

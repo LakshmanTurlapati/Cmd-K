@@ -86,6 +86,55 @@ impl HistoryEntry {
     }
 }
 
+/// Token usage returned by streaming adapters after each query.
+/// Fields are Option because some providers may not return usage data.
+#[derive(Debug, Clone, Default)]
+pub struct TokenUsage {
+    pub input_tokens: Option<u64>,
+    pub output_tokens: Option<u64>,
+}
+
+/// Accumulated token counts for a single provider+model pair.
+#[derive(Debug, Clone, Default)]
+pub struct UsageEntry {
+    pub total_input_tokens: u64,
+    pub total_output_tokens: u64,
+    pub query_count: u32,
+}
+
+/// Session-scoped accumulator for token usage across all provider+model pairs.
+/// Key is (provider_display_name, model_id) using Strings for decoupling.
+#[derive(Debug, Default)]
+pub struct UsageAccumulator {
+    entries: HashMap<(String, String), UsageEntry>,
+}
+
+impl UsageAccumulator {
+    /// Record token usage for a provider+model pair.
+    /// Only adds non-None token values to the running totals.
+    pub fn record(&mut self, provider: &str, model: &str, usage: &TokenUsage) {
+        let key = (provider.to_string(), model.to_string());
+        let entry = self.entries.entry(key).or_default();
+        if let Some(input) = usage.input_tokens {
+            entry.total_input_tokens += input;
+        }
+        if let Some(output) = usage.output_tokens {
+            entry.total_output_tokens += output;
+        }
+        entry.query_count += 1;
+    }
+
+    /// Clear all accumulated usage data.
+    pub fn reset(&mut self) {
+        self.entries.clear();
+    }
+
+    /// Read access to the accumulated entries.
+    pub fn entries(&self) -> &HashMap<(String, String), UsageEntry> {
+        &self.entries
+    }
+}
+
 /// Application state shared across Tauri commands.
 ///
 /// All fields are Mutex-wrapped for thread-safe access from async command handlers
@@ -125,6 +174,10 @@ pub struct AppState {
     /// Session-scoped only — resets to None on app launch (Default impl).
     /// When None, position_overlay() uses the default centered position.
     pub last_position: Mutex<Option<(f64, f64)>>,
+    /// Session-scoped token usage accumulator, keyed by (provider, model).
+    pub usage: Mutex<UsageAccumulator>,
+    /// Cached OpenRouter model pricing: model_id -> (input_price_per_m, output_price_per_m).
+    pub openrouter_pricing: Mutex<HashMap<String, (f64, f64)>>,
 }
 
 impl Default for AppState {
@@ -140,6 +193,8 @@ impl Default for AppState {
             history: Mutex::new(HashMap::new()),
             previous_hwnd: Mutex::new(None),
             last_position: Mutex::new(None),
+            usage: Mutex::new(UsageAccumulator::default()),
+            openrouter_pricing: Mutex::new(HashMap::new()),
         }
     }
 }
