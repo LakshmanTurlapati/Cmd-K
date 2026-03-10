@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use tauri_plugin_http::reqwest;
 
@@ -18,7 +19,7 @@ pub struct ModelWithMeta {
 }
 
 /// Hardcoded curated model list per provider with tier tags.
-fn curated_models(provider: &Provider) -> Vec<ModelWithMeta> {
+pub(crate) fn curated_models(provider: &Provider) -> Vec<ModelWithMeta> {
     match provider {
         Provider::OpenAI => vec![
             ModelWithMeta { id: "gpt-4o".into(), label: "GPT-4o".into(), tier: "balanced".into(), input_price_per_m: Some(2.50), output_price_per_m: Some(10.00) },
@@ -44,6 +45,27 @@ fn curated_models(provider: &Provider) -> Vec<ModelWithMeta> {
         ],
         Provider::OpenRouter => vec![],
     }
+}
+
+/// Build a pricing lookup map from all curated models across all providers.
+/// Returns model_id -> (input_price_per_m, output_price_per_m) for models
+/// where both prices are known.
+pub(crate) fn curated_models_pricing() -> HashMap<String, (f64, f64)> {
+    let providers = [
+        Provider::OpenAI,
+        Provider::Anthropic,
+        Provider::Gemini,
+        Provider::XAI,
+    ];
+    let mut map = HashMap::new();
+    for provider in &providers {
+        for model in curated_models(provider) {
+            if let (Some(inp), Some(out)) = (model.input_price_per_m, model.output_price_per_m) {
+                map.insert(model.id, (inp, out));
+            }
+        }
+    }
+    map
 }
 
 /// Validate an API key for a given provider by making a lightweight request.

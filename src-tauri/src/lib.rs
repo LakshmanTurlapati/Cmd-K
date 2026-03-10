@@ -15,6 +15,7 @@ use commands::{
     tray::setup_tray,
     window::{hide_overlay, show_overlay, set_overlay_position},
     models::{validate_api_key, fetch_models},
+    usage::{get_usage_stats, reset_usage},
 };
 use commands::updater;
 use state::AppState;
@@ -261,6 +262,8 @@ pub fn run() {
             add_history_entry,
             clear_all_history,
             set_overlay_position,
+            get_usage_stats,
+            reset_usage,
         ])
         .run(tauri::generate_context!())
         .expect("error while running CMD+K application");
