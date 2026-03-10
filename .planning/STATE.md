@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: executing
-stopped_at: Phase 26 context gathered
-last_updated: "2026-03-10T10:03:58.561Z"
-last_activity: 2026-03-10 -- Completed Plan 25-02
+stopped_at: Completed 26-01-PLAN.md
+last_updated: "2026-03-10T10:18:34Z"
+last_activity: 2026-03-10 -- Completed Plan 26-01
 progress:
   total_phases: 2
-  completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  completed_phases: 2
+  total_plans: 3
+  completed_plans: 3
   percent: 100
 ---
 
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 
 ## Current Position
 
-Phase: 25 -- Token Tracking & Pricing Backend (complete)
-Plan: 02 complete (2/2)
+Phase: 26 -- Cost Display Frontend
+Plan: 01 complete (1/1)
 Status: Executing
-Last activity: 2026-03-10 -- Completed Plan 25-02
+Last activity: 2026-03-10 -- Completed Plan 26-01
 
-Progress: [██████████] 100% (Phase 25)
+Progress: [██████████] 100% (Phase 26)
 
 ## Performance Metrics
 
@@ -52,6 +52,8 @@ All prior decisions archived in PROJECT.md Key Decisions table.
 - [25-01] Adapters return TokenUsage with Option fields -- None values silently skipped during accumulation
 - [25-02] Cost calculation uses two-tier pricing: curated models first, then OpenRouter dynamic pricing as fallback
 - [25-02] OpenRouter pricing strings parsed to f64 and converted to $/1M tokens format for consistency
+- [26-01] QueryRecord stores raw tokens per query; cost calculated at read time using pricing data in usage.rs
+- [26-01] Sparkline uses div-based bars with flex layout, angular (no border-radius)
 
 ### Technical Context (v0.2.7)
 
@@ -61,7 +63,7 @@ All prior decisions archived in PROJECT.md Key Decisions table.
 - OpenRouter `/api/v1/models` returns `pricing.prompt` and `pricing.completion` as strings (USD per token)
 - Other providers have no pricing API -- hardcode per curated model, updated with app releases
 - Streaming adapters: openai_compat.rs, anthropic.rs, gemini.rs
-- Frontend placeholder: ModelTab.tsx:145-154
+- Frontend placeholder: ModelTab.tsx:145-154 (replaced with live cost display in 26-01)
 
 ### Pending Todos
 
@@ -73,6 +75,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-10T10:03:58.537Z
-Stopped at: Phase 26 context gathered
-Next action: Plan and execute Phase 26
+Last session: 2026-03-10T10:18:34Z
+Stopped at: Completed 26-01-PLAN.md
+Next action: Verify cost display visually or continue to next phase

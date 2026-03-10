@@ -22,10 +22,10 @@ Requirements for v0.2.7 Cost Estimation. Each maps to roadmap phases.
 
 ### Display
 
-- [ ] **DISP-01**: Settings Model tab shows session cost estimate replacing the current placeholder
-- [ ] **DISP-02**: User can see token breakdown (input/output tokens) and total estimated cost
-- [ ] **DISP-03**: Cost display updates live after each AI query completes
-- [ ] **DISP-04**: User can reset session usage stats
+- [x] **DISP-01**: Settings Model tab shows session cost estimate replacing the current placeholder
+- [x] **DISP-02**: User can see token breakdown (input/output tokens) and total estimated cost
+- [x] **DISP-03**: Cost display updates live after each AI query completes
+- [x] **DISP-04**: User can reset session usage stats
 
 ## Future Requirements
 
@@ -54,10 +54,10 @@ Requirements for v0.2.7 Cost Estimation. Each maps to roadmap phases.
 | PRIC-01 | 25 | Complete |
 | PRIC-02 | 25 | Complete |
 | PRIC-03 | 25 | Complete |
-| DISP-01 | 26 | Pending |
-| DISP-02 | 26 | Pending |
-| DISP-03 | 26 | Pending |
-| DISP-04 | 26 | Pending |
+| DISP-01 | 26 | Complete |
+| DISP-02 | 26 | Complete |
+| DISP-03 | 26 | Complete |
+| DISP-04 | 26 | Complete |
 
 **Coverage:**
 - v1 requirements: 11 total

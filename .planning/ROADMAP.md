@@ -71,7 +71,7 @@
 ### v0.2.7 Cost Estimation (In Progress)
 
 - [x] **Phase 25: Token Tracking & Pricing Backend** - Extract token usage from all 3 streaming adapters, accumulate in session state, bundled + dynamic pricing data (completed 2026-03-10)
-- [ ] **Phase 26: Cost Display Frontend** - Replace placeholder with live cost display, token breakdown, reset button
+- [x] **Phase 26: Cost Display Frontend** - Replace placeholder with live cost display, token breakdown, reset button (completed 2026-03-10)
 
 ## Phase Details
 
@@ -113,4 +113,4 @@ Plans:
 | 17-20 | v0.2.4 | 5/5 | Complete | 2026-03-04 |
 | 21-24 | v0.2.6 | 10/10 | Complete | 2026-03-09 |
 | 25 | 2/2 | Complete    | 2026-03-10 | -- |
-| 26 | v0.2.7 | 0/1 | Pending | -- |
+| 26 | 1/1 | Complete   | 2026-03-10 | -- |
