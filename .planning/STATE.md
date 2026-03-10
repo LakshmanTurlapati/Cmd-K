@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: executing
-stopped_at: Completed 25-01-PLAN.md
-last_updated: "2026-03-10T08:55:00.000Z"
-last_activity: 2026-03-10 -- Completed Plan 25-01
+stopped_at: Completed 25-02-PLAN.md
+last_updated: "2026-03-10T08:57:30.000Z"
+last_activity: 2026-03-10 -- Completed Plan 25-02
 progress:
   total_phases: 2
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
-  percent: 0
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 
 ## Current Position
 
-Phase: 25 -- Token Tracking & Pricing Backend
-Plan: 01 complete, ready for 02
+Phase: 25 -- Token Tracking & Pricing Backend (complete)
+Plan: 02 complete (2/2)
 Status: Executing
-Last activity: 2026-03-10 -- Completed Plan 25-01
+Last activity: 2026-03-10 -- Completed Plan 25-02
 
-Progress: [█████░░░░░] 50%
+Progress: [██████████] 100% (Phase 25)
 
 ## Performance Metrics
 
@@ -50,6 +50,8 @@ All prior decisions archived in PROJECT.md Key Decisions table.
 
 - [25-01] UsageAccumulator keys are (String, String) not (Provider, String) to keep state.rs decoupled from providers module
 - [25-01] Adapters return TokenUsage with Option fields -- None values silently skipped during accumulation
+- [25-02] Cost calculation uses two-tier pricing: curated models first, then OpenRouter dynamic pricing as fallback
+- [25-02] OpenRouter pricing strings parsed to f64 and converted to $/1M tokens format for consistency
 
 ### Technical Context (v0.2.7)
 
@@ -71,6 +73,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-10T08:55:00.000Z
-Stopped at: Completed 25-01-PLAN.md
-Next action: Plan and execute 25-02
+Last session: 2026-03-10T08:57:30.000Z
+Stopped at: Completed 25-02-PLAN.md
+Next action: Plan and execute Phase 26

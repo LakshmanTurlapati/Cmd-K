@@ -17,8 +17,8 @@ Requirements for v0.2.7 Cost Estimation. Each maps to roadmap phases.
 ### Pricing
 
 - [x] **PRIC-01**: Curated models (OpenAI, Anthropic, Gemini, xAI) have bundled pricing data ($/1M input, $/1M output) updated with each app release
-- [ ] **PRIC-02**: OpenRouter model pricing is fetched dynamically from their `/api/v1/models` endpoint (prompt/completion fields)
-- [ ] **PRIC-03**: Models without pricing data show token counts but display "pricing unavailable" instead of a dollar amount
+- [x] **PRIC-02**: OpenRouter model pricing is fetched dynamically from their `/api/v1/models` endpoint (prompt/completion fields)
+- [x] **PRIC-03**: Models without pricing data show token counts but display "pricing unavailable" instead of a dollar amount
 
 ### Display
 
@@ -52,8 +52,8 @@ Requirements for v0.2.7 Cost Estimation. Each maps to roadmap phases.
 | TRAK-03 | 25 | Complete |
 | TRAK-04 | 25 | Complete |
 | PRIC-01 | 25 | Complete |
-| PRIC-02 | 25 | Pending |
-| PRIC-03 | 25 | Pending |
+| PRIC-02 | 25 | Complete |
+| PRIC-03 | 25 | Complete |
 | DISP-01 | 26 | Pending |
 | DISP-02 | 26 | Pending |
 | DISP-03 | 26 | Pending |
