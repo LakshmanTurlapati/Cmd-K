@@ -22,26 +22,73 @@ pub struct ModelWithMeta {
 pub(crate) fn curated_models(provider: &Provider) -> Vec<ModelWithMeta> {
     match provider {
         Provider::OpenAI => vec![
-            ModelWithMeta { id: "gpt-4o".into(), label: "GPT-4o".into(), tier: "balanced".into(), input_price_per_m: Some(2.50), output_price_per_m: Some(10.00) },
-            ModelWithMeta { id: "gpt-4o-mini".into(), label: "GPT-4o Mini".into(), tier: "fast".into(), input_price_per_m: Some(0.15), output_price_per_m: Some(0.60) },
-            ModelWithMeta { id: "gpt-4.1".into(), label: "GPT-4.1".into(), tier: "capable".into(), input_price_per_m: Some(2.00), output_price_per_m: Some(8.00) },
+            // GPT-5.x family
+            ModelWithMeta { id: "gpt-5.4".into(), label: "GPT-5.4".into(), tier: "capable".into(), input_price_per_m: Some(2.50), output_price_per_m: Some(15.00) },
+            ModelWithMeta { id: "gpt-5.4-pro".into(), label: "GPT-5.4 Pro".into(), tier: "capable".into(), input_price_per_m: Some(30.00), output_price_per_m: Some(180.00) },
+            ModelWithMeta { id: "gpt-5.2".into(), label: "GPT-5.2".into(), tier: "capable".into(), input_price_per_m: Some(1.75), output_price_per_m: Some(14.00) },
+            ModelWithMeta { id: "gpt-5.2-pro".into(), label: "GPT-5.2 Pro".into(), tier: "capable".into(), input_price_per_m: Some(21.00), output_price_per_m: Some(168.00) },
+            ModelWithMeta { id: "gpt-5.1".into(), label: "GPT-5.1".into(), tier: "capable".into(), input_price_per_m: Some(1.25), output_price_per_m: Some(10.00) },
+            ModelWithMeta { id: "gpt-5".into(), label: "GPT-5".into(), tier: "capable".into(), input_price_per_m: Some(1.25), output_price_per_m: Some(10.00) },
+            ModelWithMeta { id: "gpt-5-pro".into(), label: "GPT-5 Pro".into(), tier: "capable".into(), input_price_per_m: Some(15.00), output_price_per_m: Some(120.00) },
+            ModelWithMeta { id: "gpt-5-mini".into(), label: "GPT-5 Mini".into(), tier: "fast".into(), input_price_per_m: Some(0.25), output_price_per_m: Some(2.00) },
+            ModelWithMeta { id: "gpt-5-nano".into(), label: "GPT-5 Nano".into(), tier: "fast".into(), input_price_per_m: Some(0.05), output_price_per_m: Some(0.40) },
+            // GPT-4.x family
+            ModelWithMeta { id: "gpt-4.1".into(), label: "GPT-4.1".into(), tier: "balanced".into(), input_price_per_m: Some(2.00), output_price_per_m: Some(8.00) },
             ModelWithMeta { id: "gpt-4.1-mini".into(), label: "GPT-4.1 Mini".into(), tier: "fast".into(), input_price_per_m: Some(0.40), output_price_per_m: Some(1.60) },
             ModelWithMeta { id: "gpt-4.1-nano".into(), label: "GPT-4.1 Nano".into(), tier: "fast".into(), input_price_per_m: Some(0.10), output_price_per_m: Some(0.40) },
+            ModelWithMeta { id: "gpt-4o".into(), label: "GPT-4o".into(), tier: "balanced".into(), input_price_per_m: Some(2.50), output_price_per_m: Some(10.00) },
+            ModelWithMeta { id: "gpt-4o-mini".into(), label: "GPT-4o Mini".into(), tier: "fast".into(), input_price_per_m: Some(0.15), output_price_per_m: Some(0.60) },
+            // o-series reasoning models
+            ModelWithMeta { id: "o3".into(), label: "o3".into(), tier: "capable".into(), input_price_per_m: Some(2.00), output_price_per_m: Some(8.00) },
+            ModelWithMeta { id: "o3-pro".into(), label: "o3 Pro".into(), tier: "capable".into(), input_price_per_m: Some(20.00), output_price_per_m: Some(80.00) },
+            ModelWithMeta { id: "o3-mini".into(), label: "o3 Mini".into(), tier: "fast".into(), input_price_per_m: Some(1.10), output_price_per_m: Some(4.40) },
+            ModelWithMeta { id: "o4-mini".into(), label: "o4 Mini".into(), tier: "fast".into(), input_price_per_m: Some(1.10), output_price_per_m: Some(4.40) },
+            ModelWithMeta { id: "o1".into(), label: "o1".into(), tier: "capable".into(), input_price_per_m: Some(15.00), output_price_per_m: Some(60.00) },
+            ModelWithMeta { id: "o1-mini".into(), label: "o1 Mini".into(), tier: "fast".into(), input_price_per_m: Some(1.10), output_price_per_m: Some(4.40) },
+            ModelWithMeta { id: "o1-pro".into(), label: "o1 Pro".into(), tier: "capable".into(), input_price_per_m: Some(150.00), output_price_per_m: Some(600.00) },
         ],
         Provider::Anthropic => vec![
+            // Claude 4.6 (latest)
+            ModelWithMeta { id: "claude-opus-4-6".into(), label: "Claude Opus 4.6".into(), tier: "capable".into(), input_price_per_m: Some(5.00), output_price_per_m: Some(25.00) },
+            ModelWithMeta { id: "claude-sonnet-4-6".into(), label: "Claude Sonnet 4.6".into(), tier: "balanced".into(), input_price_per_m: Some(3.00), output_price_per_m: Some(15.00) },
+            // Claude 4.5
+            ModelWithMeta { id: "claude-haiku-4-5-20251001".into(), label: "Claude Haiku 4.5".into(), tier: "fast".into(), input_price_per_m: Some(1.00), output_price_per_m: Some(5.00) },
+            ModelWithMeta { id: "claude-sonnet-4-5-20250929".into(), label: "Claude Sonnet 4.5".into(), tier: "balanced".into(), input_price_per_m: Some(3.00), output_price_per_m: Some(15.00) },
+            ModelWithMeta { id: "claude-opus-4-5-20251101".into(), label: "Claude Opus 4.5".into(), tier: "capable".into(), input_price_per_m: Some(5.00), output_price_per_m: Some(25.00) },
+            // Claude 4.1
+            ModelWithMeta { id: "claude-opus-4-1-20250805".into(), label: "Claude Opus 4.1".into(), tier: "capable".into(), input_price_per_m: Some(15.00), output_price_per_m: Some(75.00) },
+            // Claude 4.0
             ModelWithMeta { id: "claude-sonnet-4-20250514".into(), label: "Claude Sonnet 4".into(), tier: "balanced".into(), input_price_per_m: Some(3.00), output_price_per_m: Some(15.00) },
-            ModelWithMeta { id: "claude-haiku-3-5-20241022".into(), label: "Claude 3.5 Haiku".into(), tier: "fast".into(), input_price_per_m: Some(0.80), output_price_per_m: Some(4.00) },
             ModelWithMeta { id: "claude-opus-4-20250514".into(), label: "Claude Opus 4".into(), tier: "capable".into(), input_price_per_m: Some(15.00), output_price_per_m: Some(75.00) },
+            // Claude 3.5
+            ModelWithMeta { id: "claude-haiku-3-5-20241022".into(), label: "Claude 3.5 Haiku".into(), tier: "fast".into(), input_price_per_m: Some(0.80), output_price_per_m: Some(4.00) },
         ],
         Provider::Gemini => vec![
+            // Gemini 3.x
+            ModelWithMeta { id: "gemini-3.1-pro-preview".into(), label: "Gemini 3.1 Pro".into(), tier: "capable".into(), input_price_per_m: Some(2.00), output_price_per_m: Some(12.00) },
+            ModelWithMeta { id: "gemini-3.1-flash-lite-preview".into(), label: "Gemini 3.1 Flash Lite".into(), tier: "fast".into(), input_price_per_m: Some(0.25), output_price_per_m: Some(1.50) },
+            ModelWithMeta { id: "gemini-3-flash-preview".into(), label: "Gemini 3 Flash".into(), tier: "balanced".into(), input_price_per_m: Some(0.50), output_price_per_m: Some(3.00) },
+            // Gemini 2.5
+            ModelWithMeta { id: "gemini-2.5-pro".into(), label: "Gemini 2.5 Pro".into(), tier: "capable".into(), input_price_per_m: Some(1.25), output_price_per_m: Some(10.00) },
+            ModelWithMeta { id: "gemini-2.5-flash".into(), label: "Gemini 2.5 Flash".into(), tier: "balanced".into(), input_price_per_m: Some(0.30), output_price_per_m: Some(2.50) },
+            ModelWithMeta { id: "gemini-2.5-flash-lite".into(), label: "Gemini 2.5 Flash Lite".into(), tier: "fast".into(), input_price_per_m: Some(0.10), output_price_per_m: Some(0.40) },
+            // Gemini 2.0
             ModelWithMeta { id: "gemini-2.0-flash".into(), label: "Gemini 2.0 Flash".into(), tier: "fast".into(), input_price_per_m: Some(0.10), output_price_per_m: Some(0.40) },
-            ModelWithMeta { id: "gemini-2.5-pro-preview-06-05".into(), label: "Gemini 2.5 Pro".into(), tier: "capable".into(), input_price_per_m: Some(1.25), output_price_per_m: Some(10.00) },
-            ModelWithMeta { id: "gemini-2.5-flash-preview-05-20".into(), label: "Gemini 2.5 Flash".into(), tier: "balanced".into(), input_price_per_m: Some(0.15), output_price_per_m: Some(3.50) },
+            // Legacy model IDs (still valid aliases)
+            ModelWithMeta { id: "gemini-2.5-pro-preview-06-05".into(), label: "Gemini 2.5 Pro (preview)".into(), tier: "capable".into(), input_price_per_m: Some(1.25), output_price_per_m: Some(10.00) },
+            ModelWithMeta { id: "gemini-2.5-flash-preview-05-20".into(), label: "Gemini 2.5 Flash (preview)".into(), tier: "balanced".into(), input_price_per_m: Some(0.30), output_price_per_m: Some(2.50) },
         ],
         Provider::XAI => vec![
+            // Grok 4.x
+            ModelWithMeta { id: "grok-4-1-fast-reasoning".into(), label: "Grok 4.1 Fast".into(), tier: "fast".into(), input_price_per_m: Some(0.20), output_price_per_m: Some(0.50) },
+            ModelWithMeta { id: "grok-4-1-fast-non-reasoning".into(), label: "Grok 4.1 Fast NR".into(), tier: "fast".into(), input_price_per_m: Some(0.20), output_price_per_m: Some(0.50) },
+            ModelWithMeta { id: "grok-4-0709".into(), label: "Grok 4".into(), tier: "capable".into(), input_price_per_m: Some(3.00), output_price_per_m: Some(15.00) },
+            ModelWithMeta { id: "grok-4-fast-reasoning".into(), label: "Grok 4 Fast".into(), tier: "fast".into(), input_price_per_m: Some(0.20), output_price_per_m: Some(0.50) },
+            ModelWithMeta { id: "grok-4-fast-non-reasoning".into(), label: "Grok 4 Fast NR".into(), tier: "fast".into(), input_price_per_m: Some(0.20), output_price_per_m: Some(0.50) },
+            ModelWithMeta { id: "grok-code-fast-1".into(), label: "Grok Code".into(), tier: "fast".into(), input_price_per_m: Some(0.20), output_price_per_m: Some(1.50) },
+            // Grok 3
             ModelWithMeta { id: "grok-3".into(), label: "Grok 3".into(), tier: "balanced".into(), input_price_per_m: Some(3.00), output_price_per_m: Some(15.00) },
             ModelWithMeta { id: "grok-3-mini".into(), label: "Grok 3 Mini".into(), tier: "fast".into(), input_price_per_m: Some(0.30), output_price_per_m: Some(0.50) },
-            ModelWithMeta { id: "grok-4".into(), label: "Grok 4".into(), tier: "capable".into(), input_price_per_m: Some(6.00), output_price_per_m: Some(18.00) },
         ],
         Provider::OpenRouter => vec![],
     }
@@ -359,11 +406,14 @@ async fn fetch_api_models(
                 404 => {
                     // GET /v1/models not supported -- return hardcoded list
                     Ok(vec![
+                        "grok-4-1-fast-reasoning",
+                        "grok-4-1-fast-non-reasoning",
+                        "grok-4-0709",
+                        "grok-4-fast-reasoning",
+                        "grok-4-fast-non-reasoning",
+                        "grok-code-fast-1",
                         "grok-3",
                         "grok-3-mini",
-                        "grok-4",
-                        "grok-4-fast",
-                        "grok-4-fast-non-reasoning",
                     ]
                     .into_iter()
                     .map(|id| ModelWithMeta {
