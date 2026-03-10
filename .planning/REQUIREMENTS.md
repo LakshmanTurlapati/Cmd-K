@@ -9,14 +9,14 @@ Requirements for v0.2.7 Cost Estimation. Each maps to roadmap phases.
 
 ### Token Tracking
 
-- [ ] **TRAK-01**: App extracts input/output token counts from OpenAI-compatible streaming responses via `stream_options.include_usage`
-- [ ] **TRAK-02**: App extracts input/output token counts from Anthropic streaming responses (`message_start` + `message_delta` usage events)
-- [ ] **TRAK-03**: App extracts input/output token counts from Gemini streaming responses (`usageMetadata`)
-- [ ] **TRAK-04**: Token counts accumulate per provider+model in session-scoped Rust state
+- [x] **TRAK-01**: App extracts input/output token counts from OpenAI-compatible streaming responses via `stream_options.include_usage`
+- [x] **TRAK-02**: App extracts input/output token counts from Anthropic streaming responses (`message_start` + `message_delta` usage events)
+- [x] **TRAK-03**: App extracts input/output token counts from Gemini streaming responses (`usageMetadata`)
+- [x] **TRAK-04**: Token counts accumulate per provider+model in session-scoped Rust state
 
 ### Pricing
 
-- [ ] **PRIC-01**: Curated models (OpenAI, Anthropic, Gemini, xAI) have bundled pricing data ($/1M input, $/1M output) updated with each app release
+- [x] **PRIC-01**: Curated models (OpenAI, Anthropic, Gemini, xAI) have bundled pricing data ($/1M input, $/1M output) updated with each app release
 - [ ] **PRIC-02**: OpenRouter model pricing is fetched dynamically from their `/api/v1/models` endpoint (prompt/completion fields)
 - [ ] **PRIC-03**: Models without pricing data show token counts but display "pricing unavailable" instead of a dollar amount
 
@@ -47,11 +47,11 @@ Requirements for v0.2.7 Cost Estimation. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TRAK-01 | 25 | Pending |
-| TRAK-02 | 25 | Pending |
-| TRAK-03 | 25 | Pending |
-| TRAK-04 | 25 | Pending |
-| PRIC-01 | 25 | Pending |
+| TRAK-01 | 25 | Complete |
+| TRAK-02 | 25 | Complete |
+| TRAK-03 | 25 | Complete |
+| TRAK-04 | 25 | Complete |
+| PRIC-01 | 25 | Complete |
 | PRIC-02 | 25 | Pending |
 | PRIC-03 | 25 | Pending |
 | DISP-01 | 26 | Pending |
