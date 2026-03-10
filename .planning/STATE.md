@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v0.2.7
 milestone_name: Cost Estimation
-status: defining_requirements
-stopped_at: Defining requirements
-last_updated: "2026-03-09"
-last_activity: 2026-03-09 -- Milestone v0.2.7 started
+status: ready_to_plan
+stopped_at: Roadmap created
+last_updated: "2026-03-10"
+last_activity: 2026-03-10 -- Roadmap created with 2 phases (25-26), 3 plans
 progress:
-  total_phases: 0
+  total_phases: 2
   completed_phases: 0
-  total_plans: 0
+  total_plans: 3
   completed_plans: 0
   percent: 0
 ---
@@ -18,17 +18,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-09)
+See: .planning/PROJECT.md (updated 2026-03-10)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** v0.2.7 Cost Estimation -- defining requirements
+**Current focus:** v0.2.7 Cost Estimation -- ready to plan Phase 25
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 25 -- Token Tracking & Pricing Backend (not yet planned)
 Plan: --
-Status: Defining requirements
-Last activity: 2026-03-09 -- Milestone v0.2.7 started
+Status: Ready to plan
+Last activity: 2026-03-10 -- Roadmap created
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -48,16 +48,26 @@ Progress: [░░░░░░░░░░] 0%
 
 All prior decisions archived in PROJECT.md Key Decisions table.
 
+### Technical Context (v0.2.7)
+
+- OpenAI-compat streaming: add `stream_options: {"include_usage": true}`, final chunk has `usage.prompt_tokens` / `usage.completion_tokens` with `choices: []`
+- Anthropic streaming: `message_start` event has `message.usage.input_tokens`, `message_delta` event has `usage.output_tokens`
+- Gemini streaming: chunks contain `usageMetadata.promptTokenCount` / `usageMetadata.candidatesTokenCount`
+- OpenRouter `/api/v1/models` returns `pricing.prompt` and `pricing.completion` as strings (USD per token)
+- Other providers have no pricing API -- hardcode per curated model, updated with app releases
+- Streaming adapters: openai_compat.rs, anthropic.rs, gemini.rs
+- Frontend placeholder: ModelTab.tsx:145-154
+
 ### Pending Todos
 
 None.
 
 ### Blockers/Concerns
 
-- Phase 23.1 KNOWN GAP: IDE terminal type detection faulty -- always detects cmd.exe instead of active shell in VS Code. Will revisit in future milestone.
+- Phase 23.1 KNOWN GAP: IDE terminal type detection faulty -- always detects cmd.exe instead of active shell in VS Code.
 
 ## Session Continuity
 
-Last session: 2026-03-09
-Stopped at: Defining v0.2.7 requirements
-Next action: Complete requirements definition
+Last session: 2026-03-10
+Stopped at: Roadmap created, ready to plan Phase 25
+Next action: /gsd:plan-phase 25

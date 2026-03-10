@@ -47,23 +47,24 @@ Requirements for v0.2.7 Cost Estimation. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TRAK-01 | Pending | Pending |
-| TRAK-02 | Pending | Pending |
-| TRAK-03 | Pending | Pending |
-| TRAK-04 | Pending | Pending |
-| PRIC-01 | Pending | Pending |
-| PRIC-02 | Pending | Pending |
-| PRIC-03 | Pending | Pending |
-| DISP-01 | Pending | Pending |
-| DISP-02 | Pending | Pending |
-| DISP-03 | Pending | Pending |
-| DISP-04 | Pending | Pending |
+| TRAK-01 | 25 | Pending |
+| TRAK-02 | 25 | Pending |
+| TRAK-03 | 25 | Pending |
+| TRAK-04 | 25 | Pending |
+| PRIC-01 | 25 | Pending |
+| PRIC-02 | 25 | Pending |
+| PRIC-03 | 25 | Pending |
+| DISP-01 | 26 | Pending |
+| DISP-02 | 26 | Pending |
+| DISP-03 | 26 | Pending |
+| DISP-04 | 26 | Pending |
 
 **Coverage:**
 - v1 requirements: 11 total
-- Mapped to phases: 0
-- Unmapped: 11 (pending roadmap creation)
+- Mapped to phases: 11 (100%)
+- Phase 25: 7 requirements (TRAK-01..04, PRIC-01..03)
+- Phase 26: 4 requirements (DISP-01..04)
 
 ---
 *Requirements defined: 2026-03-10*
-*Last updated: 2026-03-10 after initial definition*
+*Last updated: 2026-03-10 after roadmap creation*
