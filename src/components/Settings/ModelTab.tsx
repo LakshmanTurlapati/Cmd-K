@@ -1,7 +1,24 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Store } from "@tauri-apps/plugin-store";
+import { invoke } from "@tauri-apps/api/core";
 import { Loader2 } from "lucide-react";
 import { useOverlayStore, PROVIDERS } from "@/store";
+
+interface UsageStatEntry {
+  provider: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  query_count: number;
+  estimated_cost: number | null;
+  pricing_available: boolean;
+}
+
+interface UsageStatsResponse {
+  entries: UsageStatEntry[];
+  session_total_cost: number | null;
+  query_costs: (number | null)[];
+}
 
 const TIER_ORDER = [
   { key: "fast", label: "Fast" },
@@ -17,6 +34,22 @@ export function ModelTab() {
   const selectedProvider = useOverlayStore((s) => s.selectedProvider);
   const selectedModels = useOverlayStore((s) => s.selectedModels);
   const setSelectedModels = useOverlayStore((s) => s.setSelectedModels);
+
+  const [usageStats, setUsageStats] = useState<UsageStatsResponse | null>(null);
+
+  const fetchUsage = async () => {
+    try {
+      const stats = await invoke<UsageStatsResponse>("get_usage_stats");
+      setUsageStats(stats);
+    } catch {
+      // Non-fatal: leave display empty
+    }
+  };
+
+  // Fetch usage stats on mount (tab open)
+  useEffect(() => {
+    fetchUsage();
+  }, []);
 
   const isEnabled =
     apiKeyStatus === "valid" && availableModels.length > 0;
@@ -142,15 +175,95 @@ export function ModelTab() {
         )}
       </div>
 
-      {/* Usage placeholder */}
+      {/* Session cost display */}
       <div className="flex flex-col gap-1.5">
         <p className="text-white/40 text-xs uppercase tracking-wider">
           Estimated Cost
         </p>
-        <p className="text-white/30 text-xs">No usage recorded yet</p>
-        <p className="text-white/20 text-xs">
-          (Available after AI commands are enabled)
-        </p>
+        {(() => {
+          const totalQueries = usageStats?.entries.reduce((s, e) => s + e.query_count, 0) ?? 0;
+          if (!usageStats || totalQueries === 0) {
+            return (
+              <p className="text-white/30 text-xs">No usage recorded yet</p>
+            );
+          }
+
+          const totalInput = usageStats.entries.reduce((s, e) => s + e.input_tokens, 0);
+          const totalOutput = usageStats.entries.reduce((s, e) => s + e.output_tokens, 0);
+          const allUnpriced = usageStats.entries.every((e) => !e.pricing_available);
+          const someUnpriced = usageStats.entries.some((e) => !e.pricing_available) && !allUnpriced;
+
+          const formatCost = (cost: number): string => {
+            if (cost >= 1) return `$${cost.toFixed(2)}`;
+            return `$${cost.toFixed(4)}`;
+          };
+
+          const tokenStr = `${totalInput.toLocaleString()} in / ${totalOutput.toLocaleString()} out`;
+
+          const handleReset = async () => {
+            await invoke("reset_usage");
+            fetchUsage();
+          };
+
+          // Sparkline data: filter to only render if there are meaningful costs
+          const queryCosts = usageStats.query_costs;
+          const hasCosts = queryCosts.some((c) => c !== null && c > 0);
+
+          return (
+            <>
+              <div className="flex items-center gap-2">
+                <p className="text-white/70 text-xs">
+                  {allUnpriced ? (
+                    <span title="Pricing unavailable for this model">
+                      {tokenStr} &mdash; $&mdash;
+                    </span>
+                  ) : (
+                    <>
+                      {formatCost(usageStats.session_total_cost ?? 0)}
+                      {someUnpriced && <span>*</span>}
+                      <span className="text-white/40"> &mdash; {tokenStr}</span>
+                    </>
+                  )}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="text-white/40 text-xs hover:text-white/60 cursor-default"
+                >
+                  Reset
+                </button>
+              </div>
+              {someUnpriced && (
+                <p className="text-white/20 text-xs">*excludes queries without pricing</p>
+              )}
+              {hasCosts && (
+                <div className="flex items-end gap-px h-8">
+                  {queryCosts.map((cost, i) => {
+                    const maxCost = Math.max(
+                      ...queryCosts.map((c) => c ?? 0)
+                    );
+                    const height =
+                      cost !== null && cost > 0 && maxCost > 0
+                        ? Math.max(1, (cost / maxCost) * 32)
+                        : 0;
+                    return (
+                      <div
+                        key={i}
+                        className="bg-white/20 rounded-none"
+                        style={{
+                          flex: 1,
+                          maxWidth: 6,
+                          minWidth: 1,
+                          height: `${height}px`,
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          );
+        })()}
       </div>
     </div>
   );
