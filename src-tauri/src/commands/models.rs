@@ -216,19 +216,32 @@ struct OpenRouterModelsResponse {
 struct OpenRouterModel {
     id: String,
     context_length: Option<u64>,
+    pricing: Option<OpenRouterPricing>,
+}
+
+#[derive(Deserialize)]
+struct OpenRouterPricing {
+    /// USD per token as string, e.g. "0.000003"
+    prompt: Option<String>,
+    /// USD per token as string
+    completion: Option<String>,
 }
 
 /// Fetch models for a provider: curated models first (with tier tags),
 /// then API-fetched models not in the curated list (with tier="").
+///
+/// For OpenRouter, also caches per-model pricing in AppState.openrouter_pricing
+/// so that get_usage_stats can calculate costs for dynamically-fetched models.
 #[tauri::command]
 pub async fn fetch_models(
     provider: Provider,
     api_key: String,
+    state: tauri::State<'_, crate::state::AppState>,
 ) -> Result<Vec<ModelWithMeta>, String> {
     let curated = curated_models(&provider);
     let curated_ids: Vec<String> = curated.iter().map(|m| m.id.clone()).collect();
 
-    let api_models = fetch_api_models(&provider, &api_key).await.unwrap_or_default();
+    let api_models = fetch_api_models(&provider, &api_key, &state).await.unwrap_or_default();
 
     // Merge: curated first, then API models not already in curated list
     let mut result = curated;
@@ -242,9 +255,11 @@ pub async fn fetch_models(
 }
 
 /// Fetch models from a provider's API. Returns empty vec on failure (graceful degradation).
+/// For OpenRouter, also caches pricing data in AppState.
 async fn fetch_api_models(
     provider: &Provider,
     api_key: &str,
+    state: &tauri::State<'_, crate::state::AppState>,
 ) -> Result<Vec<ModelWithMeta>, String> {
     let client = reqwest::Client::new();
 
@@ -375,18 +390,42 @@ async fn fetch_api_models(
             let parsed: OpenRouterModelsResponse =
                 serde_json::from_slice(&bytes).map_err(|e| format!("Parse error: {}", e))?;
 
-            Ok(parsed
+            // Build pricing cache from OpenRouter response
+            let mut pricing_cache = HashMap::new();
+
+            let models: Vec<ModelWithMeta> = parsed
                 .data
                 .into_iter()
                 .filter(|m| m.context_length.unwrap_or(0) > 0)
-                .map(|m| ModelWithMeta {
-                    label: m.id.clone(),
-                    id: m.id,
-                    tier: String::new(),
-                    input_price_per_m: None,
-                    output_price_per_m: None,
+                .map(|m| {
+                    // Parse pricing strings to f64, convert per-token to per-million-token
+                    let (input_price, output_price) = m
+                        .pricing
+                        .as_ref()
+                        .and_then(|p| {
+                            let prompt = p.prompt.as_ref()?.parse::<f64>().ok()?;
+                            let completion = p.completion.as_ref()?.parse::<f64>().ok()?;
+                            let inp_per_m = prompt * 1_000_000.0;
+                            let out_per_m = completion * 1_000_000.0;
+                            pricing_cache.insert(m.id.clone(), (inp_per_m, out_per_m));
+                            Some((Some(inp_per_m), Some(out_per_m)))
+                        })
+                        .unwrap_or((None, None));
+
+                    ModelWithMeta {
+                        label: m.id.clone(),
+                        id: m.id,
+                        tier: String::new(),
+                        input_price_per_m: input_price,
+                        output_price_per_m: output_price,
+                    }
                 })
-                .collect())
+                .collect();
+
+            // Cache pricing in AppState (replace entirely on success)
+            *state.openrouter_pricing.lock().unwrap() = pricing_cache;
+
+            Ok(models)
         }
     }
 }
