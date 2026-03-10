@@ -53,6 +53,7 @@ fn get_frontmost_pid() -> Option<i32> {
 }
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 fn get_frontmost_pid() -> Option<i32> {
     None
 }
@@ -73,6 +74,7 @@ fn get_foreground_hwnd() -> Option<isize> {
 }
 
 #[cfg(not(target_os = "windows"))]
+#[allow(dead_code)]
 fn get_foreground_hwnd() -> Option<isize> {
     None
 }
@@ -144,6 +146,7 @@ pub fn restore_focus(target_hwnd: isize) -> bool {
 }
 
 #[cfg(not(target_os = "windows"))]
+#[allow(dead_code)]
 pub fn restore_focus(_target_hwnd: isize) -> bool {
     false
 }
@@ -161,6 +164,7 @@ pub fn restore_focus(_target_hwnd: isize) -> bool {
 /// `focused_cwd`: AX-derived CWD from the focused terminal tab. Used by
 /// `find_shell_pid` to disambiguate between multiple candidate shells in
 /// Electron IDEs with multiple terminal tabs.
+#[allow(dead_code)]
 fn compute_window_key(pid: i32, focused_cwd: Option<String>) -> String {
     let bundle_id = terminal::detect::get_bundle_id(pid);
     let bundle_str = bundle_id.as_deref().unwrap_or("unknown");

@@ -92,7 +92,7 @@ export function StepModelSelect({ onNext }: StepModelSelectProps) {
         </p>
 
         {hasModels ? (
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 max-h-64 overflow-y-auto scrollbar-thin pr-1">
             {/* Tier sections */}
             {TIER_ORDER.map((tier) => {
               const tierModels = availableModels.filter((m) => m.tier === tier.key);

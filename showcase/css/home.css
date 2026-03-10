@@ -1116,6 +1116,14 @@
   }
 }
 
+/* -- Provider cards (static row) -- */
+.provider-cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
 .terminal-tags-label {
   text-align: center;
   font-size: 0.8rem;
@@ -1123,6 +1131,7 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-muted);
+  margin-top: 48px;
   margin-bottom: 16px;
 }
 

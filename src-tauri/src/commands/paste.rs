@@ -1,4 +1,6 @@
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use tauri::Manager;
 
 #[cfg(target_os = "macos")]
 use tauri_nspanel::ManagerExt;
@@ -6,6 +8,7 @@ use tauri_nspanel::ManagerExt;
 #[cfg(target_os = "windows")]
 use crate::commands::hotkey::restore_focus;
 
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use crate::state::AppState;
 #[cfg(target_os = "macos")]
 use crate::terminal::detect::get_bundle_id;
@@ -155,6 +158,7 @@ fn write_to_clipboard(command: &str) {
 
 /// Non-macOS, non-Windows stub.
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[allow(dead_code)]
 fn write_to_clipboard(_command: &str) {
     // Stub for other platforms
 }
@@ -212,7 +216,7 @@ pub fn paste_to_terminal(app: AppHandle, command: String) -> Result<(), String> 
     // Other platforms: not yet implemented
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
-        let _ = &command;
+        let _ = (&app, &command);
         return Err("paste not yet implemented for this platform".to_string());
     }
 
@@ -233,11 +237,14 @@ pub fn paste_to_terminal(app: AppHandle, command: String) -> Result<(), String> 
         }
     }
 
-    eprintln!(
-        "[paste] paste succeeded | chars={}",
-        command.len()
-    );
-    Ok(())
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    {
+        eprintln!(
+            "[paste] paste succeeded | chars={}",
+            command.len()
+        );
+        Ok(())
+    }
 }
 
 /// macOS-specific paste implementation using osascript and CGEventPost.
@@ -618,6 +625,7 @@ pub fn confirm_terminal_command(app: AppHandle) -> Result<(), String> {
     // Other platforms: not yet implemented
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
+        let _ = &app;
         return Err("confirm not yet implemented for this platform".to_string());
     }
 
