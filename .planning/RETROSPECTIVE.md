@@ -87,6 +87,47 @@
 
 ---
 
+## Milestone: v0.2.7 -- Cost Estimation
+
+**Shipped:** 2026-03-10
+**Phases:** 2 | **Plans:** 3
+
+### What Was Built
+- Token extraction from all 3 streaming adapters (OpenAI-compat, Anthropic, Gemini) with session-scoped per-model accumulation
+- Two-tier pricing: 47 curated model prices hardcoded + OpenRouter dynamic pricing from API
+- Live cost display in Settings Model tab with dollar amount, token breakdown, greyscale angular sparkline
+- Reset button for session stats, fetch-on-tab-open for live updates
+
+### What Worked
+- Clean separation: backend tracks raw tokens, cost calculated at read time using pricing data
+- Decoupled UsageAccumulator (String keys, no Provider dependency) kept state.rs clean
+- Div-based sparkline was simpler than canvas/SVG and matched the existing design system perfectly
+- Entire pipeline is pure cross-platform -- no #[cfg(target_os)] anywhere in token/pricing/display code
+- Two phases with clear backend/frontend boundary made for fast execution
+
+### What Was Inefficient
+- Initial curated pricing only covered 16 models -- expanded to 47 as a follow-up after execution
+- Gemini preview model IDs changed (2.5-flash-preview-05-20 → 2.5-flash) requiring both old and new IDs
+- Grok 4 model ID and price were wrong in initial hardcoding ($6/$18 → should have been grok-4-0709 at $3/$15)
+
+### Patterns Established
+- Per-query metadata stored at record time, costs calculated at read time (pricing changes apply retroactively)
+- Two-tier pricing lookup: curated first, dynamic fallback for OpenRouter
+- Fetch-on-mount for tab data instead of push-based updates (simpler, IPC is near-instant)
+- Angular div-based sparkline pattern with flex layout and proportional heights
+
+### Key Lessons
+1. Hardcoded pricing data should be researched comprehensively upfront, not incrementally -- avoids corrections
+2. Keep legacy model ID aliases when APIs transition (Gemini preview → GA) for backward compatibility
+3. Read-time cost calculation is preferable to record-time -- decouples pricing updates from data collection
+
+### Cost Observations
+- Model mix: opus for execution, sonnet for planning/verification
+- All 3 plans completed rapidly -- smallest milestone to date
+- Notable: Cross-platform verification agent confirmed zero platform-specific code in the entire pipeline
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -98,6 +139,7 @@
 | v0.2.1 | 7 | 11 | Cross-platform port, parallel branch work |
 | v0.2.4 | 4 | 5 | UX polish + infra, yolo mode with plan-check |
 | v0.2.6 | 5 | 10 | Multi-provider + WSL + auto-update, single-day milestone |
+| v0.2.7 | 2 | 3 | Cost estimation, smallest milestone, fully cross-platform |
 
 ### Top Lessons (Verified Across Milestones)
 

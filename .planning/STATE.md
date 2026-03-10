@@ -1,11 +1,11 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.1
-milestone_name: milestone
-status: executing
-stopped_at: Completed 26-01-PLAN.md
-last_updated: "2026-03-10T10:21:56.473Z"
-last_activity: 2026-03-10 -- Completed Plan 26-01
+milestone: v0.2.7
+milestone_name: Cost Estimation
+status: complete
+stopped_at: Milestone v0.2.7 shipped
+last_updated: "2026-03-10"
+last_activity: 2026-03-10 -- Milestone v0.2.7 complete
 progress:
   total_phases: 2
   completed_phases: 2
@@ -21,16 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-10)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** v0.2.7 Cost Estimation -- ready to plan Phase 25
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 26 -- Cost Display Frontend
-Plan: 01 complete (1/1)
-Status: Executing
-Last activity: 2026-03-10 -- Completed Plan 26-01
+Phase: All complete
+Status: Milestone v0.2.7 shipped
+Last activity: 2026-03-10 -- Milestone complete
 
-Progress: [██████████] 100% (Phase 26)
+Progress: [██████████] 100% (v0.2.7)
 
 ## Performance Metrics
 
@@ -40,30 +39,14 @@ Progress: [██████████] 100% (Phase 26)
 - v0.2.1: 7 phases, 11 plans, 3 days
 - v0.2.4: 4 phases, 5 plans, 2 days
 - v0.2.6: 5 phases, 10 plans, 1 day
-- Cumulative: 27 phases, 53 plans, 16 days
+- v0.2.7: 2 phases, 3 plans, 1 day
+- Cumulative: 29 phases, 56 plans, 17 days
 
 ## Accumulated Context
 
 ### Decisions
 
-All prior decisions archived in PROJECT.md Key Decisions table.
-
-- [25-01] UsageAccumulator keys are (String, String) not (Provider, String) to keep state.rs decoupled from providers module
-- [25-01] Adapters return TokenUsage with Option fields -- None values silently skipped during accumulation
-- [25-02] Cost calculation uses two-tier pricing: curated models first, then OpenRouter dynamic pricing as fallback
-- [25-02] OpenRouter pricing strings parsed to f64 and converted to $/1M tokens format for consistency
-- [26-01] QueryRecord stores raw tokens per query; cost calculated at read time using pricing data in usage.rs
-- [26-01] Sparkline uses div-based bars with flex layout, angular (no border-radius)
-
-### Technical Context (v0.2.7)
-
-- OpenAI-compat streaming: add `stream_options: {"include_usage": true}`, final chunk has `usage.prompt_tokens` / `usage.completion_tokens` with `choices: []`
-- Anthropic streaming: `message_start` event has `message.usage.input_tokens`, `message_delta` event has `usage.output_tokens`
-- Gemini streaming: chunks contain `usageMetadata.promptTokenCount` / `usageMetadata.candidatesTokenCount`
-- OpenRouter `/api/v1/models` returns `pricing.prompt` and `pricing.completion` as strings (USD per token)
-- Other providers have no pricing API -- hardcode per curated model, updated with app releases
-- Streaming adapters: openai_compat.rs, anthropic.rs, gemini.rs
-- Frontend placeholder: ModelTab.tsx:145-154 (replaced with live cost display in 26-01)
+All decisions archived in PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
@@ -75,6 +58,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-10T10:18:34Z
-Stopped at: Completed 26-01-PLAN.md
-Next action: Verify cost display visually or continue to next phase
+Last session: 2026-03-10
+Stopped at: Milestone v0.2.7 shipped
+Next action: /gsd:new-milestone to start next milestone

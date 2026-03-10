@@ -1,5 +1,26 @@
 # Milestones
 
+## v0.2.7 Cost Estimation (Shipped: 2026-03-10)
+
+**Phases completed:** 2 phases (25-26), 3 plans, 6 tasks
+**Timeline:** 2026-03-10 (1 day)
+**Git range:** 17 commits (11 files changed, 406 insertions)
+**Codebase:** 7,967 LOC Rust + 3,878 LOC TypeScript
+
+**Key accomplishments:**
+1. Token extraction from all 3 streaming adapters (OpenAI-compat, Anthropic, Gemini) with session-scoped accumulation per provider+model
+2. Curated pricing data for 47 models across 4 providers (OpenAI, Anthropic, Gemini, xAI) with OpenRouter dynamic pricing from API
+3. Live cost display in Settings Model tab — dollar amount, input/output token breakdown, greyscale angular sparkline bar chart
+4. Reset button to clear session usage stats, fetch-on-tab-open pattern for live updates
+
+**Delivered:** Session cost estimation with token tracking across all 5 AI providers, hardcoded + dynamic pricing, and a live cost display with sparkline visualization.
+
+**Archives:**
+- milestones/v0.2.7-ROADMAP.md
+- milestones/v0.2.7-REQUIREMENTS.md
+
+---
+
 ## v0.2.6 Multi-Provider, WSL & Auto-Update (Shipped: 2026-03-09)
 
 **Phases completed:** 5 phases (21-24 + 23.1), 10 executed plans

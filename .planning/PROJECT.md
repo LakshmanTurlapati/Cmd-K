@@ -60,19 +60,13 @@ The overlay must appear on top of the currently active application and feel inst
 - ORTR-01, ORTR-02: OpenRouter single-key access with filtered model list -- v0.2.6
 - WSLT-01 through WSLT-10: WSL terminal context detection, CWD, shell type, output, AI commands, badge -- v0.2.6
 - UPDT-01 through UPDT-08: Auto-updater with background checks, tray menu, Ed25519 signing, CI pipeline -- v0.2.6
+- TRAK-01 through TRAK-04: Token extraction from OpenAI-compat, Anthropic, Gemini streaming adapters with session-scoped accumulation -- v0.2.7
+- PRIC-01 through PRIC-03: Curated pricing for 47 models, OpenRouter dynamic pricing, pricing-unavailable indicator -- v0.2.7
+- DISP-01 through DISP-04: Live cost display in Settings Model tab with token breakdown, sparkline, and reset -- v0.2.7
 
 ### Active
 
-**Current Milestone: v0.2.7 Cost Estimation**
-
-**Goal:** Replace the placeholder "Estimated Cost" section in Settings with real token tracking, per-model pricing, and live cost display.
-
-**Target features:**
-- Extract token usage from all 3 streaming adapter response formats
-- Accumulate session-scoped usage per provider/model in Rust state
-- Hardcoded pricing data for curated models
-- IPC command to query accumulated usage and estimated cost
-- Live cost display in Settings Model tab replacing placeholder
+(No active milestone — run `/gsd:new-milestone` to start next)
 
 ### Out of Scope
 
@@ -89,10 +83,10 @@ The overlay must appear on top of the currently active application and feel inst
 
 ## Context
 
-Shipped v0.2.6 with multi-provider AI, WSL terminal context, and auto-updater.
+Shipped v0.2.7 with session cost estimation across all 5 AI providers.
 Tech stack: Tauri v2 (Rust + React + TypeScript), NSPanel for overlay, 5 AI providers (OpenAI/Anthropic/Gemini/xAI/OpenRouter), macOS Accessibility API + raw libproc FFI, Win32 APIs + UIA for Windows, WSL process ancestry + wsl.exe subprocess for Linux context.
-27 phases across 5 milestones (v0.1.0, v0.1.1, v0.2.1, v0.2.4, v0.2.6), 53 plans executed over 16 days.
-All 75 requirements satisfied across milestones. 7,616 LOC Rust + 3,765 LOC TypeScript.
+29 phases across 7 milestones (v0.1.0, v0.1.1, v0.2.1, v0.2.4, v0.2.6, v0.2.7), 56 plans executed over 17 days.
+All 86 requirements satisfied across milestones. 7,967 LOC Rust + 3,878 LOC TypeScript.
 CI/CD pipeline produces signed macOS DMG, Windows installer, and auto-update artifacts (latest.json + .sig files) on every v* tag push.
 Ed25519 update signing configured with GitHub secrets.
 
@@ -139,6 +133,10 @@ Ed25519 update signing configured with GitHub secrets.
 | UpdateState as separate managed state | tauri_plugin_updater::Update not Default, can't embed in AppState | Good -- clean separation |
 | Install-on-quit pattern | download() in background, install() in quit handler | Good -- no forced restart |
 | Ed25519 signing with empty password | Simplifies CI secrets, acceptable for open-source project | Good -- works with GitHub Actions |
+| Decoupled UsageAccumulator keys | (String, String) not (Provider, String) keeps state.rs independent | Good -- clean separation |
+| Two-tier pricing lookup | Curated models first, OpenRouter dynamic as fallback | Good -- fast for known models |
+| Per-query cost at read time | QueryRecord stores raw tokens; cost calculated in get_usage_stats | Good -- pricing changes apply retroactively |
+| Div-based sparkline | Angular bars with flex layout, no canvas/SVG | Good -- simple, matches design system |
 
 ---
-*Last updated: 2026-03-09 after v0.2.7 milestone start*
+*Last updated: 2026-03-10 after v0.2.7 milestone*
