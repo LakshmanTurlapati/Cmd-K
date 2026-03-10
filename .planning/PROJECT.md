@@ -63,7 +63,16 @@ The overlay must appear on top of the currently active application and feel inst
 
 ### Active
 
-(No active milestone — run `/gsd:new-milestone` to start next)
+**Current Milestone: v0.2.7 Cost Estimation**
+
+**Goal:** Replace the placeholder "Estimated Cost" section in Settings with real token tracking, per-model pricing, and live cost display.
+
+**Target features:**
+- Extract token usage from all 3 streaming adapter response formats
+- Accumulate session-scoped usage per provider/model in Rust state
+- Hardcoded pricing data for curated models
+- IPC command to query accumulated usage and estimated cost
+- Live cost display in Settings Model tab replacing placeholder
 
 ### Out of Scope
 
@@ -82,7 +91,7 @@ The overlay must appear on top of the currently active application and feel inst
 
 Shipped v0.2.6 with multi-provider AI, WSL terminal context, and auto-updater.
 Tech stack: Tauri v2 (Rust + React + TypeScript), NSPanel for overlay, 5 AI providers (OpenAI/Anthropic/Gemini/xAI/OpenRouter), macOS Accessibility API + raw libproc FFI, Win32 APIs + UIA for Windows, WSL process ancestry + wsl.exe subprocess for Linux context.
-25 phases across 5 milestones (v0.1.0, v0.1.1, v0.2.1, v0.2.4, v0.2.6), 48 plans executed over 15 days.
+27 phases across 5 milestones (v0.1.0, v0.1.1, v0.2.1, v0.2.4, v0.2.6), 53 plans executed over 16 days.
 All 75 requirements satisfied across milestones. 7,616 LOC Rust + 3,765 LOC TypeScript.
 CI/CD pipeline produces signed macOS DMG, Windows installer, and auto-update artifacts (latest.json + .sig files) on every v* tag push.
 Ed25519 update signing configured with GitHub secrets.
@@ -132,4 +141,4 @@ Ed25519 update signing configured with GitHub secrets.
 | Ed25519 signing with empty password | Simplifies CI secrets, acceptable for open-source project | Good -- works with GitHub Actions |
 
 ---
-*Last updated: 2026-03-09 after v0.2.6 milestone completion*
+*Last updated: 2026-03-09 after v0.2.7 milestone start*
