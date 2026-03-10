@@ -2,6 +2,7 @@ use eventsource_stream::Eventsource;
 use futures_util::StreamExt;
 use tauri_plugin_http::reqwest;
 
+use crate::state::TokenUsage;
 use super::{handle_http_status, Provider};
 
 /// Stream tokens from the Google Gemini API.
@@ -20,7 +21,7 @@ pub async fn stream(
     messages: Vec<serde_json::Value>,
     on_token: &tauri::ipc::Channel<String>,
     timeout: tokio::time::Duration,
-) -> Result<(), String> {
+) -> Result<TokenUsage, String> {
     let provider = Provider::Gemini;
 
     // Build Gemini URL: {base}{model}:streamGenerateContent?alt=sse&key={api_key}
@@ -75,6 +76,8 @@ pub async fn stream(
 
     let mut stream = response.bytes_stream().eventsource();
 
+    let mut token_usage = TokenUsage::default();
+
     let result = tokio::time::timeout(timeout, async {
         while let Some(event) = stream.next().await {
             match event {
@@ -88,6 +91,11 @@ pub async fn stream(
                                     .send(text.to_string())
                                     .map_err(|e| format!("Google Gemini: Channel error: {}", e))?;
                             }
+                        }
+                        // Extract usage metadata (last chunk has final counts, always overwrite)
+                        if chunk.get("usageMetadata").is_some() {
+                            token_usage.input_tokens = chunk["usageMetadata"]["promptTokenCount"].as_u64();
+                            token_usage.output_tokens = chunk["usageMetadata"]["candidatesTokenCount"].as_u64();
                         }
                     }
                 }
@@ -103,7 +111,7 @@ pub async fn stream(
     .await;
 
     match result {
-        Ok(Ok(())) => Ok(()),
+        Ok(Ok(())) => Ok(token_usage),
         Ok(Err(e)) => Err(e),
         Err(_) => Err("Google Gemini: Request timed out. Try again.".to_string()),
     }

@@ -185,6 +185,7 @@ fn build_user_message(query: &str, ctx: &AppContextView, is_follow_up: bool) -> 
 /// - Dispatches to the appropriate adapter based on provider.adapter_kind().
 #[tauri::command]
 pub async fn stream_ai_response(
+    state: tauri::State<'_, crate::state::AppState>,
     provider: Provider,
     query: String,
     model: String,
@@ -294,12 +295,12 @@ pub async fn stream_ai_response(
     // 6. Dispatch to the correct adapter based on provider
     let timeout = tokio::time::Duration::from_secs(provider.default_timeout_secs());
 
-    match provider.adapter_kind() {
+    let token_usage = match provider.adapter_kind() {
         AdapterKind::OpenAICompat => {
             providers::openai_compat::stream(
                 &provider, &api_key, &model, messages, &on_token, timeout,
             )
-            .await
+            .await?
         }
         AdapterKind::Anthropic => {
             // Anthropic: system prompt is a top-level field, not in messages array
@@ -316,7 +317,7 @@ pub async fn stream_ai_response(
                 &on_token,
                 timeout,
             )
-            .await
+            .await?
         }
         AdapterKind::Gemini => {
             // Gemini: system prompt via systemInstruction, not in messages
@@ -333,7 +334,14 @@ pub async fn stream_ai_response(
                 &on_token,
                 timeout,
             )
-            .await
+            .await?
         }
+    };
+
+    // Accumulate token usage into session state
+    if let Ok(mut acc) = state.usage.lock() {
+        acc.record(provider.display_name(), &model, &token_usage);
     }
+
+    Ok(())
 }

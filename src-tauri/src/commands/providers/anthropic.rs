@@ -2,6 +2,7 @@ use eventsource_stream::Eventsource;
 use futures_util::StreamExt;
 use tauri_plugin_http::reqwest;
 
+use crate::state::TokenUsage;
 use super::{handle_http_status, Provider};
 
 /// Stream tokens from the Anthropic Messages API.
@@ -21,7 +22,7 @@ pub async fn stream(
     messages: Vec<serde_json::Value>,
     on_token: &tauri::ipc::Channel<String>,
     timeout: tokio::time::Duration,
-) -> Result<(), String> {
+) -> Result<TokenUsage, String> {
     let provider = Provider::Anthropic;
 
     let body = serde_json::json!({
@@ -51,6 +52,8 @@ pub async fn stream(
 
     let mut stream = response.bytes_stream().eventsource();
 
+    let mut token_usage = TokenUsage::default();
+
     let result = tokio::time::timeout(timeout, async {
         while let Some(event) = stream.next().await {
             match event {
@@ -67,11 +70,21 @@ pub async fn stream(
                                 }
                             }
                         }
+                        "message_start" => {
+                            if let Ok(chunk) = serde_json::from_str::<serde_json::Value>(&event.data) {
+                                token_usage.input_tokens = chunk["message"]["usage"]["input_tokens"].as_u64();
+                            }
+                        }
+                        "message_delta" => {
+                            if let Ok(chunk) = serde_json::from_str::<serde_json::Value>(&event.data) {
+                                token_usage.output_tokens = chunk["usage"]["output_tokens"].as_u64();
+                            }
+                        }
                         "message_stop" => {
                             eprintln!("[Anthropic] received message_stop, stream complete");
                             break;
                         }
-                        // Ignore: ping, message_start, content_block_start, content_block_stop, message_delta
+                        // Ignore: ping, content_block_start, content_block_stop
                         _ => {}
                     }
                 }
@@ -85,7 +98,7 @@ pub async fn stream(
     .await;
 
     match result {
-        Ok(Ok(())) => Ok(()),
+        Ok(Ok(())) => Ok(token_usage),
         Ok(Err(e)) => Err(e),
         Err(_) => Err("Anthropic: Request timed out. Try again.".to_string()),
     }

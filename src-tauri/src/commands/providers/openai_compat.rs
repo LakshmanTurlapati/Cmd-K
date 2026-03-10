@@ -2,6 +2,7 @@ use eventsource_stream::Eventsource;
 use futures_util::StreamExt;
 use tauri_plugin_http::reqwest;
 
+use crate::state::TokenUsage;
 use super::{handle_http_status, Provider};
 
 /// Stream tokens from an OpenAI-compatible API (OpenAI, xAI, OpenRouter).
@@ -16,11 +17,12 @@ pub async fn stream(
     messages: Vec<serde_json::Value>,
     on_token: &tauri::ipc::Channel<String>,
     timeout: tokio::time::Duration,
-) -> Result<(), String> {
+) -> Result<TokenUsage, String> {
     let body = serde_json::json!({
         "model": model,
         "messages": messages,
         "stream": true,
+        "stream_options": { "include_usage": true },
         "temperature": 0.1
     })
     .to_string();
@@ -50,6 +52,8 @@ pub async fn stream(
 
     let mut stream = response.bytes_stream().eventsource();
 
+    let mut token_usage = TokenUsage::default();
+
     let result = tokio::time::timeout(timeout, async {
         while let Some(event) = stream.next().await {
             match event {
@@ -67,6 +71,11 @@ pub async fn stream(
                                     .map_err(|e| format!("{}: Channel error: {}", provider.display_name(), e))?;
                             }
                         }
+                        // Extract usage from final chunk (choices is empty, usage object present)
+                        if chunk.get("usage").is_some() {
+                            token_usage.input_tokens = chunk["usage"]["prompt_tokens"].as_u64();
+                            token_usage.output_tokens = chunk["usage"]["completion_tokens"].as_u64();
+                        }
                     }
                 }
                 Err(e) => {
@@ -79,7 +88,7 @@ pub async fn stream(
     .await;
 
     match result {
-        Ok(Ok(())) => Ok(()),
+        Ok(Ok(())) => Ok(token_usage),
         Ok(Err(e)) => Err(e),
         Err(_) => Err(format!(
             "{}: Request timed out. Try again.",
