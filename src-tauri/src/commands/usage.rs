@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use serde::Serialize;
 
 /// Per-model usage statistics with optional cost estimation.

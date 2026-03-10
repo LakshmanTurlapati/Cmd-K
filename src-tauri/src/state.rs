@@ -105,7 +105,6 @@ pub struct UsageEntry {
 /// Per-query metadata stored for later cost calculation in usage.rs.
 #[derive(Debug, Clone)]
 pub struct QueryRecord {
-    pub provider: String,
     pub model: String,
     pub input_tokens: u64,
     pub output_tokens: u64,
@@ -138,7 +137,6 @@ impl UsageAccumulator {
         // Track per-query metadata for sparkline cost calculation
         if usage.input_tokens.is_some() || usage.output_tokens.is_some() {
             self.query_history.push(QueryRecord {
-                provider: provider.to_string(),
                 model: model.to_string(),
                 input_tokens: input,
                 output_tokens: output,

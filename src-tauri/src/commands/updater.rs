@@ -145,7 +145,7 @@ pub fn update_tray_text(app: &tauri::AppHandle, status: &UpdateStatus) {
         UpdateStatus::Checking => "Checking for Updates...".to_string(),
         UpdateStatus::Available(v) => format!("Update Available (v{})", v),
         UpdateStatus::Downloading(v) => format!("Downloading v{}...", v),
-        UpdateStatus::Ready(_) => "Update Ready (restart to apply)".to_string(),
+        UpdateStatus::Ready(v) => format!("Update Ready v{} (restart to apply)", v),
         UpdateStatus::Disabled => "Check for Updates...".to_string(),
     };
 
