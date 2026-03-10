@@ -102,11 +102,21 @@ pub struct UsageEntry {
     pub query_count: u32,
 }
 
+/// Per-query metadata stored for later cost calculation in usage.rs.
+#[derive(Debug, Clone)]
+pub struct QueryRecord {
+    pub provider: String,
+    pub model: String,
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+}
+
 /// Session-scoped accumulator for token usage across all provider+model pairs.
 /// Key is (provider_display_name, model_id) using Strings for decoupling.
 #[derive(Debug, Default)]
 pub struct UsageAccumulator {
     entries: HashMap<(String, String), UsageEntry>,
+    query_history: Vec<QueryRecord>,
 }
 
 impl UsageAccumulator {
@@ -115,23 +125,41 @@ impl UsageAccumulator {
     pub fn record(&mut self, provider: &str, model: &str, usage: &TokenUsage) {
         let key = (provider.to_string(), model.to_string());
         let entry = self.entries.entry(key).or_default();
-        if let Some(input) = usage.input_tokens {
+        let input = usage.input_tokens.unwrap_or(0);
+        let output = usage.output_tokens.unwrap_or(0);
+        if usage.input_tokens.is_some() {
             entry.total_input_tokens += input;
         }
-        if let Some(output) = usage.output_tokens {
+        if usage.output_tokens.is_some() {
             entry.total_output_tokens += output;
         }
         entry.query_count += 1;
+
+        // Track per-query metadata for sparkline cost calculation
+        if usage.input_tokens.is_some() || usage.output_tokens.is_some() {
+            self.query_history.push(QueryRecord {
+                provider: provider.to_string(),
+                model: model.to_string(),
+                input_tokens: input,
+                output_tokens: output,
+            });
+        }
     }
 
     /// Clear all accumulated usage data.
     pub fn reset(&mut self) {
         self.entries.clear();
+        self.query_history.clear();
     }
 
     /// Read access to the accumulated entries.
     pub fn entries(&self) -> &HashMap<(String, String), UsageEntry> {
         &self.entries
+    }
+
+    /// Read access to per-query history for cost calculation.
+    pub fn query_history(&self) -> &[QueryRecord] {
+        &self.query_history
     }
 }
 

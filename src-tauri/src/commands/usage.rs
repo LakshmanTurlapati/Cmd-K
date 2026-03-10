@@ -21,6 +21,8 @@ pub struct UsageStatsResponse {
     pub entries: Vec<UsageStatEntry>,
     /// Sum of all entries with known pricing. None if no entries have pricing.
     pub session_total_cost: Option<f64>,
+    /// Per-query cost history for sparkline. None entries = pricing unavailable.
+    pub query_costs: Vec<Option<f64>>,
 }
 
 /// Return accumulated usage stats with estimated costs per model.
@@ -70,9 +72,26 @@ pub fn get_usage_stats(
         });
     }
 
+    // Compute per-query costs from query history for sparkline
+    let query_costs: Vec<Option<f64>> = usage
+        .query_history()
+        .iter()
+        .map(|q| {
+            let pricing = curated_pricing
+                .get(q.model.as_str())
+                .copied()
+                .or_else(|| or_pricing.get(q.model.as_str()).copied());
+            pricing.map(|(input_price, output_price)| {
+                (q.input_tokens as f64 * input_price / 1_000_000.0)
+                    + (q.output_tokens as f64 * output_price / 1_000_000.0)
+            })
+        })
+        .collect();
+
     UsageStatsResponse {
         entries,
         session_total_cost: if any_priced { Some(total_cost) } else { None },
+        query_costs,
     }
 }
 
