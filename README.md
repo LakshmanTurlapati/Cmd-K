@@ -54,12 +54,12 @@ And when the generated command would `rm -rf` your home directory or `DROP` your
 | Feature | Description |
 |---|---|
 | **System-Wide Overlay** | Floating overlay triggered by a global hotkey from any application. No dock icon, no window clutter -- just a translucent command bar that appears and disappears. |
-| **Natural Language Commands** | Describe what you want in plain English. xAI Grok models stream a working terminal command back token-by-token. |
+| **Natural Language Commands** | Describe what you want in plain English. AI models from OpenAI, Anthropic, Google Gemini, xAI, or OpenRouter stream a working terminal command back token-by-token. |
 | **Zero-Config Context Detection** | Reads your current working directory, shell type, and recent terminal output via platform accessibility APIs and process introspection. No shell plugins, no rc file edits. |
 | **Multi-Terminal Support** | Detects and reads context from Terminal.app, iTerm2, Alacritty, kitty, and WezTerm. Recognizes shells inside VS Code and Cursor. |
 | **Browser DevTools Support** | Detects open DevTools consoles in Chrome, Safari, Firefox, Arc, Edge, and Brave. Switches to a conversational assistant mode for web debugging. |
 | **Destructive Command Safety** | 50+ regex patterns flag dangerous commands (rm -rf, DROP TABLE, git push --force, etc.) with a red badge and an AI-generated plain-English explanation of the risk. |
-| **Secure API Key Storage** | Your xAI API key lives in your system's secure credential store. It never touches a plaintext config file and never leaves the Rust backend. |
+| **Secure API Key Storage** | Your API key lives in your system's secure credential store. It never touches a plaintext config file and never leaves the Rust backend. |
 | **Smart Onboarding** | A 4-step wizard handles Accessibility permissions, API key validation, and model selection on first launch. No manual setup required. |
 | **Configurable Hotkey** | Change the trigger shortcut to any key combination. Preset suggestions and a custom key recorder are built in. |
 | **Lightweight Native App** | Built with Tauri 2 and Rust. Runs as a menu bar utility with minimal memory footprint. No Electron. No bundled Chromium. |
@@ -71,7 +71,7 @@ And when the generated command would `rm -rf` your home directory or `DROP` your
 1. **Press the hotkey** -- Cmd+K on macOS, Ctrl+K on Windows (default) from any application. The overlay appears centered on your active screen.
 2. **Type your intent** -- Describe what you want in natural language. "Find all PDFs modified this week" or "Kill whatever is hogging port 3000."
 3. **Context is gathered** -- CMD+K captures the foreground app's PID, resolves the active terminal's working directory, shell type, and recent visible output via platform accessibility APIs.
-4. **AI generates the command** -- Your query plus context is sent to xAI. The response streams token-by-token into the results area with shell syntax highlighting.
+4. **AI generates the command** -- Your query plus context is sent to your selected AI provider. The response streams token-by-token into the results area with shell syntax highlighting.
 5. **Safety check runs** -- Once generation completes, the command is scanned against 50+ destructive patterns. Matches trigger a red badge with an AI-powered risk explanation.
 6. **Copy or auto-paste** -- Click the result to copy to clipboard, or let CMD+K paste directly into your terminal.
 7. **Dismiss** -- Press Escape. The overlay vanishes. Focus returns to your previous application.
@@ -121,8 +121,8 @@ graph TB
         SI[SendInput / arboard Paste]
     end
 
-    subgraph External["External Services"]
-        XAI[xAI Grok API]
+    subgraph External["AI Providers"]
+        PROVIDERS["OpenAI · Anthropic · Gemini · xAI · OpenRouter"]
     end
 
     HK --> OVR_WIN
@@ -130,7 +130,7 @@ graph TB
     OVR --> INPUT
     INPUT --> STORE
     STORE --> AI
-    AI --> XAI
+    AI --> PROVIDERS
     AI --> RESULT
     RESULT --> SAFE
     SAFE --> PASTE
@@ -171,7 +171,11 @@ graph TB
 
 **AI**
 
+![OpenAI](https://img.shields.io/badge/OpenAI-555555?style=flat-square&logo=openai&logoColor=white)
+![Anthropic](https://img.shields.io/badge/Anthropic-555555?style=flat-square&logo=anthropic&logoColor=white)
+![Google Gemini](https://img.shields.io/badge/Google_Gemini-555555?style=flat-square&logo=googlegemini&logoColor=white)
 ![xAI](https://img.shields.io/badge/xAI_Grok-555555?style=flat-square&logo=x&logoColor=white)
+![OpenRouter](https://img.shields.io/badge/OpenRouter-555555?style=flat-square&logo=openrouter&logoColor=white)
 ![SSE Streaming](https://img.shields.io/badge/SSE_Streaming-FF6600?style=flat-square&logo=lightning&logoColor=white)
 
 ---
@@ -190,7 +194,7 @@ Grab the latest release from the [Releases page](https://github.com/LakshmanTurl
 - [Rust](https://rustup.rs/) (latest stable)
 - [Node.js](https://nodejs.org/) 18+
 - [pnpm](https://pnpm.io/)
-- An [xAI API key](https://console.x.ai/)
+- An API key from one of the supported providers: [OpenAI](https://platform.openai.com/api-keys), [Anthropic](https://console.anthropic.com/), [Google Gemini](https://aistudio.google.com/apikey), [xAI](https://console.x.ai/), or [OpenRouter](https://openrouter.ai/keys)
 
 ### Install & Run
 
@@ -211,8 +215,8 @@ pnpm tauri dev
 On first launch, the onboarding wizard will walk you through:
 
 1. **Accessibility Permission** -- CMD+K needs this to read terminal context. The wizard links you to System Settings.
-2. **API Key** -- Enter your xAI API key. It's validated against the xAI API and stored securely in your system credential store.
-3. **Model Selection** -- Choose your preferred Grok model (grok-3 recommended).
+2. **API Key** -- Enter your API key. It's validated against the provider's API and stored securely in your system credential store.
+3. **Model Selection** -- Choose your AI provider and preferred model.
 
 ### Build for Production
 
@@ -326,8 +330,8 @@ Type `/settings` into the overlay to configure these options.
 
 | Setting | Location | Description |
 |---|---|---|
-| **API Key** | System credential store (macOS Keychain / Windows Credential Manager) | xAI API key. Never stored in plaintext. Never sent to the frontend. |
-| **Model** | Tauri Store (`settings.json`) | Grok model selection: `grok-3` (default), `grok-3-mini`, `grok-4`, `grok-4-fast` |
+| **API Key** | System credential store (macOS Keychain / Windows Credential Manager) | API key for your selected provider. Never stored in plaintext. Never sent to the frontend. |
+| **Model** | Tauri Store (`settings.json`) | AI provider and model selection. Default provider: xAI. |
 | **Hotkey** | Tauri Store (`settings.json`) | Global trigger shortcut. Default: `Cmd+K` (macOS) / `Ctrl+K` (Windows). Supports any modifier+key combination. |
 | **Destructive Detection** | Settings > Preferences | Toggle safety pattern scanning on/off. Default: enabled. |
 | **Auto-Paste** | Settings > Preferences | Auto-paste generated commands to active terminal. Default: enabled. |

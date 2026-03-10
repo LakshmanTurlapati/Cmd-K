@@ -788,6 +788,27 @@
   cursor: default;
 }
 
+.demo-provider-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.demo-provider-tag {
+  font-size: 10px;
+  color: rgba(255,255,255,0.5);
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.demo-provider-tag.active {
+  background: rgba(255,255,255,0.15);
+  color: white;
+  border-color: rgba(255,255,255,0.25);
+}
+
 .demo-model-option {
   display: flex;
   align-items: center;

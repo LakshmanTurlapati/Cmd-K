@@ -120,6 +120,57 @@
   padding: 2px 6px;
 }
 
+/* ---------- Policy version history ---------- */
+.policy-version {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 12px;
+}
+
+.policy-version summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  list-style: none;
+}
+
+.policy-version summary::-webkit-details-marker {
+  display: none;
+}
+
+.policy-version summary::before {
+  content: '\25B6';
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  transition: transform var(--duration-fast);
+}
+
+.policy-version[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.policy-version-date {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.policy-version-body {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+.policy-version-body p {
+  font-size: 0.9rem;
+}
+
 /* ---------- Responsive ---------- */
 @media (max-width: 768px) {
   .privacy-page {

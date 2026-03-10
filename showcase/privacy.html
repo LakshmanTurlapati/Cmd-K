@@ -43,7 +43,7 @@
         <img src="assets/K-white.png" alt="CMD+K" class="logo-dark">
         <img src="assets/K.png" alt="CMD+K" class="logo-light">
       </div>
-      <span class="mobile-gate-version">v0.2.4</span>
+      <span class="mobile-gate-version">v0.2.6</span>
     </div>
   </div>
 
@@ -81,23 +81,23 @@
       <div class="privacy-header">
         <div class="section-label">Legal</div>
         <h1 class="section-title">Privacy Policy</h1>
-        <p class="privacy-last-updated">Last updated: February 27, 2026</p>
+        <p class="privacy-last-updated">Last updated: March 9, 2026</p>
       </div>
 
       <div class="privacy-content">
         <!-- TL;DR -->
         <div class="privacy-callout">
-          <p><strong>TLDR</strong> CMD+K runs entirely on your device. No servers, no accounts, no analytics. You bring your own xAI API key. Data goes directly from your device to xAI's API, nowhere else.</p>
+          <p><strong>TLDR</strong> CMD+K runs entirely on your device. No servers, no accounts, no analytics. You bring your own API key for the provider you choose (OpenAI, Anthropic, Google Gemini, xAI, or OpenRouter). Data goes directly from your device to your selected provider's API, nowhere else.</p>
         </div>
 
         <!-- How CMD+K Works -->
         <h2>How CMD+K Works</h2>
-        <p>CMD+K is a native desktop overlay application. You press a global hotkey, type a natural-language description of what you want to do, and CMD+K generates a working terminal command using xAI's Grok models. The entire application runs locally on your device. There is no CMD+K server in between.</p>
+        <p>CMD+K is a native desktop overlay application. You press a global hotkey, type a natural-language description of what you want to do, and CMD+K generates a working terminal command using AI models from your chosen provider. The entire application runs locally on your device. There is no CMD+K server in between.</p>
 
 
         <!-- What Is Sent to the AI Provider -->
         <h2>What Is Sent to the AI Provider</h2>
-        <p>When you submit a query, CMD+K sends context to the xAI API so the model can generate an accurate command. The exact data depends on which mode you are using.</p>
+        <p>When you submit a query, CMD+K sends context to your selected AI provider's API so the model can generate an accurate command. The exact data depends on which mode you are using.</p>
 
         <h3>Terminal Mode</h3>
         <ul>
@@ -118,7 +118,15 @@
           <li>Your question</li>
         </ul>
 
-        <p>All data is sent over HTTPS directly to <code>api.x.ai</code>. No data passes through any CMD+K-operated server.</p>
+        <p>All data is sent over HTTPS directly to the provider you selected:</p>
+        <ul>
+          <li><strong>OpenAI</strong> &mdash; <code>api.openai.com</code></li>
+          <li><strong>Anthropic</strong> &mdash; <code>api.anthropic.com</code></li>
+          <li><strong>Google Gemini</strong> &mdash; <code>generativelanguage.googleapis.com</code></li>
+          <li><strong>xAI</strong> &mdash; <code>api.x.ai</code></li>
+          <li><strong>OpenRouter</strong> &mdash; <code>openrouter.ai/api</code></li>
+        </ul>
+        <p>No data passes through any CMD+K-operated server.</p>
 
         <!-- What Is Automatically Filtered -->
         <h2>What Is Automatically Filtered</h2>
@@ -152,15 +160,21 @@
         <h2>Where Your Data Is Stored</h2>
         <p>All persistent data is stored locally on your device:</p>
         <ul>
-          <li><strong>System credential store</strong> Your xAI API key, encrypted by the operating system (macOS Keychain on Mac, Windows Credential Manager on Windows)</li>
+          <li><strong>System credential store</strong> Your API key(s), encrypted by the operating system (macOS Keychain on Mac, Windows Credential Manager on Windows)</li>
           <li><strong>Local settings file</strong> Model preference, hotkey binding, feature toggles</li>
         </ul>
         <p>There is no CMD+K server, no cloud database, no remote backup, and no sync service.</p>
 
         <!-- Third-Party Services -->
         <h2>Third-Party Services</h2>
-        <p>CMD+K connects to exactly one external service: the <strong>xAI API</strong> (<code>api.x.ai</code>). Your queries and the context described above are sent to xAI to generate command suggestions. Once data reaches xAI, their privacy policy applies.</p>
-        <p>You can review xAI's privacy policy at <a href="https://x.ai/legal/privacy-policy" target="_blank" rel="noopener">x.ai/legal/privacy-policy</a>.</p>
+        <p>CMD+K connects to the AI provider you select. Your queries and the context described above are sent to that provider to generate command suggestions. Once data reaches the provider, their privacy policy applies.</p>
+        <ul>
+          <li><strong>OpenAI</strong> &mdash; <a href="https://openai.com/privacy" target="_blank" rel="noopener">openai.com/privacy</a></li>
+          <li><strong>Anthropic</strong> &mdash; <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener">anthropic.com/privacy</a></li>
+          <li><strong>Google Gemini</strong> &mdash; <a href="https://ai.google.dev/terms" target="_blank" rel="noopener">ai.google.dev/terms</a></li>
+          <li><strong>xAI</strong> &mdash; <a href="https://x.ai/legal/privacy-policy" target="_blank" rel="noopener">x.ai/legal/privacy-policy</a></li>
+          <li><strong>OpenRouter</strong> &mdash; <a href="https://openrouter.ai/privacy" target="_blank" rel="noopener">openrouter.ai/privacy</a></li>
+        </ul>
 
         <!-- Permissions -->
         <h2>Permissions</h2>
@@ -168,7 +182,7 @@
 
         <!-- No Telemetry -->
         <h2>No Telemetry</h2>
-        <p>CMD+K includes zero telemetry. There are no analytics SDKs, no tracking pixels, no cookies, no crash reporters, and no usage data transmitted anywhere. The application makes network requests only when you explicitly submit a query, and only to the xAI API.</p>
+        <p>CMD+K includes zero telemetry. There are no analytics SDKs, no tracking pixels, no cookies, no crash reporters, and no usage data transmitted anywhere. The application makes network requests only when you explicitly submit a query, and only to your selected AI provider.</p>
 
         <!-- Open Source -->
         <h2>Open Source</h2>
@@ -181,6 +195,20 @@
         <!-- Contact -->
         <h2>Contact</h2>
         <p>If you have questions about this privacy policy or CMD+K's data handling, please open an issue on <a href="https://github.com/LakshmanTurlapati/Cmd-K/issues" target="_blank" rel="noopener">GitHub Issues</a>.</p>
+
+        <!-- Policy History -->
+        <h2>Policy History</h2>
+        <details class="policy-version">
+          <summary>
+            <span class="policy-version-date">February 27, 2026</span>
+            Initial version &mdash; xAI-only provider support
+          </summary>
+          <div class="policy-version-body">
+            <p><strong>TLDR (original):</strong> CMD+K runs entirely on your device. No servers, no accounts, no analytics. You bring your own xAI API key. Data goes directly from your device to xAI's API, nowhere else.</p>
+            <p><strong>Third-Party Services (original):</strong> CMD+K connects to exactly one external service: the xAI API (<code>api.x.ai</code>). Your queries and the context described above are sent to xAI to generate command suggestions.</p>
+            <p><strong>Endpoint:</strong> All data was sent over HTTPS directly to <code>api.x.ai</code>.</p>
+          </div>
+        </details>
       </div>
     </div>
   </main>
@@ -215,7 +243,7 @@
 
     <div class="footer-bottom">
       <span>Built by <a href="https://github.com/LakshmanTurlapati" target="_blank" rel="noopener">Lakshman Turlapati</a></span>
-      <span>v0.2.4</span>
+      <span>v0.2.6</span>
     </div>
   </footer>
 
