@@ -112,10 +112,29 @@ pub fn detect_full_with_hwnd(
 ) -> Option<AppContext> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
+        // Windows: read UIA text FIRST to extract shell type hint for process tree disambiguation
+        #[cfg(target_os = "windows")]
+        let (uia_text, shell_type_hint) = {
+            let uia = previous_hwnd.and_then(|hwnd| {
+                uia_reader::read_terminal_text_windows(hwnd)
+                    .map(|text| filter::filter_sensitive(&text))
+            });
+            let hint = uia.as_deref().and_then(detect_windows::detect_shell_type_from_uia_text);
+            eprintln!("[detect_full_with_hwnd] UIA shell_type_hint: {:?}", hint);
+            (uia, hint)
+        };
+
+        // Windows: call detect_app_context_windows directly with shell_type_hint
+        #[cfg(target_os = "windows")]
+        #[allow(unused_mut)]
+        let mut result = detect_app_context_windows(previous_app_pid, pre_captured_text, shell_type_hint);
+
+        // Non-Windows: use generic detect_app_context (no shell_type_hint needed)
+        #[cfg(not(target_os = "windows"))]
         #[allow(unused_mut)]
         let mut result = detect_app_context(previous_app_pid, pre_captured_text);
 
-        // Windows: window title WSL detection + UIA text reading
+        // Windows: window title WSL detection + UIA text processing (reusing already-captured UIA text)
         #[cfg(target_os = "windows")]
         if let Some(ref mut ctx) = result {
             if let Some(ref mut terminal) = ctx.terminal {
@@ -138,42 +157,39 @@ pub fn detect_full_with_hwnd(
                     }
                 }
 
+                // Reuse already-captured UIA text (no double reads)
                 if terminal.visible_output.is_none() {
-                    if let Some(hwnd) = previous_hwnd {
-                        let uia_text = uia_reader::read_terminal_text_windows(hwnd)
-                            .map(|text| filter::filter_sensitive(&text));
-                        if let Some(ref text) = uia_text {
-                            eprintln!("[detect_full_with_hwnd] UIA text: {} bytes, content: {:?}", text.len(), &text[..text.len().min(500)]);
+                    if let Some(ref text) = uia_text {
+                        eprintln!("[detect_full_with_hwnd] UIA text: {} bytes, content: {:?}", text.len(), &text[..text.len().min(500)]);
 
-                            // Step 1: Try UIA text-based WSL detection UNCONDITIONALLY
-                            // This is the PRIMARY WSL detection mechanism.
-                            // Process tree ancestry (detect_wsl_in_ancestry) is the fallback,
-                            // but it fails for WSL 2 where Linux processes run in Hyper-V VM.
-                            if !terminal.is_wsl {
-                                if detect_wsl_from_text(text) {
-                                    eprintln!("[detect_full_with_hwnd] WSL detected from UIA text (process tree missed it)");
-                                    terminal.is_wsl = true;
-                                }
-                            }
-
-                            // Step 2: If WSL (from either process tree or UIA text), infer Linux context
-                            if terminal.is_wsl {
-                                if let Some(linux_cwd) = infer_linux_cwd_from_text(text) {
-                                    eprintln!("[detect_full_with_hwnd] inferred Linux CWD from UIA text: {}", &linux_cwd);
-                                    terminal.cwd = Some(linux_cwd);
-                                }
-                                let shell = infer_shell_from_text(text);
-                                eprintln!("[detect_full_with_hwnd] WSL shell from UIA text: {}", shell);
-                                terminal.shell_type = Some(shell.to_string());
-                            } else if terminal.cwd.is_none() {
-                                // Non-WSL: infer shell type from visible text when process tree detection failed
-                                let shell = infer_shell_from_text(text);
-                                eprintln!("[detect_full_with_hwnd] inferred shell from UIA text: {}", shell);
-                                terminal.shell_type = Some(shell.to_string());
+                        // Step 1: Try UIA text-based WSL detection UNCONDITIONALLY
+                        // This is the PRIMARY WSL detection mechanism.
+                        // Process tree ancestry (detect_wsl_in_ancestry) is the fallback,
+                        // but it fails for WSL 2 where Linux processes run in Hyper-V VM.
+                        if !terminal.is_wsl {
+                            if detect_wsl_from_text(text) {
+                                eprintln!("[detect_full_with_hwnd] WSL detected from UIA text (process tree missed it)");
+                                terminal.is_wsl = true;
                             }
                         }
-                        terminal.visible_output = uia_text;
+
+                        // Step 2: If WSL (from either process tree or UIA text), infer Linux context
+                        if terminal.is_wsl {
+                            if let Some(linux_cwd) = infer_linux_cwd_from_text(text) {
+                                eprintln!("[detect_full_with_hwnd] inferred Linux CWD from UIA text: {}", &linux_cwd);
+                                terminal.cwd = Some(linux_cwd);
+                            }
+                            let shell = infer_shell_from_text(text);
+                            eprintln!("[detect_full_with_hwnd] WSL shell from UIA text: {}", shell);
+                            terminal.shell_type = Some(shell.to_string());
+                        } else if terminal.cwd.is_none() {
+                            // Non-WSL: infer shell type from visible text when process tree detection failed
+                            let shell = infer_shell_from_text(text);
+                            eprintln!("[detect_full_with_hwnd] inferred shell from UIA text: {}", shell);
+                            terminal.shell_type = Some(shell.to_string());
+                        }
                     }
+                    terminal.visible_output = uia_text;
                 }
 
                 // Final fallback: detect WSL from CWD path style
@@ -285,8 +301,8 @@ fn detect_inner_windows(previous_app_pid: i32) -> Option<TerminalContext> {
         eprintln!("[detect_inner_windows] {} is not a terminal or IDE, trying generic shell detection", exe_str);
     }
 
-    // Walk process tree to find shell (no shared snapshot in detect_inner path)
-    let proc_info = process::get_foreground_info(previous_app_pid, None);
+    // Walk process tree to find shell (no shared snapshot in detect_inner path, no UIA hint)
+    let proc_info = process::get_foreground_info(previous_app_pid, None, None);
 
     if proc_info.shell_type.is_none() && proc_info.cwd.is_none() {
         eprintln!("[detect_inner_windows] no shell found in process tree of {} ({})", previous_app_pid, exe_str);
@@ -351,7 +367,7 @@ fn detect_app_context(previous_app_pid: i32, pre_captured_text: Option<String>) 
 
     #[cfg(target_os = "windows")]
     {
-        detect_app_context_windows(previous_app_pid, pre_captured_text)
+        detect_app_context_windows(previous_app_pid, pre_captured_text, None)
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -450,20 +466,20 @@ fn detect_app_context_macos(previous_app_pid: i32, pre_captured_text: Option<Str
 }
 
 #[cfg(target_os = "windows")]
-fn detect_app_context_windows(previous_app_pid: i32, _pre_captured_text: Option<String>) -> Option<AppContext> {
+fn detect_app_context_windows(previous_app_pid: i32, _pre_captured_text: Option<String>, shell_type_hint: Option<&str>) -> Option<AppContext> {
     let exe_name = detect_windows::get_exe_name_for_pid(previous_app_pid as u32);
     let exe_str = exe_name.as_deref().unwrap_or("unknown");
     let app_name = Some(detect_windows::clean_exe_name(exe_str));
     let _is_terminal = detect_windows::is_known_terminal_exe(exe_str);
 
-    eprintln!("[detect_app_context_windows] exe={} app_name={:?}", exe_str, &app_name);
+    eprintln!("[detect_app_context_windows] exe={} app_name={:?} shell_type_hint={:?}", exe_str, &app_name, shell_type_hint);
 
     // Create a single ProcessSnapshot for the entire detection pipeline (PROC-03)
     let snapshot = process::ProcessSnapshot::capture();
     eprintln!("[detect_app_context_windows] ProcessSnapshot: {}", if snapshot.is_some() { "captured" } else { "failed" });
 
-    // Walk process tree to find shell using shared snapshot
-    let proc_info = process::get_foreground_info(previous_app_pid, snapshot.as_ref());
+    // Walk process tree to find shell using shared snapshot, with UIA shell hint for disambiguation
+    let proc_info = process::get_foreground_info(previous_app_pid, snapshot.as_ref(), shell_type_hint);
     let has_shell = proc_info.shell_type.is_some() || proc_info.cwd.is_some();
 
     let terminal = if has_shell {

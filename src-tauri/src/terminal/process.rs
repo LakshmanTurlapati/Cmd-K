@@ -90,8 +90,8 @@ pub struct ProcessInfo {
 /// On Windows, accepts an optional ProcessSnapshot to avoid redundant CreateToolhelp32Snapshot calls.
 /// If None on Windows, creates one internally as fallback.
 #[cfg(target_os = "windows")]
-pub fn get_foreground_info(terminal_pid: i32, snapshot: Option<&ProcessSnapshot>) -> ProcessInfo {
-    eprintln!("[process] get_foreground_info for terminal_pid={}", terminal_pid);
+pub fn get_foreground_info(terminal_pid: i32, snapshot: Option<&ProcessSnapshot>, shell_type_hint: Option<&str>) -> ProcessInfo {
+    eprintln!("[process] get_foreground_info for terminal_pid={} shell_type_hint={:?}", terminal_pid, shell_type_hint);
     let children = get_child_pids(terminal_pid);
     eprintln!("[process] direct children of {}: {:?}", terminal_pid, children);
     for &child in &children {
@@ -107,7 +107,7 @@ pub fn get_foreground_info(terminal_pid: i32, snapshot: Option<&ProcessSnapshot>
     };
     let snap = snapshot.or(owned_snapshot.as_ref());
 
-    let shell_pid = match find_shell_pid(terminal_pid, None, snap) {
+    let shell_pid = match find_shell_pid(terminal_pid, None, snap, shell_type_hint) {
         Some(pid) => {
             eprintln!("[process] found shell pid: {} (name: {:?})", pid, get_process_name(pid));
             pid
@@ -602,7 +602,7 @@ fn get_child_pids(_pid: i32) -> Vec<i32> {
 /// multiple terminal tabs. Pass `None` for non-IDE callers.
 /// Find the shell PID for a terminal. Windows version accepts optional ProcessSnapshot.
 #[cfg(target_os = "windows")]
-pub(crate) fn find_shell_pid(terminal_pid: i32, focused_cwd: Option<&str>, snapshot: Option<&ProcessSnapshot>) -> Option<i32> {
+pub(crate) fn find_shell_pid(terminal_pid: i32, focused_cwd: Option<&str>, snapshot: Option<&ProcessSnapshot>, shell_type_hint: Option<&str>) -> Option<i32> {
     // Try the fast recursive walk first (works for simple terminal apps).
     if let Some(pid) = find_shell_recursive(terminal_pid, 3) {
         return Some(pid);
@@ -611,9 +611,9 @@ pub(crate) fn find_shell_pid(terminal_pid: i32, focused_cwd: Option<&str>, snaps
     // Broad search: find shells that are descendants of this app
     eprintln!("[process] recursive walk failed for {}, trying ancestry search", terminal_pid);
     if let Some(snap) = snapshot {
-        find_shell_by_ancestry(terminal_pid, focused_cwd, snap)
+        find_shell_by_ancestry(terminal_pid, focused_cwd, snap, shell_type_hint)
     } else {
-        find_shell_by_ancestry_no_snapshot(terminal_pid, focused_cwd)
+        find_shell_by_ancestry_no_snapshot(terminal_pid, focused_cwd, shell_type_hint)
     }
 }
 
@@ -905,7 +905,7 @@ fn pick_most_recent(candidates: &[(u32, String)]) -> Option<i32> {
 /// cmd.exe candidates are filtered through is_interactive_cmd() instead of blanket exclusion.
 /// Recency is determined by GetProcessTimes (with PID fallback).
 #[cfg(target_os = "windows")]
-fn find_shell_by_ancestry(app_pid: i32, _focused_cwd: Option<&str>, snapshot: &ProcessSnapshot) -> Option<i32> {
+fn find_shell_by_ancestry(app_pid: i32, _focused_cwd: Option<&str>, snapshot: &ProcessSnapshot, shell_type_hint: Option<&str>) -> Option<i32> {
     let app_pid_u32 = app_pid as u32;
 
     // Helper: check if a PID is a descendant of app_pid using snapshot's parent_map
@@ -940,6 +940,24 @@ fn find_shell_by_ancestry(app_pid: i32, _focused_cwd: Option<&str>, snapshot: &P
             .collect()
     };
 
+    // Helper: prefer candidates matching shell_type_hint, fall back to all if none match
+    let pick_with_hint = |candidates: &[(u32, String)]| -> Option<i32> {
+        if let Some(hint) = shell_type_hint {
+            let matching: Vec<(u32, String)> = candidates.iter()
+                .filter(|(_, name)| {
+                    let exe_type = super::detect_windows::exe_to_shell_type(name);
+                    exe_type == hint
+                })
+                .cloned()
+                .collect();
+            eprintln!("[process] shell_type_hint '{}': {} of {} candidates match", hint, matching.len(), candidates.len());
+            if !matching.is_empty() {
+                return pick_most_recent(&matching);
+            }
+        }
+        pick_most_recent(candidates)
+    };
+
     // PRIORITY 1: ConPTY-hosted shells that are descendants of app_pid
     if !snapshot.conpty_host_pids.is_empty() {
         let mut conpty_descendant_shells: Vec<(u32, String)> = Vec::new();
@@ -954,7 +972,7 @@ fn find_shell_by_ancestry(app_pid: i32, _focused_cwd: Option<&str>, snapshot: &P
         let filtered = filter_cmd(&conpty_descendant_shells);
         if !filtered.is_empty() {
             eprintln!("[process] ConPTY descendant selection: {} candidates after cmd.exe filter", filtered.len());
-            return pick_most_recent(&filtered);
+            return pick_with_hint(&filtered);
         }
     }
 
@@ -969,7 +987,7 @@ fn find_shell_by_ancestry(app_pid: i32, _focused_cwd: Option<&str>, snapshot: &P
     let filtered_descendants = filter_cmd(&descendant_shells);
     if !filtered_descendants.is_empty() {
         eprintln!("[process] descendant selection: {} candidates after cmd.exe filter", filtered_descendants.len());
-        return pick_most_recent(&filtered_descendants);
+        return pick_with_hint(&filtered_descendants);
     }
 
     eprintln!("[process] no shell found as descendant of {} on Windows", app_pid);
@@ -988,7 +1006,7 @@ fn find_shell_by_ancestry(app_pid: i32, _focused_cwd: Option<&str>, snapshot: &P
         let filtered = filter_cmd(&all_conpty_shells);
         if !filtered.is_empty() {
             eprintln!("[process] ConPTY fallback: {} candidates after cmd.exe filter", filtered.len());
-            return pick_most_recent(&filtered);
+            return pick_with_hint(&filtered);
         }
     }
 
@@ -1003,10 +1021,10 @@ fn find_shell_by_ancestry(_app_pid: i32, _focused_cwd: Option<&str>) -> Option<i
 
 /// Windows stub that accepts snapshot (used by find_shell_pid when snapshot is available).
 #[cfg(target_os = "windows")]
-fn find_shell_by_ancestry_no_snapshot(app_pid: i32, focused_cwd: Option<&str>) -> Option<i32> {
+fn find_shell_by_ancestry_no_snapshot(app_pid: i32, focused_cwd: Option<&str>, shell_type_hint: Option<&str>) -> Option<i32> {
     // Create an internal snapshot as fallback when no snapshot is provided
     if let Some(snapshot) = ProcessSnapshot::capture() {
-        find_shell_by_ancestry(app_pid, focused_cwd, &snapshot)
+        find_shell_by_ancestry(app_pid, focused_cwd, &snapshot, shell_type_hint)
     } else {
         None
     }

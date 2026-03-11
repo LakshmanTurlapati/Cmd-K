@@ -202,3 +202,93 @@ pub fn extract_wsl_distro_from_title(title: &str) -> Option<String> {
     }
     None
 }
+
+/// Detect shell type from UIA text content of the focused terminal tab.
+///
+/// UIA text for a focused tab starts with the tab title (e.g., "Windows PowerShell",
+/// "Command Prompt"). This function scans the first few lines for shell type indicators.
+///
+/// Returns a static shell type string matching exe_to_shell_type output (e.g., "cmd",
+/// "powershell", "pwsh", "bash") or None if no match found.
+///
+/// Does NOT match user@host patterns (WSL detection is handled separately).
+pub fn detect_shell_type_from_uia_text(text: &str) -> Option<&'static str> {
+    // Only check first 5 lines -- tab title appears at the top of UIA text
+    for line in text.lines().take(5) {
+        let lower = line.to_lowercase();
+        let trimmed = lower.trim();
+
+        if trimmed.contains("command prompt") {
+            return Some("cmd");
+        }
+        if trimmed.contains("windows powershell") {
+            return Some("powershell");
+        }
+        if trimmed.contains("powershell 7") || trimmed.starts_with("pwsh") {
+            return Some("pwsh");
+        }
+        if trimmed.starts_with("mingw") || trimmed.contains("git bash") {
+            return Some("bash");
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_detect_shell_type_powershell() {
+        let text = "Windows PowerShell\nWindows PowerShell\nClose Tab\nNew Tab\n";
+        assert_eq!(detect_shell_type_from_uia_text(text), Some("powershell"));
+    }
+
+    #[test]
+    fn test_detect_shell_type_cmd() {
+        let text = "Command Prompt\nCommand Prompt\nClose Tab\nNew Tab\n";
+        assert_eq!(detect_shell_type_from_uia_text(text), Some("cmd"));
+    }
+
+    #[test]
+    fn test_detect_shell_type_admin_powershell() {
+        let text = "Administrator: Windows PowerShell";
+        assert_eq!(detect_shell_type_from_uia_text(text), Some("powershell"));
+    }
+
+    #[test]
+    fn test_detect_shell_type_wsl_not_matched() {
+        // WSL prompt patterns should NOT be matched -- handled separately
+        let text = "parzival@host:/mnt/c$";
+        assert_eq!(detect_shell_type_from_uia_text(text), None);
+    }
+
+    #[test]
+    fn test_detect_shell_type_random_text_no_match() {
+        let text = "some random app text";
+        assert_eq!(detect_shell_type_from_uia_text(text), None);
+    }
+
+    #[test]
+    fn test_detect_shell_type_pwsh() {
+        let text = "PowerShell 7\npwsh";
+        assert_eq!(detect_shell_type_from_uia_text(text), Some("pwsh"));
+    }
+
+    #[test]
+    fn test_detect_shell_type_git_bash() {
+        let text = "Git Bash\nMINGW64";
+        assert_eq!(detect_shell_type_from_uia_text(text), Some("bash"));
+    }
+
+    #[test]
+    fn test_detect_shell_type_mingw() {
+        let text = "MINGW64:/c/Users/test$";
+        assert_eq!(detect_shell_type_from_uia_text(text), Some("bash"));
+    }
+
+    #[test]
+    fn test_detect_shell_type_empty() {
+        assert_eq!(detect_shell_type_from_uia_text(""), None);
+    }
+}
