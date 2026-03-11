@@ -100,7 +100,7 @@
 Plans:
 - [x] 27-01-PLAN.md -- ProcessSnapshot struct, PEB command line reader, cmd.exe filtering logic with unit tests
 - [x] 27-02-PLAN.md -- ConPTY-first shell selection, snapshot threading through detection pipeline
-- [ ] 27-03-PLAN.md -- UIA shell type hint for multi-tab disambiguation (gap closure)
+- [x] 27-03-PLAN.md -- UIA shell type hint for multi-tab disambiguation (gap closure)
 
 ### Phase 28: UIA Terminal Text Scoping
 **Goal**: Terminal text reading captures only terminal panel content, not editor or sidebar text from the IDE window
@@ -109,7 +109,10 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. When CMD+K reads terminal text in VS Code or Cursor, the captured text contains only terminal output -- no code editor content, sidebar text, or menu labels leak into the reading
   2. A Linux-style path appearing only in the VS Code editor (not the terminal) does not trigger WSL detection -- multiple corroborating signals are required before declaring a session as WSL
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 28-01-PLAN.md -- Multi-signal WSL text detection with scoring threshold (TDD)
+- [ ] 28-02-PLAN.md -- Scoped UIA tree walk targeting terminal List elements
 
 ### Phase 29: Active Tab Matching
 **Goal**: The focused terminal tab's shell is correctly identified even when multiple tabs with different shell types are open
@@ -145,6 +148,6 @@ Phases execute in numeric order: 27 -> 28 -> 29 -> 30
 | 21-24 | v0.2.6 | 10/10 | Complete | 2026-03-09 |
 | 25-26 | v0.2.7 | 3/3 | Complete | 2026-03-10 |
 | 27. ConPTY Discovery | 3/3 | Complete    | 2026-03-11 | 2026-03-11 |
-| 28. UIA Scoping | v0.2.8 | 0/0 | Not started | - |
+| 28. UIA Scoping | v0.2.8 | 0/2 | In progress | - |
 | 29. Tab Matching | v0.2.8 | 0/0 | Not started | - |
 | 30. WSL Hardening | v0.2.8 | 0/0 | Not started | - |
