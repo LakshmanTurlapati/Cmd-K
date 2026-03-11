@@ -14,6 +14,7 @@ use uiautomation::types::Handle;
 use uiautomation::types::TreeScope;
 #[cfg(target_os = "windows")]
 use uiautomation::types::{UIProperty, ControlType};
+use uiautomation::variants::Variant;
 #[cfg(target_os = "windows")]
 use uiautomation::patterns::UITextPattern;
 
@@ -175,7 +176,7 @@ fn try_scoped_terminal_walk(
 ) -> Result<String, String> {
     // Find all List elements (xterm.js terminal uses role="list" -> ControlType::List)
     let list_condition = automation
-        .create_property_condition(UIProperty::ControlType, ControlType::List.into(), None)
+        .create_property_condition(UIProperty::ControlType, Variant::from(ControlType::List as i32), None)
         .map_err(|e| format!("create list condition failed: {}", e))?;
 
     let lists = element

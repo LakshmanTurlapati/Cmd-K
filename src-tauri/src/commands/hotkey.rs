@@ -172,7 +172,11 @@ fn compute_window_key(pid: i32, focused_cwd: Option<String>) -> String {
     let is_ide = terminal::detect::is_ide_with_terminal(bundle_str);
 
     let key = if is_terminal || is_ide {
-        match terminal::process::find_shell_pid(pid, focused_cwd.as_deref(), None) {
+        #[cfg(target_os = "windows")]
+        let shell_pid = terminal::process::find_shell_pid(pid, focused_cwd.as_deref(), None, None);
+        #[cfg(not(target_os = "windows"))]
+        let shell_pid = terminal::process::find_shell_pid(pid, focused_cwd.as_deref(), None);
+        match shell_pid {
             Some(shell_pid) => format!("{}:{}", bundle_str, shell_pid),
             None => format!("{}:{}", bundle_str, pid),
         }
