@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: in-progress
-stopped_at: Completed 28-01-PLAN.md (multi-signal WSL text detection)
-last_updated: "2026-03-11T17:20:03.492Z"
-last_activity: 2026-03-11 -- Completed 28-01 multi-signal WSL text detection
+stopped_at: Completed 28-02-PLAN.md (scoped UIA tree walk)
+last_updated: "2026-03-11T21:42:00.000Z"
+last_activity: 2026-03-11 -- Completed 28-02 scoped UIA tree walk
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 5
-  completed_plans: 4
-  percent: 100
+  completed_plans: 5
+  percent: 80
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-11)
 ## Current Position
 
 Phase: 28 of 30 (UIA Terminal Text Scoping)
-Plan: 1 of 2 in current phase
+Plan: 2 of 2 in current phase (phase complete)
 Status: in-progress
-Last activity: 2026-03-11 -- Completed 28-01 multi-signal WSL text detection
+Last activity: 2026-03-11 -- Completed 28-02 scoped UIA tree walk
 
-Progress: [████████░░] 80%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -59,6 +59,9 @@ Recent decisions affecting current work:
 - [Phase 27]: UIA text read before process tree walk to extract shell type hint for multi-tab disambiguation
 - [Phase 28]: Scoring threshold >= 2 for WSL text detection eliminates single-path false positives
 - [Phase 28]: WSL mount paths (/mnt/c/) score 2 (strong signal); Linux paths score 1 (weak signal)
+- [Phase 28]: ControlType::List identifies xterm.js terminal panels in VS Code UIA tree
+- [Phase 28]: IsOffscreen property filters inactive terminal tabs from text capture
+- [Phase 28]: 3-strategy UIA text cascade: TextPattern -> scoped walk -> full tree fallback
 
 ### Pending Todos
 
@@ -66,12 +69,12 @@ None.
 
 ### Blockers/Concerns
 
-- UIA tree structure for VS Code terminal panel needs empirical verification (Phase 28)
+- ~~UIA tree structure for VS Code terminal panel needs empirical verification (Phase 28)~~ -- RESOLVED: ControlType::List confirmed correct
 - Cursor IDE assumed same as VS Code fork -- needs testing (Phase 27)
 - Windows 10 vs 11 ConPTY differences may exist (conhost.exe vs OpenConsole.exe)
 
 ## Session Continuity
 
-Last session: 2026-03-11T17:15:20Z
-Stopped at: Completed 28-01-PLAN.md (multi-signal WSL text detection)
-Next action: Execute 28-02-PLAN.md (scoped terminal walk with List-element filtering)
+Last session: 2026-03-11T21:42:00Z
+Stopped at: Completed 28-02-PLAN.md (scoped UIA tree walk)
+Next action: Plan Phase 29 (Active Tab Matching)

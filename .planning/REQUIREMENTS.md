@@ -26,7 +26,7 @@ Requirements for Windows terminal detection fix milestone. Each maps to roadmap 
 
 ### UIA Scoping
 
-- [ ] **UIAS-01**: UIA text reading scoped to terminal panel elements only — editor content, sidebars, menus excluded from text capture
+- [x] **UIAS-01**: UIA text reading scoped to terminal panel elements only — editor content, sidebars, menus excluded from text capture
 - [x] **UIAS-02**: WSL text detection requires multiple corroborating signals before declaring WSL — single Linux path in text insufficient
 
 ## Future Requirements
@@ -56,7 +56,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROC-01 | Phase 27 | Complete |
 | PROC-02 | Phase 27 | Complete |
 | PROC-03 | Phase 27 | Complete |
-| UIAS-01 | Phase 28 | Pending |
+| UIAS-01 | Phase 28 | Complete |
 | UIAS-02 | Phase 28 | Complete |
 | TABM-01 | Phase 29 | Pending |
 | TABM-02 | Phase 29 | Pending |
