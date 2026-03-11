@@ -5,9 +5,9 @@ milestone_name: Windows Terminal Detection Fix
 status: active
 stopped_at: null
 last_updated: "2026-03-11"
-last_activity: 2026-03-11 -- Milestone v0.2.8 started
+last_activity: 2026-03-11 -- Roadmap created for v0.2.8
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-11)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** v0.2.8 Windows Terminal Detection Fix
+**Current focus:** Phase 27 - ConPTY Discovery & Process Snapshot
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-11 — Milestone v0.2.8 started
+Phase: 27 of 30 (ConPTY Discovery & Process Snapshot)
+Plan: 0 of TBD in current phase
+Status: Ready to plan
+Last activity: 2026-03-11 -- Roadmap created for v0.2.8 Windows Terminal Detection Fix
 
 Progress: [░░░░░░░░░░] 0% (v0.2.8)
 
@@ -48,6 +48,12 @@ Progress: [░░░░░░░░░░] 0% (v0.2.8)
 ### Decisions
 
 All decisions archived in PROJECT.md Key Decisions table.
+Recent decisions affecting current work:
+
+- [v0.2.8]: ConPTY parentage replaces highest-PID heuristic for shell discovery
+- [v0.2.8]: No new crates -- uses existing windows-sys 0.59 + uiautomation 0.24
+- [v0.2.8]: Never add wsl.exe to KNOWN_SHELL_EXES (caused prior revert)
+- [v0.2.8]: WSL 2 Linux processes invisible to Win32 APIs -- output signals only
 
 ### Pending Todos
 
@@ -55,12 +61,12 @@ None.
 
 ### Blockers/Concerns
 
-- Phase 23.1 KNOWN GAP: IDE terminal type detection faulty -- always detects cmd.exe instead of active shell in VS Code.
-- WSL detection in IDE local terminal profiles (non-Remote-WSL) not working.
-- All Windows UAT test cases from v0.2.1/v0.2.6 pending hardware verification.
+- UIA tree structure for VS Code terminal panel needs empirical verification (Phase 28)
+- Cursor IDE assumed same as VS Code fork -- needs testing (Phase 27)
+- Windows 10 vs 11 ConPTY differences may exist (conhost.exe vs OpenConsole.exe)
 
 ## Session Continuity
 
 Last session: 2026-03-11
-Stopped at: Defining requirements for v0.2.8
-Next action: Define requirements and create roadmap
+Stopped at: Roadmap created for v0.2.8 milestone
+Next action: Plan Phase 27
