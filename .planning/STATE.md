@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
-status: completed
-stopped_at: Completed 27-03-PLAN.md (gap closure - multi-tab shell disambiguation)
-last_updated: "2026-03-11T14:54:18.743Z"
-last_activity: 2026-03-11 -- Completed 27-03 UIA-guided shell disambiguation
+status: in-progress
+stopped_at: Completed 28-01-PLAN.md (multi-signal WSL text detection)
+last_updated: "2026-03-11T17:20:03.492Z"
+last_activity: 2026-03-11 -- Completed 28-01 multi-signal WSL text detection
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 5
+  completed_plans: 4
   percent: 100
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-11)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Phase 27 - ConPTY Discovery & Process Snapshot
+**Current focus:** Phase 28 - UIA Terminal Text Scoping
 
 ## Current Position
 
-Phase: 27 of 30 (ConPTY Discovery & Process Snapshot)
-Plan: 3 of 3 in current phase
-Status: phase-complete
-Last activity: 2026-03-11 -- Completed 27-03 UIA-guided shell disambiguation
+Phase: 28 of 30 (UIA Terminal Text Scoping)
+Plan: 1 of 2 in current phase
+Status: in-progress
+Last activity: 2026-03-11 -- Completed 28-01 multi-signal WSL text detection
 
-Progress: [██████████] 100% (v0.2.8)
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
@@ -57,6 +57,8 @@ Recent decisions affecting current work:
 - [Phase 27]: Check both conhost.exe and OpenConsole.exe as ConPTY hosts for Win10/Win11 compatibility
 - [Phase 27]: Conservative fallback: treat cmd.exe as interactive when PEB read fails
 - [Phase 27]: UIA text read before process tree walk to extract shell type hint for multi-tab disambiguation
+- [Phase 28]: Scoring threshold >= 2 for WSL text detection eliminates single-path false positives
+- [Phase 28]: WSL mount paths (/mnt/c/) score 2 (strong signal); Linux paths score 1 (weak signal)
 
 ### Pending Todos
 
@@ -70,6 +72,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-11T14:49:27Z
-Stopped at: Completed 27-03-PLAN.md (gap closure - multi-tab shell disambiguation)
-Next action: UAT re-test of multi-tab shell disambiguation, then Phase 28
+Last session: 2026-03-11T17:15:20Z
+Stopped at: Completed 28-01-PLAN.md (multi-signal WSL text detection)
+Next action: Execute 28-02-PLAN.md (scoped terminal walk with List-element filtering)

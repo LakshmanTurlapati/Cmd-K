@@ -109,7 +109,7 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. When CMD+K reads terminal text in VS Code or Cursor, the captured text contains only terminal output -- no code editor content, sidebar text, or menu labels leak into the reading
   2. A Linux-style path appearing only in the VS Code editor (not the terminal) does not trigger WSL detection -- multiple corroborating signals are required before declaring a session as WSL
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 28-01-PLAN.md -- Multi-signal WSL text detection with scoring threshold (TDD)
 - [ ] 28-02-PLAN.md -- Scoped UIA tree walk targeting terminal List elements
@@ -148,6 +148,6 @@ Phases execute in numeric order: 27 -> 28 -> 29 -> 30
 | 21-24 | v0.2.6 | 10/10 | Complete | 2026-03-09 |
 | 25-26 | v0.2.7 | 3/3 | Complete | 2026-03-10 |
 | 27. ConPTY Discovery | 3/3 | Complete    | 2026-03-11 | 2026-03-11 |
-| 28. UIA Scoping | v0.2.8 | 0/2 | In progress | - |
+| 28. UIA Scoping | 1/2 | In Progress|  | - |
 | 29. Tab Matching | v0.2.8 | 0/0 | Not started | - |
 | 30. WSL Hardening | v0.2.8 | 0/0 | Not started | - |
