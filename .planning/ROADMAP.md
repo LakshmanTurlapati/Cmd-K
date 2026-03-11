@@ -8,7 +8,7 @@
 - v0.2.4 Overlay UX, Safety & CI/CD -- Phases 17-20 (shipped 2026-03-04) | [Archive](milestones/v0.2.4-ROADMAP.md)
 - v0.2.6 Multi-Provider, WSL & Auto-Update -- Phases 21-24 (shipped 2026-03-09) | [Archive](milestones/v0.2.6-ROADMAP.md)
 - v0.2.7 Cost Estimation -- Phases 25-26 (shipped 2026-03-10) | [Archive](milestones/v0.2.7-ROADMAP.md)
-- v0.2.8 Windows Terminal Detection Fix -- Phases 27-30 (in progress)
+- v0.2.8 Windows Terminal Detection Fix & Provider Icons -- Phases 27-29 (in progress)
 
 ## Phases
 
@@ -79,12 +79,11 @@
 
 ### v0.2.8 Windows Terminal Detection Fix (In Progress)
 
-**Milestone Goal:** Fix unreliable WSL detection and shell type differentiation across all Windows terminal hosts.
+**Milestone Goal:** Fix unreliable WSL detection and shell type differentiation across all Windows terminal hosts. Add provider branding to onboarding and settings UI.
 
 - [x] **Phase 27: ConPTY Discovery & Process Snapshot** - Replace highest-PID heuristic with ConPTY-aware shell discovery and consolidated process snapshot (completed 2026-03-11)
 - [x] **Phase 28: UIA Terminal Text Scoping** - Scope UIA text reading to terminal panel elements only, eliminating false positives from IDE chrome (completed 2026-03-11)
-- [ ] **Phase 29: Active Tab Matching** - Identify the active terminal tab's shell via CWD-based disambiguation and window title parsing
-- [ ] **Phase 30: WSL Detection Hardening** - Reliable WSL detection across all scenarios using multi-signal waterfall with sibling and environment detection
+- [ ] **Phase 29: Provider Icon Branding** - Add provider SVG icons to onboarding wizard and settings provider selection
 
 ## Phase Details
 
@@ -114,30 +113,19 @@ Plans:
 - [x] 28-01-PLAN.md -- Multi-signal WSL text detection with scoring threshold (TDD)
 - [x] 28-02-PLAN.md -- Scoped UIA tree walk targeting terminal List elements
 
-### Phase 29: Active Tab Matching
-**Goal**: The focused terminal tab's shell is correctly identified even when multiple tabs with different shell types are open
-**Depends on**: Phase 27 (needs ConPTY shell list to match against)
-**Requirements**: TABM-01, TABM-02
+### Phase 29: Provider Icon Branding
+**Goal**: Provider selection in onboarding and settings shows recognizable SVG icons (same as showcase site) instead of plain text initials
+**Depends on**: Nothing (UI-only phase)
+**Requirements**: ICON-01, ICON-02
 **Success Criteria** (what must be TRUE):
-  1. With three terminal tabs open (PowerShell, cmd.exe, bash) in VS Code, CMD+K identifies the shell matching the currently focused tab -- not whichever process was most recently spawned
-  2. In Windows Terminal with multiple panes or tabs, CMD+K identifies the shell process belonging to the focused pane via UIA tree correlation
-**Plans**: TBD
-
-### Phase 30: WSL Detection Hardening
-**Goal**: WSL sessions reliably detected across all terminal hosts without false positives or missed detections
-**Depends on**: Phases 27, 28, 29 (benefits from clean shell candidates, scoped text, and correct tab identification)
-**Requirements**: WSLD-01, WSLD-02, WSLD-03
-**Success Criteria** (what must be TRUE):
-  1. A WSL terminal tab in Windows Terminal, VS Code, or Cursor is correctly detected as WSL and generates Linux commands -- even without Remote-WSL mode enabled
-  2. WSL detection uses wsl.exe sibling relationship (shared ConPTY parent with the detected shell) as a primary signal, working for both WSL 1 and WSL 2 without relying on Linux process visibility
-  3. When multiple WSL distros are installed, CMD+K identifies the correct distro for the active tab via process args or window title, and reads the correct Linux CWD
-  4. Non-WSL terminals (native PowerShell, cmd.exe) are never falsely identified as WSL, even when WSL-related processes exist in the system process tree
+  1. The onboarding provider selection step shows inline SVG icons (OpenAI, Anthropic, Gemini, xAI, OpenRouter) matching the showcase site's provider cards
+  2. The settings provider dropdown/selector shows the same SVG icons next to provider names
 **Plans**: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 27 -> 28 -> 29 -> 30
+Phases execute in numeric order: 27 -> 28 -> 29
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -149,5 +137,4 @@ Phases execute in numeric order: 27 -> 28 -> 29 -> 30
 | 25-26 | v0.2.7 | 3/3 | Complete | 2026-03-10 |
 | 27. ConPTY Discovery | 3/3 | Complete    | 2026-03-11 | 2026-03-11 |
 | 28. UIA Scoping | 2/2 | Complete    | 2026-03-11 | 2026-03-11 |
-| 29. Tab Matching | v0.2.8 | 0/0 | Not started | - |
-| 30. WSL Hardening | v0.2.8 | 0/0 | Not started | - |
+| 29. Provider Icons | v0.2.8 | 0/0 | Not started | - |

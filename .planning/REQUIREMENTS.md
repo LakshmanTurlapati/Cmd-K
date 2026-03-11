@@ -13,16 +13,10 @@ Requirements for Windows terminal detection fix milestone. Each maps to roadmap 
 - [x] **PROC-02**: Internal IDE cmd.exe processes (git, extensions, tasks) filtered out — only interactive console-attached cmd.exe selected
 - [x] **PROC-03**: Process snapshot consolidated into single CreateToolhelp32Snapshot call shared across shell discovery, WSL detection, and diagnostics
 
-### WSL Detection
+### Provider Icon Branding
 
-- [ ] **WSLD-01**: WSL terminals detected via wsl.exe sibling relationship (shares parent with detected shell under ConPTY)
-- [ ] **WSLD-02**: WSL detected via environment block reading — WSL_DISTRO_NAME present in process environment confirms WSL
-- [ ] **WSLD-03**: Correct WSL distro matched to active tab via process args or window title in multi-distro scenarios
-
-### Active Tab Matching
-
-- [ ] **TABM-01**: Active terminal tab's shell identified via CWD-based disambiguation using focused_cwd parameter (Windows parity with macOS)
-- [ ] **TABM-02**: Windows Terminal focused pane identified via UIA tree walking to correlate focused TermControl with its shell process
+- [ ] **ICON-01**: Onboarding provider selection shows inline SVG icons (OpenAI, Anthropic, Gemini, xAI, OpenRouter) matching showcase site provider cards
+- [ ] **ICON-02**: Settings provider selector shows same SVG icons next to provider names
 
 ### UIA Scoping
 
@@ -58,15 +52,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROC-03 | Phase 27 | Complete |
 | UIAS-01 | Phase 28 | Complete |
 | UIAS-02 | Phase 28 | Complete |
-| TABM-01 | Phase 29 | Pending |
-| TABM-02 | Phase 29 | Pending |
-| WSLD-01 | Phase 30 | Pending |
-| WSLD-02 | Phase 30 | Pending |
-| WSLD-03 | Phase 30 | Pending |
+| ICON-01 | Phase 29 | Pending |
+| ICON-02 | Phase 29 | Pending |
 
 **Coverage:**
-- v0.2.8 requirements: 10 total
-- Mapped to phases: 10
+- v0.2.8 requirements: 7 total
+- Mapped to phases: 7
 - Unmapped: 0
 
 ---
