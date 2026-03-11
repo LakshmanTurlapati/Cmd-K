@@ -83,7 +83,7 @@
 
 - [x] **Phase 27: ConPTY Discovery & Process Snapshot** - Replace highest-PID heuristic with ConPTY-aware shell discovery and consolidated process snapshot (completed 2026-03-11)
 - [x] **Phase 28: UIA Terminal Text Scoping** - Scope UIA text reading to terminal panel elements only, eliminating false positives from IDE chrome (completed 2026-03-11)
-- [ ] **Phase 29: Provider Icon Branding** - Add provider SVG icons to onboarding wizard and settings provider selection
+- [x] **Phase 29: Provider Icon Branding** - Add provider SVG icons to onboarding wizard and settings provider selection (completed 2026-03-11)
 
 ## Phase Details
 
@@ -120,7 +120,7 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. The onboarding provider selection step shows inline SVG icons (OpenAI, Anthropic, Gemini, xAI, OpenRouter) matching the showcase site's provider cards
   2. The settings provider dropdown/selector shows the same SVG icons next to provider names
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
 - [ ] 29-01-PLAN.md -- ProviderIcon component and integration into onboarding + settings UI
 
@@ -139,4 +139,4 @@ Phases execute in numeric order: 27 -> 28 -> 29
 | 25-26 | v0.2.7 | 3/3 | Complete | 2026-03-10 |
 | 27. ConPTY Discovery | 3/3 | Complete    | 2026-03-11 | 2026-03-11 |
 | 28. UIA Scoping | 2/2 | Complete    | 2026-03-11 | 2026-03-11 |
-| 29. Provider Icons | v0.2.8 | 0/1 | Not started | - |
+| 29. Provider Icons | 1/1 | Complete   | 2026-03-11 | - |

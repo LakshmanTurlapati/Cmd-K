@@ -15,8 +15,8 @@ Requirements for Windows terminal detection fix milestone. Each maps to roadmap 
 
 ### Provider Icon Branding
 
-- [ ] **ICON-01**: Onboarding provider selection shows inline SVG icons (OpenAI, Anthropic, Gemini, xAI, OpenRouter) matching showcase site provider cards
-- [ ] **ICON-02**: Settings provider selector shows same SVG icons next to provider names
+- [x] **ICON-01**: Onboarding provider selection shows inline SVG icons (OpenAI, Anthropic, Gemini, xAI, OpenRouter) matching showcase site provider cards
+- [x] **ICON-02**: Settings provider selector shows same SVG icons next to provider names
 
 ### UIA Scoping
 
@@ -52,8 +52,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROC-03 | Phase 27 | Complete |
 | UIAS-01 | Phase 28 | Complete |
 | UIAS-02 | Phase 28 | Complete |
-| ICON-01 | Phase 29 | Pending |
-| ICON-02 | Phase 29 | Pending |
+| ICON-01 | Phase 29 | Complete |
+| ICON-02 | Phase 29 | Complete |
 
 **Coverage:**
 - v0.2.8 requirements: 7 total

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: in-progress
-stopped_at: Phase 29 context gathered
-last_updated: "2026-03-11T22:25:49.709Z"
-last_activity: 2026-03-11 -- Completed 28-02 scoped UIA tree walk
+stopped_at: Completed 29-01-PLAN.md
+last_updated: "2026-03-11T22:47:31.744Z"
+last_activity: 2026-03-11 -- Completed 29-01 provider icon branding
 progress:
   total_phases: 3
-  completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
+  completed_phases: 3
+  total_plans: 6
+  completed_plans: 6
   percent: 100
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-11)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Phase 28 - UIA Terminal Text Scoping
+**Current focus:** Phase 29 - Provider Icon Branding
 
 ## Current Position
 
-Phase: 28 of 30 (UIA Terminal Text Scoping)
-Plan: 2 of 2 in current phase (phase complete)
+Phase: 29 of 30 (Provider Icon Branding)
+Plan: 1 of 1 in current phase (phase complete)
 Status: in-progress
-Last activity: 2026-03-11 -- Completed 28-02 scoped UIA tree walk
+Last activity: 2026-03-11 -- Completed 29-01 provider icon branding
 
 Progress: [██████████] 100%
 
@@ -62,6 +62,7 @@ Recent decisions affecting current work:
 - [Phase 28]: ControlType::List identifies xterm.js terminal panels in VS Code UIA tree
 - [Phase 28]: IsOffscreen property filters inactive terminal tabs from text capture
 - [Phase 28]: 3-strategy UIA text cascade: TextPattern -> scoped walk -> full tree fallback
+- [Phase 29]: No icon appearance change on selection -- existing row highlight is sufficient
 
 ### Pending Todos
 
@@ -75,6 +76,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-11T22:25:49.679Z
-Stopped at: Phase 29 context gathered
+Last session: 2026-03-11T22:47:31.718Z
+Stopped at: Completed 29-01-PLAN.md
 Next action: Plan Phase 29 (Active Tab Matching)
