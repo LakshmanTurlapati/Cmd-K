@@ -1,9 +1,9 @@
 ---
-status: complete
+status: diagnosed
 phase: 27-conpty-discovery-process-snapshot
 source: [27-01-SUMMARY.md, 27-02-SUMMARY.md]
 started: 2026-03-11T14:10:00Z
-updated: 2026-03-11T15:50:00Z
+updated: 2026-03-11T15:55:00Z
 ---
 
 ## Current Test
@@ -51,13 +51,29 @@ skipped: 0
   reason: "User reported: Both for powershell and cmd it just detects as cmd. pick_most_recent selects most recently created cmd.exe regardless of focused tab. WSL works via UIA text fallback."
   severity: major
   test: 1
-  artifacts: []
-  missing: []
+  root_cause: "UIA text contains focused tab shell type ('Command Prompt', 'Windows PowerShell') but is only consumed by detect_wsl_from_text — not used to disambiguate among process tree candidates"
+  artifacts:
+    - path: "src-tauri/src/terminal/mod.rs"
+      issue: "detect_full_with_hwnd captures UIA text but doesn't extract shell type for non-WSL"
+    - path: "src-tauri/src/terminal/process.rs"
+      issue: "pick_most_recent has no UIA signal to prefer focused tab's shell"
+  missing:
+    - "Parse shell type from UIA text (Command Prompt → cmd, Windows PowerShell → powershell)"
+    - "Use shell type as filter/preference when selecting among multiple process tree candidates"
+  debug_session: ".planning/debug/multi-tab-shell-disambiguation.md"
 
 - truth: "Focused tab is correctly identified when multiple shells are open in Windows Terminal"
   status: failed
   reason: "User reported: WT only exposes one shell as direct child. find_shell_recursive picks it immediately. UIA text contains focused tab name ('Command Prompt' / 'Windows PowerShell') but is not used for non-WSL shell type disambiguation."
   severity: major
   test: 3
-  artifacts: []
-  missing: []
+  root_cause: "Same as gap 1 — UIA text has the signal but it's not used. Additionally, find_shell_recursive returns the first direct child without considering whether it matches the focused tab."
+  artifacts:
+    - path: "src-tauri/src/terminal/process.rs"
+      issue: "find_shell_recursive returns first shell child without tab-focus awareness"
+    - path: "src-tauri/src/terminal/detect_windows.rs"
+      issue: "detect_wsl_from_text only matches WSL patterns, not general shell types"
+  missing:
+    - "Extend UIA text parsing to detect non-WSL shell types"
+    - "Pass detected shell type hint to find_shell_pid/find_shell_by_ancestry for preference"
+  debug_session: ".planning/debug/multi-tab-shell-disambiguation.md"
