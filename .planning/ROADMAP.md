@@ -120,7 +120,9 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. The onboarding provider selection step shows inline SVG icons (OpenAI, Anthropic, Gemini, xAI, OpenRouter) matching the showcase site's provider cards
   2. The settings provider dropdown/selector shows the same SVG icons next to provider names
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 29-01-PLAN.md -- ProviderIcon component and integration into onboarding + settings UI
 
 ## Progress
 
@@ -137,4 +139,4 @@ Phases execute in numeric order: 27 -> 28 -> 29
 | 25-26 | v0.2.7 | 3/3 | Complete | 2026-03-10 |
 | 27. ConPTY Discovery | 3/3 | Complete    | 2026-03-11 | 2026-03-11 |
 | 28. UIA Scoping | 2/2 | Complete    | 2026-03-11 | 2026-03-11 |
-| 29. Provider Icons | v0.2.8 | 0/0 | Not started | - |
+| 29. Provider Icons | v0.2.8 | 0/1 | Not started | - |
