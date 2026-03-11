@@ -9,7 +9,7 @@ Requirements for Windows terminal detection fix milestone. Each maps to roadmap 
 
 ### Process Detection
 
-- [ ] **PROC-01**: User's active shell correctly identified via ConPTY parentage (OpenConsole.exe/conhost.exe) instead of highest-PID heuristic
+- [x] **PROC-01**: User's active shell correctly identified via ConPTY parentage (OpenConsole.exe/conhost.exe) instead of highest-PID heuristic
 - [x] **PROC-02**: Internal IDE cmd.exe processes (git, extensions, tasks) filtered out — only interactive console-attached cmd.exe selected
 - [x] **PROC-03**: Process snapshot consolidated into single CreateToolhelp32Snapshot call shared across shell discovery, WSL detection, and diagnostics
 
@@ -53,7 +53,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PROC-01 | Phase 27 | Pending |
+| PROC-01 | Phase 27 | Complete |
 | PROC-02 | Phase 27 | Complete |
 | PROC-03 | Phase 27 | Complete |
 | UIAS-01 | Phase 28 | Pending |
