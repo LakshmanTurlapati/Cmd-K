@@ -144,7 +144,7 @@ Phases execute in numeric order: 27 -> 28 -> 29 -> 30
 | 17-20 | v0.2.4 | 5/5 | Complete | 2026-03-04 |
 | 21-24 | v0.2.6 | 10/10 | Complete | 2026-03-09 |
 | 25-26 | v0.2.7 | 3/3 | Complete | 2026-03-10 |
-| 27. ConPTY Discovery | 3/3 | Complete   | 2026-03-11 | 2026-03-11 |
+| 27. ConPTY Discovery | 3/3 | Complete    | 2026-03-11 | 2026-03-11 |
 | 28. UIA Scoping | v0.2.8 | 0/0 | Not started | - |
 | 29. Tab Matching | v0.2.8 | 0/0 | Not started | - |
 | 30. WSL Hardening | v0.2.8 | 0/0 | Not started | - |
