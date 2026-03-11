@@ -971,32 +971,8 @@
 
 /* -- Demo Responsive -- */
 @media (max-width: 768px) {
-  .desktop-screen {
-    padding: 16px;
-    aspect-ratio: auto;
-    min-height: 420px;
-  }
-
-  .demo-term-window {
-    width: 100%;
-  }
-
-  .desktop-menubar {
-    font-size: 11px;
-    height: 22px;
-    padding: 0 8px;
-  }
-
-  .menubar-left {
-    gap: 10px;
-  }
-
-  .menubar-menu {
+  .demo-section {
     display: none;
-  }
-
-  .demo-overlay {
-    width: 280px;
   }
 }
 
@@ -1243,6 +1219,12 @@
   .cta-box {
     padding: 48px 24px;
   }
+
+  .terminal-body {
+    height: auto;
+    max-height: 250px;
+  }
+
 }
 
 @media (max-width: 480px) {
@@ -1260,4 +1242,9 @@
     padding: 6px 12px;
     font-size: 0.78rem;
   }
+
+  .terminal-body {
+    max-height: 200px;
+  }
+
 }
