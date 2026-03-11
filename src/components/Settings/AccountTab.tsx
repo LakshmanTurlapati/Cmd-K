@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Store } from "@tauri-apps/plugin-store";
 import { Eye, EyeOff, Check, X, Loader2, AlertCircle, ChevronDown } from "lucide-react";
 import { useOverlayStore, PROVIDERS, ModelWithMeta } from "@/store";
+import { ProviderIcon } from "@/components/icons/ProviderIcon";
 
 export function AccountTab() {
   const apiKeyStatus = useOverlayStore((s) => s.apiKeyStatus);
@@ -172,9 +173,12 @@ export function AccountTab() {
           <button
             type="button"
             onClick={() => setDropdownOpen((o) => !o)}
-            className="w-full flex items-center justify-between bg-white/8 border border-white/10 rounded-lg px-3 py-2 text-sm text-white cursor-default"
+            className="w-full flex items-center gap-2 bg-white/8 border border-white/10 rounded-lg px-3 py-2 text-sm text-white cursor-default"
           >
-            <span>{currentProviderName}</span>
+            <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+              <ProviderIcon provider={selectedProvider} size={12} className="text-white/70" />
+            </div>
+            <span className="flex-1 text-left">{currentProviderName}</span>
             <ChevronDown size={14} className="text-white/40" />
           </button>
           {dropdownOpen && (
@@ -185,13 +189,16 @@ export function AccountTab() {
                   type="button"
                   onClick={() => handleProviderSelect(p.id)}
                   className={[
-                    "w-full flex items-center justify-between px-3 py-2 text-sm transition-colors cursor-default",
+                    "w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors cursor-default",
                     p.id === selectedProvider
                       ? "text-white bg-white/10"
                       : "text-white/70 hover:bg-white/8",
                   ].join(" ")}
                 >
-                  <span>{p.name}</span>
+                  <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                    <ProviderIcon provider={p.id} size={12} className="text-white/70" />
+                  </div>
+                  <span className="flex-1 text-left">{p.name}</span>
                   {providerHasKey[p.id] && (
                     <Check size={14} className="text-green-400" />
                   )}

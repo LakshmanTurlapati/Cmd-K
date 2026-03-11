@@ -1,18 +1,11 @@
 import { useState } from "react";
 import { Store } from "@tauri-apps/plugin-store";
 import { useOverlayStore, PROVIDERS } from "@/store";
+import { ProviderIcon } from "@/components/icons/ProviderIcon";
 
 interface StepProviderSelectProps {
   onNext: () => void;
 }
-
-const PROVIDER_INITIALS: Record<string, string> = {
-  openai: "O",
-  anthropic: "A",
-  gemini: "G",
-  xai: "x",
-  openrouter: "OR",
-};
 
 export function StepProviderSelect({ onNext }: StepProviderSelectProps) {
   const setSelectedProvider = useOverlayStore((s) => s.setSelectedProvider);
@@ -54,8 +47,8 @@ export function StepProviderSelect({ onNext }: StepProviderSelectProps) {
                     : "bg-white/5 hover:bg-white/8 text-white/70 border-transparent",
                 ].join(" ")}
               >
-                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs font-medium text-white/70">
-                  {PROVIDER_INITIALS[provider.id] ?? "?"}
+                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                  <ProviderIcon provider={provider.id} size={16} className="text-white/70" />
                 </div>
                 <span>{provider.name}</span>
               </button>
