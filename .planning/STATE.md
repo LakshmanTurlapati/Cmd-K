@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: completed
-stopped_at: Completed 27-02-PLAN.md (Phase 27 complete)
-last_updated: "2026-03-11T14:05:34.011Z"
-last_activity: 2026-03-11 -- Completed 27-02 ConPTY shell discovery pipeline
+stopped_at: Completed 27-03-PLAN.md (gap closure - multi-tab shell disambiguation)
+last_updated: "2026-03-11T14:49:27Z"
+last_activity: 2026-03-11 -- Completed 27-03 UIA-guided shell disambiguation
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 3
+  completed_plans: 3
   percent: 100
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-03-11)
 ## Current Position
 
 Phase: 27 of 30 (ConPTY Discovery & Process Snapshot)
-Plan: 2 of 2 in current phase
+Plan: 3 of 3 in current phase
 Status: phase-complete
-Last activity: 2026-03-11 -- Completed 27-02 ConPTY shell discovery pipeline
+Last activity: 2026-03-11 -- Completed 27-03 UIA-guided shell disambiguation
 
 Progress: [██████████] 100% (v0.2.8)
 
@@ -56,6 +56,7 @@ Recent decisions affecting current work:
 - [v0.2.8]: WSL 2 Linux processes invisible to Win32 APIs -- output signals only
 - [Phase 27]: Check both conhost.exe and OpenConsole.exe as ConPTY hosts for Win10/Win11 compatibility
 - [Phase 27]: Conservative fallback: treat cmd.exe as interactive when PEB read fails
+- [Phase 27]: UIA text read before process tree walk to extract shell type hint for multi-tab disambiguation
 
 ### Pending Todos
 
@@ -69,6 +70,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-11T14:01:00Z
-Stopped at: Completed 27-02-PLAN.md (Phase 27 complete)
-Next action: Phase 28
+Last session: 2026-03-11T14:49:27Z
+Stopped at: Completed 27-03-PLAN.md (gap closure - multi-tab shell disambiguation)
+Next action: UAT re-test of multi-tab shell disambiguation, then Phase 28
