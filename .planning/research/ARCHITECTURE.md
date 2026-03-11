@@ -1,917 +1,607 @@
 # Architecture Patterns
 
-**Domain:** Multi-provider AI, WSL terminal context, and auto-updater integration into existing Tauri v2 app
-**Researched:** 2026-03-08
-**Confidence:** HIGH (provider abstraction, keychain), MEDIUM (WSL detection, auto-updater config)
+**Domain:** Windows terminal detection fixes -- WSL, shell differentiation, IDE process filtering
+**Researched:** 2026-03-11
+**Confidence:** HIGH (process tree architecture, ConPTY model), MEDIUM (VS Code pty-host internals, UIA text filtering)
 
 ---
 
-## Current Architecture Snapshot
+## Current Architecture Snapshot (Detection Path)
 
 ```
-Frontend (React + Zustand)                  Backend (Rust / Tauri)
------------------------------               ----------------------------------
-src/store/index.ts                          src-tauri/src/
-  useOverlayStore (Zustand)                   lib.rs         (plugin init, IPC handler registration)
-    - apiKeyStatus, selectedModel             state.rs       (AppState: Mutex-wrapped fields)
-    - submitQuery() -> invoke("stream_ai")    commands/
-                                                ai.rs        (stream_ai_response: hardcoded xAI endpoint)
-src/components/Onboarding/                      xai.rs       (validate_and_fetch_models: xAI-specific)
-  StepApiKey.tsx (xAI-only key input)           keychain.rs  (save/get/delete with hardcoded "xai_api_key")
-  StepModelSelect.tsx                           terminal.rs  (get_app_context -> terminal::detect_full_with_hwnd)
-                                                hotkey.rs    (capture PID/HWND before overlay)
-src/components/Settings/                        paste.rs     (AppleScript/Win32 paste)
-  AccountTab.tsx (xAI-only key mgmt)            window.rs    (show/hide overlay)
-  ModelTab.tsx                                  safety.rs    (destructive command detection)
-                                              terminal/
-                                                mod.rs       (detect, detect_full, detect_full_with_hwnd)
-                                                detect.rs    (macOS bundle ID classification)
-                                                detect_windows.rs (Windows exe classification)
-                                                process.rs   (process tree walk, CWD via libproc/PEB)
-                                                ax_reader.rs (macOS Accessibility API text)
-                                                uia_reader.rs (Windows UI Automation text)
-                                                filter.rs    (sensitive data redaction)
-                                                browser.rs   (DevTools console detection)
-```
-
-**Key coupling points for this milestone:**
-- `commands/ai.rs` line 8: hardcoded `ACCOUNT: &str = "xai_api_key"`
-- `commands/ai.rs` line 259: hardcoded `https://api.x.ai/v1/chat/completions`
-- `commands/ai.rs` line 307-308: SSE parsing assumes OpenAI-compatible `choices[0].delta.content`
-- `commands/xai.rs`: entire file is xAI-specific (model validation, fallback list)
-- `commands/keychain.rs` line 4: hardcoded `ACCOUNT: &str = "xai_api_key"`
-- `src/store/index.ts`: `XaiModelWithMeta` type name, no provider concept
-- `src/components/Onboarding/StepApiKey.tsx` line 98: "Enter your xAI API key"
-- `src/components/Settings/AccountTab.tsx` line 97: "Paste your xAI API key"
-- `terminal/detect_windows.rs`: no `wsl.exe` or `wslhost.exe` in known lists
-- `terminal/process.rs`: Windows process tree walk does not enter WSL namespace
-
----
-
-## Feature 1: Multi-Provider AI Support
-
-### Recommended Architecture: Provider Enum with Per-Variant Dispatch
-
-**Why enum dispatch, not `Box<dyn Trait>`:** The provider set is fixed at compile time (5 variants). Async trait methods with `Box<dyn>` require boxing futures and lose the compiler's exhaustiveness checking. Enum dispatch is zero-cost, and the `match` arms catch missing implementations at compile time.
-
-**New module structure:**
-
-```
-src-tauri/src/commands/providers/
-  mod.rs          -- Provider enum, from_str, ModelInfo struct
-  openai.rs       -- OpenAI implementation
-  anthropic.rs    -- Anthropic implementation
-  google.rs       -- Google Gemini implementation
-  xai.rs          -- xAI/Grok (extract from current ai.rs + xai.rs)
-  openrouter.rs   -- OpenRouter implementation
-```
-
-### Provider Enum Design
-
-```rust
-// commands/providers/mod.rs
-
-pub mod openai;
-pub mod anthropic;
-pub mod google;
-pub mod xai;
-pub mod openrouter;
-
-use serde::{Serialize, Deserialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModelInfo {
-    pub id: String,
-    pub label: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Provider {
-    OpenAI,
-    Anthropic,
-    Google,
-    Xai,
-    OpenRouter,
-}
-
-impl Provider {
-    pub fn from_str(s: &str) -> Result<Self, String> {
-        match s {
-            "openai" => Ok(Self::OpenAI),
-            "anthropic" => Ok(Self::Anthropic),
-            "google" => Ok(Self::Google),
-            "xai" => Ok(Self::Xai),
-            "openrouter" => Ok(Self::OpenRouter),
-            _ => Err(format!("Unknown provider: {}", s)),
-        }
-    }
-
-    pub fn keychain_account(&self) -> String {
-        match self {
-            Self::OpenAI => "openai_api_key",
-            Self::Anthropic => "anthropic_api_key",
-            Self::Google => "google_api_key",
-            Self::Xai => "xai_api_key",       // matches existing keychain entry
-            Self::OpenRouter => "openrouter_api_key",
-        }.to_string()
-    }
-}
-```
-
-### Provider-Specific Differences (Why Simple URL Swap Fails)
-
-| Aspect | OpenAI / xAI / OpenRouter | Anthropic | Google Gemini |
-|--------|---------------------------|-----------|---------------|
-| Endpoint | `/v1/chat/completions` | `/v1/messages` | `/v1beta/models/{model}:streamGenerateContent` |
-| Auth header | `Authorization: Bearer {key}` | `x-api-key: {key}` (different header name) | `?key={key}` query param |
-| System prompt | `{"role":"system","content":"..."}` in messages array | Top-level `"system"` field, NOT in messages | `"systemInstruction"` field |
-| SSE token path | `choices[0].delta.content` | `content_block_delta.delta.text` | `candidates[0].content.parts[0].text` |
-| SSE done signal | `data: [DONE]` | `event: message_stop` | `finishReason: "STOP"` in candidate |
-| Required fields | `model`, `messages`, `stream` | `model`, `messages`, `max_tokens` (required!) | `contents`, `generationConfig` |
-| Extra headers | None | `anthropic-version: 2023-06-01` | None |
-
-**Anthropic is the most divergent.** Three unique aspects: different auth header name, system prompt not in messages, required `max_tokens` field, and completely different SSE event structure. This alone justifies the provider abstraction.
-
-### Per-Provider Module Contract
-
-Each provider module exports these functions (not a trait -- just convention):
-
-```rust
-// Example: commands/providers/anthropic.rs
-
-/// Endpoint URL for streaming requests
-pub fn endpoint() -> &'static str {
-    "https://api.anthropic.com/v1/messages"
-}
-
-/// Build HTTP headers for this provider
-pub fn headers(api_key: &str) -> Vec<(String, String)> {
-    vec![
-        ("x-api-key".to_string(), api_key.to_string()),
-        ("anthropic-version".to_string(), "2023-06-01".to_string()),
-        ("content-type".to_string(), "application/json".to_string()),
-    ]
-}
-
-/// Build the request body. System prompt handled differently per provider.
-pub fn build_body(model: &str, system_prompt: &str, messages: &[serde_json::Value]) -> String {
-    serde_json::json!({
-        "model": model,
-        "system": system_prompt,  // Anthropic: top-level field
-        "messages": messages,     // NO system message in array
-        "max_tokens": 1024,       // Required for Anthropic
-        "stream": true
-    }).to_string()
-}
-
-/// Extract token from an SSE data chunk. Returns None if no token.
-pub fn extract_token(data: &str) -> Option<String> {
-    let v: serde_json::Value = serde_json::from_str(data).ok()?;
-    if v["type"] == "content_block_delta" {
-        v["delta"]["text"].as_str().map(|s| s.to_string())
-    } else {
-        None
-    }
-}
-
-/// Check if this SSE event signals stream completion
-pub fn is_done(data: &str) -> bool {
-    let v: serde_json::Value = serde_json::from_str(data).ok().unwrap_or_default();
-    v["type"] == "message_stop"
-}
-
-/// Validate API key and return available models
-pub async fn validate_and_fetch_models(api_key: &str) -> Result<Vec<ModelInfo>, String> {
-    // Anthropic: GET /v1/models with x-api-key header
-    // ...
-}
-```
-
-### Refactored stream_ai_response
-
-```rust
-// commands/ai.rs -- refactored
-
-#[tauri::command]
-pub async fn stream_ai_response(
-    provider: String,           // NEW parameter
-    query: String,
-    model: String,
-    context_json: String,
-    history: Vec<ChatMessage>,
-    on_token: tauri::ipc::Channel<String>,
-) -> Result<(), String> {
-    let provider_enum = Provider::from_str(&provider)?;
-
-    // 1. Read API key for this provider from keychain
-    let account = provider_enum.keychain_account();
-    let entry = keyring::Entry::new(SERVICE, &account)
-        .map_err(|e| format!("Keyring error: {}", e))?;
-    let api_key = entry.get_password()
-        .map_err(|_| "No API key configured. Open Settings to add one.".to_string())?;
-
-    // 2. Parse context, build system prompt (unchanged logic)
-    let ctx: AppContextView = serde_json::from_str(&context_json).unwrap_or_else(/* ... */);
-    let system_prompt = build_system_prompt(&ctx);
-
-    // 3. Build messages array (system message excluded for Anthropic/Google)
-    let messages = build_messages_for_provider(&provider_enum, &system_prompt, &history, &query, &ctx);
-
-    // 4. Dispatch to provider-specific request building
-    let (endpoint, headers, body) = match provider_enum {
-        Provider::OpenAI => (openai::endpoint(), openai::headers(&api_key), openai::build_body(&model, &system_prompt, &messages)),
-        Provider::Anthropic => (anthropic::endpoint(), anthropic::headers(&api_key), anthropic::build_body(&model, &system_prompt, &messages)),
-        Provider::Google => (google::endpoint(&model), google::headers(&api_key), google::build_body(&system_prompt, &messages)),
-        Provider::Xai => (xai::endpoint(), xai::headers(&api_key), xai::build_body(&model, &system_prompt, &messages)),
-        Provider::OpenRouter => (openrouter::endpoint(), openrouter::headers(&api_key), openrouter::build_body(&model, &system_prompt, &messages)),
-    };
-
-    // 5. Make HTTP request
-    let client = reqwest::Client::new();
-    let mut req = client.post(endpoint);
-    for (name, value) in &headers {
-        req = req.header(name, value);
-    }
-    let response = req.body(body).send().await.map_err(|e| format!("Network error: {}", e))?;
-
-    // 6. Parse SSE stream with provider-specific token extraction
-    let mut stream = response.bytes_stream().eventsource();
-    let timeout_duration = tokio::time::Duration::from_secs(10);
-
-    tokio::time::timeout(timeout_duration, async {
-        while let Some(event) = stream.next().await {
-            match event {
-                Ok(event) => {
-                    let data = &event.data;
-                    // Provider-specific done check
-                    let is_done = match provider_enum {
-                        Provider::OpenAI | Provider::Xai | Provider::OpenRouter => data == "[DONE]",
-                        Provider::Anthropic => anthropic::is_done(data),
-                        Provider::Google => google::is_done(data),
-                    };
-                    if is_done { break; }
-
-                    // Provider-specific token extraction
-                    let token = match provider_enum {
-                        Provider::OpenAI | Provider::Xai | Provider::OpenRouter => openai::extract_token(data),
-                        Provider::Anthropic => anthropic::extract_token(data),
-                        Provider::Google => google::extract_token(data),
-                    };
-                    if let Some(t) = token {
-                        if !t.is_empty() {
-                            on_token.send(t).map_err(|e| format!("Channel error: {}", e))?;
-                        }
-                    }
-                }
-                Err(e) => return Err(format!("Stream error: {}", e)),
-            }
-        }
-        Ok(())
-    }).await.map_err(|_| "Request timed out. Try again.".to_string())??;
-
-    Ok(())
-}
-```
-
-**Note:** OpenAI, xAI, and OpenRouter share the same SSE format (OpenAI-compatible). This means 3 of 5 providers reuse the same extraction logic. Only Anthropic and Google need custom parsers.
-
-### Keychain Changes
-
-```rust
-// commands/keychain.rs -- parameterized
-
-const SERVICE: &str = "com.lakshmanturlapati.cmd-k";
-
-#[tauri::command]
-pub fn save_api_key(provider: String, key: String) -> Result<(), String> {
-    let account = format!("{}_api_key", provider);
-    let entry = Entry::new(SERVICE, &account)
-        .map_err(|e| format!("Keychain entry error: {}", e))?;
-    entry.set_password(&key)
-        .map_err(|e| format!("Failed to save to Keychain: {}", e))
-}
-
-#[tauri::command]
-pub fn get_api_key(provider: String) -> Result<Option<String>, String> {
-    let account = format!("{}_api_key", provider);
-    let entry = Entry::new(SERVICE, &account)
-        .map_err(|e| format!("Keychain entry error: {}", e))?;
-    match entry.get_password() {
-        Ok(key) => Ok(Some(key)),
-        Err(keyring::Error::NoEntry) => Ok(None),
-        Err(e) => Err(format!("Failed to read: {}", e)),
-    }
-}
-
-#[tauri::command]
-pub fn delete_api_key(provider: String) -> Result<(), String> {
-    let account = format!("{}_api_key", provider);
-    let entry = Entry::new(SERVICE, &account)
-        .map_err(|e| format!("Keychain entry error: {}", e))?;
-    entry.delete_credential()
-        .map_err(|e| format!("Failed to delete: {}", e))
-}
-```
-
-**Migration safety:** `format!("{}_api_key", "xai")` produces `"xai_api_key"`, identical to the current hardcoded `ACCOUNT` constant. Existing xAI API keys remain accessible with zero migration.
-
-### Frontend Changes for Multi-Provider
-
-**Zustand store additions:**
-
-```typescript
-// New state in useOverlayStore:
-selectedProvider: string;                   // "openai" | "anthropic" | "google" | "xai" | "openrouter"
-setSelectedProvider: (p: string) => void;
-
-// Rename type: XaiModelWithMeta -> ModelInfo
-// (same shape: { id: string; label: string }, just generic name)
-```
-
-**Onboarding flow change:**
-
-```
-Current:  Step 1 (Accessibility) -> Step 2 (API Key) -> Step 3 (Model) -> Step 4 (Done)
-New:      Step 1 (Accessibility) -> Step 2 (Provider) -> Step 3 (API Key) -> Step 4 (Model) -> Step 5 (Done)
-```
-
-New component: `StepProviderSelect.tsx` -- card/radio selection of 5 providers. Sets `selectedProvider` in store. Persisted to Tauri store plugin.
-
-**Modified components:**
-- `StepApiKey.tsx` -- Dynamic label: "Enter your {Provider} API key". Pass `provider` to `validate_and_fetch_models` invoke.
-- `AccountTab.tsx` -- Show current provider name, dynamic label, pass `provider` to keychain invokes.
-- `submitQuery()` -- Add `provider: state.selectedProvider` to `stream_ai_response` invoke args.
-- `validate_and_fetch_models` IPC -- New signature: `invoke("validate_and_fetch_models", { provider, apiKey })`.
-
-**Provider selection persistence:** Use existing `tauri-plugin-store` with keys `"selected_provider"` and `"selected_model"`.
-
-### New IPC Command: validate_and_fetch_models (Provider-Aware)
-
-```rust
-// commands/providers/mod.rs (replaces commands/xai.rs)
-
-#[tauri::command]
-pub async fn validate_and_fetch_models(
-    provider: String,
-    api_key: String,
-) -> Result<Vec<ModelInfo>, String> {
-    let p = Provider::from_str(&provider)?;
-    match p {
-        Provider::OpenAI => openai::validate_and_fetch_models(&api_key).await,
-        Provider::Anthropic => anthropic::validate_and_fetch_models(&api_key).await,
-        Provider::Google => google::validate_and_fetch_models(&api_key).await,
-        Provider::Xai => xai::validate_and_fetch_models(&api_key).await,
-        Provider::OpenRouter => openrouter::validate_and_fetch_models(&api_key).await,
-    }
-}
+Hotkey fires (hotkey.rs)
+  |-- Captures HWND + PID of foreground window BEFORE overlay steals focus
+  |
+  v
+detect_full_with_hwnd(pid, pre_captured_text, hwnd)  [mod.rs:108]
+  |-- Spawns background thread with 750ms timeout
+  |
+  v
+detect_app_context_windows(pid, pre_captured_text)  [mod.rs:453]
+  |-- get_exe_name_for_pid(pid) -> e.g. "Code.exe"
+  |-- is_known_terminal_exe() / is_ide_with_terminal_exe()
+  |-- process::get_foreground_info(pid)
+  |     |-- find_shell_pid(pid, None)
+  |     |     |-- find_shell_recursive(pid, 3)  -- fast path, depth-3 child walk
+  |     |     |-- find_shell_by_ancestry(pid, None)  -- broad path
+  |     |           |-- CreateToolhelp32Snapshot -> build parent_map + shell_candidates
+  |     |           |-- Walk ancestry of each shell candidate to app_pid
+  |     |           |-- IDE mode: filter out cmd.exe, prefer non-cmd shells
+  |     |           |-- ConPTY fallback: find shells parented by OpenConsole.exe
+  |     |           |-- Pick highest PID among candidates  <-- PROBLEM
+  |     |-- get_process_cwd(shell_pid) via PEB ReadProcessMemory
+  |     |-- detect_wsl_in_ancestry(shell_pid)
+  |
+  v  (back in detect_full_with_hwnd)
+Window title WSL detection: "[WSL: Ubuntu]"  [mod.rs:126]
+UIA text reading: read_terminal_text_windows(hwnd)  [mod.rs:143]
+UIA-based WSL detection: detect_wsl_from_text()  [mod.rs:152]
+UIA-based shell inference: infer_shell_from_text()  [mod.rs:165]
+CWD-based WSL detection: detect_wsl_from_cwd()  [mod.rs:181]
 ```
 
 ---
 
-## Feature 2: WSL Terminal Context
+## Problem Analysis: Three Distinct Failure Modes
 
-### Current Windows Terminal Detection Path
+### Problem 1: "Highest PID = Active" Heuristic Fails
 
-```
-Hotkey fires -> capture HWND + PID
-  -> detect_app_context_windows(pid)
-    -> get_exe_name_for_pid(pid) -> "WindowsTerminal.exe"
-    -> is_known_terminal_exe() -> true
-    -> process::get_foreground_info(pid)
-      -> CreateToolhelp32Snapshot -> walk process tree
-      -> find shell child (powershell.exe, cmd.exe, bash.exe)
-      -> get_process_cwd(shell_pid) via PEB ReadProcessMemory
-    -> detect_full_with_hwnd() -> UIA text reading
+**Current code (process.rs:886):**
+```rust
+// Pick the most recently spawned (highest PID) shell
+descendant_shells.iter()
+    .max_by_key(|(pid, _)| *pid)
+    .map(|(pid, _)| *pid as i32)
 ```
 
-### WSL Problem
+**Why it breaks:** VS Code spawns shells for each terminal tab. User opens Tab A (powershell, PID 5000), then Tab B (powershell, PID 5500), then switches BACK to Tab A. Highest PID picks Tab B (PID 5500), but Tab A (PID 5000) is focused. On macOS, this is solved by AX-based focused CWD matching (process.rs:656-678). On Windows, `_focused_cwd` is always `None` -- the CWD matching path is never taken.
 
-WSL shells run inside the WSL2 VM. When a user has a WSL tab in Windows Terminal:
+**Impact:** Wrong terminal context in multi-tab VS Code/Cursor. Wrong CWD, wrong history, wrong command suggestions.
 
-1. **Process tree:** Windows Terminal -> OpenConsole.exe -> wsl.exe -> (WSL namespace). The bash/zsh process inside WSL is NOT visible in the Win32 process tree. The ConPTY fallback in `process.rs` (line 798-823) finds shells parented by OpenConsole, but `wsl.exe` is not in `KNOWN_SHELL_EXES`.
+### Problem 2: Internal IDE Processes Pollute Shell Candidates
 
-2. **PEB CWD:** Reading CWD from `wsl.exe`'s PEB returns the Windows-side launcher CWD, not the user's CWD inside WSL.
+**VS Code process tree on Windows (observed):**
+```
+Code.exe (main)
+  +-- Code.exe (GPU process)
+  +-- Code.exe (extension host)
+  |     +-- cmd.exe (git operations)        <-- INTERNAL, not user shell
+  |     +-- cmd.exe (task runner)            <-- INTERNAL, not user shell
+  |     +-- wsl.exe (remote extension)      <-- INTERNAL, not user shell
+  |     +-- node.exe (language server)
+  +-- Code.exe (pty-host)
+  |     +-- conhost.exe
+  |     |     +-- powershell.exe (Tab 1)    <-- USER SHELL
+  |     +-- conhost.exe
+  |     |     +-- bash.exe (Tab 2, WSL)     <-- USER SHELL
+  |     +-- conhost.exe
+  |           +-- cmd.exe (Tab 3)           <-- USER SHELL
+  +-- cmd.exe (file watcher)                <-- INTERNAL
+  +-- wsl.exe (remote server bootstrap)     <-- INTERNAL
+```
 
-3. **Shell type:** The process name is `wsl.exe`, not `bash` or `zsh`.
+**Current mitigation (process.rs:871-889):** Only filters `cmd.exe` when other non-cmd shells exist. This is insufficient:
+- If the user's only terminal tab IS cmd.exe, filtering removes the correct result
+- Internal `wsl.exe` processes are not filtered at all (5-16+ of them)
+- No distinction between `cmd.exe` spawned by pty-host vs extension host
 
-### New Component: `terminal/wsl.rs`
+### Problem 3: WSL Detection Unreliable in IDE Terminals
+
+**Failure chain:**
+1. `detect_wsl_in_ancestry()` walks the parent chain of the detected shell PID. But if the wrong shell is selected (Problem 1), ancestry check runs on wrong process.
+2. WSL 2 shells run in Hyper-V VM -- `bash.exe` inside WSL is invisible to Win32 process tree. Only `wsl.exe` launcher is visible.
+3. UIA text for VS Code captures entire window content (sidebar, editor, terminal panel) via `try_walk_children()`. Linux paths like `/home/` in editor text trigger false WSL positives.
+4. `get_wsl_cwd()` spawns `wsl.exe -e sh -c "pwd"` -- returns the HOME directory of the default distro, not the CWD of the active terminal session.
+
+---
+
+## Recommended Architecture: Three-Layer Fix
+
+### Layer 1: ConPTY-Aware Shell Discovery (New: `process_windows.rs`)
+
+**Principle:** On Windows, user-interactive terminal shells are ALWAYS spawned through ConPTY. The ConPTY host process (conhost.exe or OpenConsole.exe) is the reliable marker. Shells spawned by IDE extensions, git operations, and task runners do NOT go through ConPTY -- they use direct `CreateProcess`.
+
+**ConPTY process model (verified):**
+```
+Hosting App (WindowsTerminal.exe / Code.exe pty-host)
+  calls CreatePseudoConsole() -> spawns conhost.exe
+    conhost.exe manages the pseudoconsole session
+      shell process (powershell.exe, bash.exe, etc.) is child of conhost.exe
+```
+
+**Key insight:** In VS Code, the `pty-host` helper process (a Code.exe child) is the one that creates ConPTY sessions. Its children are conhost.exe instances, each hosting one terminal tab's shell. Extension-spawned cmd.exe/wsl.exe are children of the extension host process, NOT children of pty-host.
+
+**New detection strategy:**
 
 ```rust
-// terminal/wsl.rs
+// terminal/process_windows.rs (NEW FILE)
 
-/// Detect if a process chain involves WSL
-pub fn is_wsl_process(exe_name: &str) -> bool {
-    matches!(exe_name.to_lowercase().as_str(), "wsl.exe" | "wslhost.exe")
+/// Identify user-interactive shells by finding those hosted by ConPTY.
+///
+/// Strategy:
+/// 1. Take process snapshot
+/// 2. Find all conhost.exe instances that are descendants of app_pid
+/// 3. For each conhost.exe, find its shell child
+/// 4. These are the user's terminal tab shells
+/// 5. Non-conhost-parented shells are internal IDE processes
+///
+/// This replaces the "all descendant shells, pick highest PID" approach.
+pub fn find_conpty_shells(app_pid: u32) -> Vec<ConPtyShell> {
+    // Single CreateToolhelp32Snapshot call
+    // Build: parent_map, exe_map
+    // Find conhost.exe/OpenConsole.exe PIDs that are descendants of app_pid
+    // For each conhost/openconsole:
+    //   Find shell child (direct child matching KNOWN_SHELL_EXES or wsl.exe)
+    //   Record: shell_pid, shell_exe, conhost_pid
+    // Return list of ConPtyShell structs
 }
 
-/// Get WSL terminal context by shelling into WSL from the Windows side.
-/// Each command has an independent timeout to avoid blocking the overlay.
-pub fn get_wsl_context() -> Option<WslContext> {
-    // 1. Shell type: query default shell inside WSL
-    let shell_type = wsl_command(&["-e", "sh", "-c", "basename \"$SHELL\""], 200)?;
+pub struct ConPtyShell {
+    pub shell_pid: u32,
+    pub shell_exe: String,
+    pub conhost_pid: u32,
+    /// True if shell_exe is "wsl.exe" (WSL session)
+    pub is_wsl: bool,
+}
+```
 
-    // 2. CWD: get working directory of the most recent user shell
-    //    Strategy: find the newest interactive shell PID, read its /proc/{pid}/cwd
-    let cwd = wsl_command(
-        &["-e", "sh", "-c",
-          "readlink /proc/$(ps -o pid= -t $(tty) 2>/dev/null | tail -1 | tr -d ' ')/cwd 2>/dev/null || pwd"],
-        300
-    );
+**Why this works:**
+- IDE-internal cmd.exe (git, tasks): spawned by extension host, NOT through ConPTY, NOT under a conhost.exe child of pty-host. Automatically excluded.
+- IDE-internal wsl.exe (remote server): spawned by extension host, NOT through ConPTY. Automatically excluded.
+- User terminal tabs: ALL go through ConPTY -> conhost.exe -> shell. Correctly included.
+- Windows Terminal: Same ConPTY architecture. Each tab has its own conhost.exe -> shell chain.
 
-    Some(WslContext {
-        shell_type: Some(shell_type),
-        cwd,
-        running_process: None, // Could be extended later
+**Integration point -- `find_shell_by_ancestry()` refactor (process.rs:767):**
+
+```rust
+#[cfg(target_os = "windows")]
+fn find_shell_by_ancestry(app_pid: i32, _focused_cwd: Option<&str>) -> Option<i32> {
+    let conpty_shells = process_windows::find_conpty_shells(app_pid as u32);
+
+    if conpty_shells.is_empty() {
+        // Fallback: legacy approach for non-ConPTY terminals (mintty, etc.)
+        return find_shell_by_ancestry_legacy(app_pid);
+    }
+
+    eprintln!("[process] found {} ConPTY shells", conpty_shells.len());
+    for s in &conpty_shells {
+        eprintln!("[process]   pid={} exe={} conhost={} is_wsl={}",
+            s.shell_pid, s.shell_exe, s.conhost_pid, s.is_wsl);
+    }
+
+    // If only one ConPTY shell, return it (common case: single tab)
+    if conpty_shells.len() == 1 {
+        return Some(conpty_shells[0].shell_pid as i32);
+    }
+
+    // Multiple ConPTY shells: use Layer 2 (active tab identification)
+    // For now, fall through to CWD matching or highest-PID
+    // Layer 2 integration point goes here
+
+    conpty_shells.iter()
+        .max_by_key(|s| s.shell_pid)
+        .map(|s| s.shell_pid as i32)
+}
+```
+
+### Layer 2: Active Tab Identification via Window Title (New: `detect_windows.rs` extension)
+
+**Principle:** VS Code/Cursor and Windows Terminal both encode the active terminal tab's information in the window title. This is the cheapest and most reliable signal for which tab is focused.
+
+**Window title patterns:**
+
+| Host | Window Title Format | Active Terminal Info |
+|------|---------------------|---------------------|
+| Windows Terminal | `PowerShell` or `Ubuntu` (tab name) | Profile name of active tab |
+| VS Code | `file.rs - project - Visual Studio Code` | No terminal info by default |
+| VS Code (terminal focused) | Changes to show terminal name when panel focused | Shell name visible |
+| VS Code Remote-WSL | `file.rs - project [WSL: Ubuntu] - Visual Studio Code` | `[WSL: distro]` |
+
+**Window title + UIA focused element approach:**
+
+```rust
+// In detect_windows.rs, add:
+
+/// Extract active terminal profile name from Windows Terminal title.
+/// Windows Terminal sets the window title to the active tab's profile name.
+pub fn extract_wt_active_profile(title: &str) -> Option<String> {
+    // Windows Terminal title format varies but often is just the profile name
+    // e.g., "PowerShell", "Ubuntu", "Command Prompt"
+    // When running a command: "command - ProfileName"
+    Some(title.trim().to_string())
+}
+
+/// Match a ConPTY shell to the active tab using CWD comparison.
+/// Reads CWD of each candidate shell via PEB and compares to
+/// any CWD signal we can extract.
+pub fn match_shell_to_active_tab(
+    shells: &[ConPtyShell],
+    window_title: &str,
+    host_exe: &str,
+) -> Option<u32> {
+    // Strategy depends on host:
+    // 1. Windows Terminal: title contains profile name -> match shell exe
+    // 2. VS Code/Cursor: use CWD comparison (read each shell's CWD via PEB)
+    // 3. Fallback: use UIA to find focused terminal element's text
+    None // Placeholder for implementation
+}
+```
+
+**CWD-based disambiguation for VS Code (enabling the unused macOS path):**
+
+The macOS codebase has CWD-based disambiguation (process.rs:656-678) that is already proven to work. The Windows path never supplies `focused_cwd`. The fix:
+
+```rust
+// In detect_app_context_windows, BEFORE calling get_foreground_info:
+// Read the window title to get CWD context
+
+let focused_cwd = if is_ide {
+    // For IDE terminals, try to extract focused tab CWD from UIA
+    // The terminal panel's focused tab may expose CWD in its title/text
+    previous_hwnd.and_then(|hwnd| {
+        extract_focused_terminal_cwd_via_uia(hwnd)
     })
-}
+} else {
+    None
+};
 
-/// Run a wsl.exe command with a hard timeout.
-/// Returns None on timeout or failure.
-fn wsl_command(args: &[&str], timeout_ms: u64) -> Option<String> {
-    use std::process::{Command, Stdio};
-    use std::sync::mpsc;
-    use std::time::Duration;
+let proc_info = process::get_foreground_info_with_cwd(previous_app_pid, focused_cwd.as_deref());
+```
 
-    let mut child = Command::new("wsl.exe")
-        .args(args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .stdin(Stdio::null())
-        .spawn()
-        .ok()?;
+### Layer 3: UIA Text Scoping (Modified: `uia_reader.rs`)
 
-    let (tx, rx) = mpsc::channel();
-    let handle = std::thread::spawn(move || {
-        let output = child.wait_with_output();
-        let _ = tx.send(output);
-    });
+**Principle:** Instead of walking ALL descendants of the VS Code window (which captures sidebar, editor, status bar, etc.), scope the UIA walk to the terminal panel element only.
 
-    match rx.recv_timeout(Duration::from_millis(timeout_ms)) {
-        Ok(Ok(output)) if output.status.success() => {
-            let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if text.is_empty() { None } else { Some(text) }
-        }
-        _ => {
-            // Timeout or failure -- don't leak the thread
-            drop(handle);
-            None
+**Current problem with `try_walk_children()`:**
+```rust
+// uia_reader.rs:132 -- walks ALL descendants
+if let Ok(children) = element.find_all(TreeScope::Descendants, &true_condition) {
+    for child in children {
+        // Captures EVERYTHING: editor text, sidebar items, terminal text
+        if let Ok(name) = child.get_name() {
+            text_parts.push(name);
         }
     }
 }
-
-pub struct WslContext {
-    pub shell_type: Option<String>,
-    pub cwd: Option<String>,
-    pub running_process: Option<String>,
-}
 ```
 
-### Integration Point: `terminal/mod.rs`
+This causes:
+- Linux paths in editor files trigger false WSL detection
+- Shell prompts in editor text trigger wrong shell inference
+- Huge text buffers (64KB of mixed UI chrome + terminal content)
+
+**Fix -- scoped UIA terminal element search:**
 
 ```rust
-// In detect_app_context_windows(), modify the process tree walk:
+// uia_reader.rs -- new function
 
+/// For IDE windows (VS Code, Cursor), find and read only the terminal panel's text.
+/// Uses UIA control type and automation ID to scope the search.
+///
+/// VS Code terminal panel UIA structure:
+///   Window "VS Code"
+///     +-- ... (many UI elements)
+///     +-- Group "Terminal" or TabItem with terminal content
+///           +-- Document or Text elements with actual terminal output
 #[cfg(target_os = "windows")]
-fn detect_app_context_windows(previous_app_pid: i32, _pre_captured_text: Option<String>) -> Option<AppContext> {
-    // ... existing exe detection ...
+pub fn read_ide_terminal_text(hwnd: isize) -> Option<String> {
+    let automation = UIAutomation::new().ok()?;
+    let element = automation.element_from_handle(Handle::from(hwnd)).ok()?;
 
-    // Walk process tree to find shell
-    let proc_info = process::get_foreground_info(previous_app_pid);
+    // Strategy 1: Find element with ClassName containing "terminal"
+    // Strategy 2: Find element with AutomationId containing "terminal"
+    // Strategy 3: Find the focused element and walk up to find terminal container
 
-    // NEW: Check if process tree contains WSL
-    let has_wsl = check_for_wsl_in_tree(previous_app_pid);
-
-    let terminal = if has_wsl {
-        // WSL session: shell into WSL for real context
-        match wsl::get_wsl_context() {
-            Some(wsl_ctx) => Some(TerminalContext {
-                shell_type: wsl_ctx.shell_type,
-                cwd: wsl_ctx.cwd,
-                visible_output: None, // UIA fills this later
-                running_process: wsl_ctx.running_process,
-            }),
-            None => {
-                // WSL detected but context reading failed
-                // Fall back to "bash" default so terminal mode is used
-                Some(TerminalContext {
-                    shell_type: Some("bash".to_string()),
-                    cwd: None,
-                    visible_output: None,
-                    running_process: None,
-                })
-            }
+    // Try finding the focused element first -- if user just pressed hotkey
+    // from terminal panel, the focused element IS in the terminal
+    if let Ok(focused) = automation.get_focused_element() {
+        // Walk up from focused element to find terminal container
+        // Then read text only from that subtree
+        if let Some(terminal_text) = extract_terminal_subtree_text(&automation, &focused) {
+            return Some(terminal_text);
         }
-    } else if has_shell {
-        // ... existing native Windows shell handling ...
-    };
+    }
 
-    // ... rest unchanged (UIA text reading, app context assembly) ...
-}
-
-/// Check if the process tree rooted at pid contains wsl.exe or wslhost.exe
-fn check_for_wsl_in_tree(app_pid: i32) -> bool {
-    // Walk process tree looking for wsl.exe in the chain
-    // Uses existing CreateToolhelp32Snapshot infrastructure
-    // Also check ConPTY children (OpenConsole -> wsl.exe pattern)
+    // Fallback: full tree walk (existing behavior)
+    None
 }
 ```
 
-### detect_windows.rs Changes
-
-```rust
-// Add to KNOWN_TERMINAL_EXES:
-"wsl.exe",       // WSL direct launch
-
-// Add to KNOWN_SHELL_EXES:
-// wsl.exe is NOT a shell, but it IS a process that hosts shells
-// Don't add it here -- instead detect it specially in wsl.rs
-```
-
-### System Prompt for WSL
-
-The AI needs to know it should generate Linux commands, not Windows commands, when the user is in WSL.
-
-```rust
-// In commands/ai.rs, modify system prompt selection:
-
-// Detect WSL from context: CWD starts with "/" (Linux path) not "C:\" (Windows path)
-let is_wsl = ctx.terminal.as_ref()
-    .and_then(|t| t.cwd.as_ref())
-    .map(|cwd| cwd.starts_with('/'))
-    .unwrap_or(false);
-
-let system_prompt = if is_wsl {
-    // WSL: Linux commands even though running on Windows
-    TERMINAL_SYSTEM_PROMPT_TEMPLATE_WSL.replace("{shell_type}", shell_type)
-} else if is_terminal_mode {
-    TERMINAL_SYSTEM_PROMPT_TEMPLATE.replace("{shell_type}", shell_type)
-} else {
-    ASSISTANT_SYSTEM_PROMPT.to_string()
-};
-```
-
-```rust
-#[cfg(target_os = "windows")]
-const TERMINAL_SYSTEM_PROMPT_TEMPLATE_WSL: &str =
-    "You are a terminal command generator for Linux (WSL on Windows). Given the user's task \
-     description and terminal context, output ONLY the exact command(s) to run. No explanations, \
-     no markdown, no code fences. Just the raw command(s). If multiple commands are needed, \
-     separate them with && or use pipes. Prefer common POSIX tools (grep, find, sed, awk). \
-     The user is running WSL (Windows Subsystem for Linux) with {shell_type} shell.";
-```
-
-### Supported WSL Hosts
-
-| Host | Detection | CWD/Shell Source | Visible Text |
-|------|-----------|-----------------|--------------|
-| Windows Terminal | ConPTY tree has wsl.exe child of OpenConsole | `wsl.exe -e` commands | UIA (works) |
-| VS Code Remote-WSL | Code.exe with wsl.exe in tree | `wsl.exe -e` commands | UIA (limited) |
-| Standalone wsl.exe | Direct wsl.exe as foreground process | `wsl.exe -e` commands | UIA on conhost |
-| Cursor | Same as VS Code pattern | `wsl.exe -e` commands | UIA (limited) |
-
-### Visible Output for WSL
-
-UIA text reading from Windows Terminal already captures WSL terminal output correctly -- it reads what is displayed in the terminal regardless of whether the underlying session is native or WSL. No changes needed for visible output capture.
+**Why focused element scoping works:** When the user presses the CMD+K hotkey, their cursor/focus is in the terminal panel. The UIA focused element will be within the terminal's element subtree. Walking up from there to find the terminal container, then reading only that subtree's text, eliminates editor/sidebar noise.
 
 ---
 
-## Feature 3: Auto-Updater
-
-### Architecture
-
-Uses `tauri-plugin-updater` (official Tauri v2 plugin). The plugin checks a JSON manifest at a URL, compares versions, downloads the update, and installs it.
+## Integration Map: New vs Modified Components
 
 ### New Files
 
-| File | Purpose |
-|------|---------|
-| `src-tauri/src/commands/updater.rs` | Rust IPC commands for check/install |
-| `src/components/UpdateBanner.tsx` | Non-blocking update notification in overlay |
-| `.github/workflows/release.yml` | Modified to generate `latest.json` manifest |
+| File | Purpose | LOC Estimate | Dependencies |
+|------|---------|-------------|--------------|
+| `terminal/process_windows.rs` | ConPTY-aware shell discovery | ~150 | windows-sys (existing) |
 
-### Cargo.toml Addition
+### Modified Files
 
-```toml
-[dependencies]
-tauri-plugin-updater = "2"
+| File | Change | Risk |
+|------|--------|------|
+| `terminal/mod.rs` | Wire ConPTY discovery into `detect_app_context_windows()`, pass focused_cwd | LOW -- additive, existing paths still work as fallback |
+| `terminal/process.rs` | Refactor `find_shell_by_ancestry()` Windows impl to use ConPTY discovery first | MEDIUM -- core detection logic change, needs thorough testing |
+| `terminal/detect_windows.rs` | Add window title parsing helpers, add `wsl.exe` handling | LOW -- additive functions |
+| `terminal/uia_reader.rs` | Add `read_ide_terminal_text()` scoped reading, keep `read_terminal_text_windows()` as fallback | LOW -- new function, doesn't change existing |
+
+### Unchanged Files
+
+| File | Why No Change |
+|------|---------------|
+| `terminal/detect.rs` | macOS-only bundle ID logic |
+| `terminal/ax_reader.rs` | macOS-only AX text reading |
+| `terminal/filter.rs` | Filtering logic applies equally to scoped/unscoped text |
+| `terminal/browser.rs` | Browser detection unrelated |
+| `commands/ai.rs` | System prompt WSL handling already exists |
+| `commands/paste.rs` | Paste logic unaffected by detection fixes |
+
+---
+
+## Data Flow: Fixed Detection Pipeline
+
 ```
-
-### tauri.conf.json Addition
-
-```json
-{
-  "plugins": {
-    "updater": {
-      "endpoints": [
-        "https://github.com/user/cmd-k/releases/latest/download/latest.json"
-      ],
-      "pubkey": "<generated-public-key>"
-    }
-  }
+Hotkey fires -> capture HWND + PID
+  |
+  v
+detect_full_with_hwnd(pid, text, hwnd)
+  |
+  v
+detect_app_context_windows(pid, text)
+  |
+  +-- get_exe_name_for_pid(pid) -> "Code.exe"
+  |
+  +-- is_ide_with_terminal_exe("Code.exe") -> true
+  |
+  +-- [NEW] find_conpty_shells(pid)
+  |     Returns: [{pid:5000, exe:"powershell.exe", conhost:4998},
+  |               {pid:5500, exe:"powershell.exe", conhost:5498},
+  |               {pid:6000, exe:"wsl.exe",        conhost:5998}]
+  |     NOTE: Internal cmd.exe/wsl.exe NOT in list (not ConPTY-hosted)
+  |
+  +-- [NEW] If multiple ConPTY shells:
+  |     Try CWD-based matching (read each shell's PEB CWD)
+  |     OR window title matching
+  |     Fallback: highest PID among ConPTY shells only
+  |
+  +-- get_process_cwd(matched_shell_pid) -> "C:\Users\laksh\project"
+  |
+  +-- detect_wsl_in_ancestry(matched_shell_pid)
+  |     OR: ConPtyShell.is_wsl flag already set
+  |
+  v
+detect_full_with_hwnd continues:
+  |
+  +-- Window title: get_window_title(hwnd)
+  |     "[WSL: Ubuntu]" -> terminal.is_wsl = true
+  |
+  +-- [MODIFIED] UIA text reading:
+  |     if is_ide -> read_ide_terminal_text(hwnd)  [scoped to terminal panel]
+  |     else -> read_terminal_text_windows(hwnd)   [existing full-window read]
+  |
+  +-- detect_wsl_from_text() -- now on scoped text, fewer false positives
+  |
+  +-- infer_shell_from_text() -- now on scoped text, more accurate
+  |
+  v
+Return TerminalContext {
+    shell_type: "powershell" (from ConPTY shell exe name)
+    cwd: "C:\Users\laksh\project" (from PEB of correct shell)
+    visible_output: "PS C:\Users\laksh\project> ..." (scoped terminal text)
+    is_wsl: false
 }
-```
-
-### Plugin Initialization (lib.rs)
-
-```rust
-// Add to builder chain in lib.rs:
-.plugin(tauri_plugin_updater::Builder::new().build())
-```
-
-This goes alongside the existing plugins (global-shortcut, positioner, store, http).
-
-### Rust IPC Commands
-
-```rust
-// commands/updater.rs
-use serde::Serialize;
-use tauri::AppHandle;
-use tauri_plugin_updater::UpdaterExt;
-
-#[derive(Serialize)]
-pub struct UpdateInfo {
-    pub version: String,
-    pub body: Option<String>,
-}
-
-/// Check if an update is available. Returns None if current version is latest.
-/// Non-blocking -- called on app launch as fire-and-forget.
-#[tauri::command]
-pub async fn check_for_update(app: AppHandle) -> Result<Option<UpdateInfo>, String> {
-    let updater = app.updater()
-        .map_err(|e| format!("Updater init error: {}", e))?;
-
-    match updater.check().await {
-        Ok(Some(update)) => Ok(Some(UpdateInfo {
-            version: update.version.clone(),
-            body: update.body.clone(),
-        })),
-        Ok(None) => Ok(None),
-        Err(e) => {
-            eprintln!("[updater] check failed: {}", e);
-            Ok(None) // Fail silently -- updates are non-critical
-        }
-    }
-}
-
-/// Download and install the pending update.
-/// On macOS: replaces app bundle, prompts relaunch.
-/// On Windows: downloads installer, runs on next launch (passive install mode).
-#[tauri::command]
-pub async fn install_update(app: AppHandle) -> Result<(), String> {
-    let updater = app.updater()
-        .map_err(|e| format!("Updater error: {}", e))?;
-
-    if let Some(update) = updater.check().await.map_err(|e| e.to_string())? {
-        update.download_and_install(|_, _| {}, || {}).await
-            .map_err(|e| format!("Install failed: {}", e))?;
-    }
-    Ok(())
-}
-```
-
-### Frontend Integration
-
-**App startup check (in App.tsx or equivalent setup):**
-
-```typescript
-// Fire-and-forget update check on mount
-useEffect(() => {
-    invoke<UpdateInfo | null>("check_for_update").then(info => {
-        if (info) {
-            useOverlayStore.getState().setUpdateAvailable(info);
-        }
-    }).catch(() => {}); // Silent fail
-}, []);
-```
-
-**Zustand store additions:**
-
-```typescript
-updateAvailable: UpdateInfo | null;
-setUpdateAvailable: (info: UpdateInfo | null) => void;
-isUpdating: boolean;
-```
-
-**Update notification options (pick one):**
-1. **Tray menu entry:** "Update available: v0.2.7" in the system tray menu. Click triggers install. Least intrusive.
-2. **Banner in overlay:** Subtle bar at top of overlay when update is available. "Update available. [Install]"
-3. **Settings tab indicator:** Dot badge on settings tab. Update controls in settings.
-
-**Recommendation:** Tray menu entry (option 1) + settings tab indicator (option 3). The overlay should not be cluttered with update UI -- it is a focused command interface.
-
-### CI/CD Changes for Auto-Updater
-
-The updater requires:
-
-1. **Signing keypair generation:** Run `npx tauri signer generate -w ~/.tauri/cmd-k.key` to generate a private key. Store private key as CI secret `TAURI_SIGNING_PRIVATE_KEY`. Public key goes in `tauri.conf.json` `plugins.updater.pubkey`.
-
-2. **Build with signing:** Set `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` env vars during `pnpm tauri build`. This produces `.sig` signature files alongside installers.
-
-3. **Generate latest.json manifest:** Post-build step assembles the manifest with version, URLs, and signatures.
-
-4. **Upload manifest to release:** Add `latest.json` to the GitHub Release artifacts.
-
-**Critical note on macOS DMG:** The current build uses a custom `scripts/build-dmg.sh` that produces a signed+notarized DMG outside of Tauri's build system. The updater plugin expects Tauri's built-in updater format. Two options:
-
-- **Option A:** Switch macOS build to `pnpm tauri build` (produces .app.tar.gz with .sig), add custom signing/notarization as post-build step. The updater downloads the .tar.gz, not the DMG.
-- **Option B:** Keep custom DMG for distribution, generate .sig separately for the DMG. This requires verifying that the updater plugin can handle DMG format.
-
-**Recommendation:** Option A. Use `pnpm tauri build` for the updater-compatible format (.app.tar.gz + .sig). Keep the DMG as a separate distribution artifact for manual downloads. The updater uses the .tar.gz; the GitHub Release includes both the DMG (for first-time installs) and the .tar.gz + .sig (for updates).
-
-### Release Workflow Additions
-
-```yaml
-# In release.yml, add after build steps:
-
-- name: Generate latest.json manifest
-  shell: bash
-  run: |
-    cat > latest.json << EOF
-    {
-      "version": "${{ env.VERSION }}",
-      "notes": "CMD+K ${{ github.ref_name }}",
-      "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-      "platforms": {
-        "darwin-universal": {
-          "url": "https://github.com/.../releases/download/${{ github.ref_name }}/CMD+K.app.tar.gz",
-          "signature": "$(cat CMD+K.app.tar.gz.sig)"
-        },
-        "windows-x86_64": {
-          "url": "https://github.com/.../releases/download/${{ github.ref_name }}/CMD+K-setup.exe",
-          "signature": "$(cat CMD+K-setup.exe.sig)"
-        }
-      }
-    }
-    EOF
-
-- name: Upload latest.json to release
-  # Upload alongside other artifacts
 ```
 
 ---
 
-## Component Boundaries Summary
+## Patterns to Follow
 
-| Component | Responsibility | Status | Communicates With |
-|-----------|---------------|--------|-------------------|
-| `commands/providers/mod.rs` | Provider enum, ModelInfo, dispatch | **NEW** | ai.rs, keychain.rs |
-| `commands/providers/openai.rs` | OpenAI request/response handling | **NEW** | providers/mod.rs |
-| `commands/providers/anthropic.rs` | Anthropic request/response handling | **NEW** | providers/mod.rs |
-| `commands/providers/google.rs` | Google Gemini request/response handling | **NEW** | providers/mod.rs |
-| `commands/providers/xai.rs` | xAI request/response (from current ai.rs+xai.rs) | **NEW** (extracted) | providers/mod.rs |
-| `commands/providers/openrouter.rs` | OpenRouter request/response handling | **NEW** | providers/mod.rs |
-| `commands/ai.rs` | Stream orchestration, prompt building | **MODIFIED** | providers/, keychain |
-| `commands/xai.rs` | -- | **DELETED** (moved to providers/xai.rs) | -- |
-| `commands/keychain.rs` | Per-provider key storage | **MODIFIED** (add `provider` param) | providers/ |
-| `commands/updater.rs` | Update check and install IPC | **NEW** | tauri-plugin-updater |
-| `terminal/wsl.rs` | WSL detection and context via wsl.exe | **NEW** | terminal/mod.rs |
-| `terminal/mod.rs` | Detection orchestration | **MODIFIED** (add WSL branch) | wsl.rs |
-| `terminal/detect_windows.rs` | Exe classification | **MODIFIED** (add WSL patterns) | terminal/mod.rs |
-| `src/store/index.ts` | Zustand state | **MODIFIED** (add provider, update, rename types) | All frontend |
-| `StepProviderSelect.tsx` | Provider picker in onboarding | **NEW** | store |
-| `StepApiKey.tsx` | Dynamic provider-aware key input | **MODIFIED** | store, keychain |
-| `AccountTab.tsx` | Provider-aware key management | **MODIFIED** | store, keychain |
-| `UpdateBanner.tsx` or tray entry | Update notification | **NEW** | updater commands |
-| `lib.rs` | Plugin initialization | **MODIFIED** (add updater plugin) | -- |
-| `Cargo.toml` | Dependencies | **MODIFIED** (add tauri-plugin-updater) | -- |
-| `tauri.conf.json` | Updater config | **MODIFIED** (add plugins.updater) | -- |
-| `.github/workflows/release.yml` | CI/CD | **MODIFIED** (signing, latest.json) | -- |
+### Pattern 1: ConPTY Parentage as Shell Classification
 
----
+**What:** Use process parentage through conhost.exe/OpenConsole.exe to distinguish user terminal shells from internal IDE processes.
 
-## Data Flow: Complete Provider Request Lifecycle
+**When:** Always on Windows when detecting shells in IDEs (VS Code, Cursor) or Windows Terminal.
 
+**Example:**
+```rust
+fn is_conpty_hosted_shell(shell_pid: u32, parent_map: &HashMap<u32, u32>, exe_map: &HashMap<u32, String>) -> bool {
+    if let Some(&parent_pid) = parent_map.get(&shell_pid) {
+        if let Some(parent_exe) = exe_map.get(&parent_pid) {
+            let lower = parent_exe.to_lowercase();
+            return lower == "conhost.exe" || lower == "openconsole.exe";
+        }
+    }
+    false
+}
 ```
-User types query -> submitQuery(query) in Zustand store
-  |
-  v
-Read selectedProvider and selectedModel from store
-  |
-  v
-invoke("stream_ai_response", { provider, query, model, contextJson, history, onToken })
-  |
-  v
-[Rust] ai.rs::stream_ai_response
-  |-- Provider::from_str(provider) -> Provider::Anthropic (example)
-  |-- Read "anthropic_api_key" from keychain
-  |-- Build system prompt (WSL-aware if CWD starts with "/")
-  |-- anthropic::build_body(model, system_prompt, messages)
-  |     -> { model, system: "...", messages: [...], max_tokens: 1024, stream: true }
-  |-- anthropic::headers(api_key)
-  |     -> [("x-api-key", key), ("anthropic-version", "2023-06-01"), ...]
-  |-- POST to "https://api.anthropic.com/v1/messages"
-  |-- SSE loop:
-  |     for each event:
-  |       anthropic::is_done(data)? -> break
-  |       anthropic::extract_token(data) -> "content_block_delta".delta.text
-  |       on_token.send(token)
-  |
-  v
-[Frontend] onToken callback -> set({ streamingText: fullText })
-  |
-  v
-Stream complete -> update turnHistory, persist to Rust history, check destructive
+
+### Pattern 2: Signal Hierarchy with Fallback Chain
+
+**What:** Order detection signals from most reliable to least reliable. Each signal validates or overrides the previous. Never rely on a single signal.
+
+**When:** All detection decisions (shell type, WSL status, CWD).
+
+**Signal hierarchy for shell type:**
+1. ConPTY shell exe name (most reliable -- directly identifies the process)
+2. Window title patterns (fast, < 1ms, good for Windows Terminal profile names)
+3. Scoped UIA terminal text prompt patterns (good when ConPTY ambiguous)
+4. Unscoped UIA text prompt patterns (least reliable -- noise from editor/sidebar)
+
+**Signal hierarchy for WSL detection:**
+1. Window title `[WSL: distro]` (definitive for Remote-WSL mode)
+2. ConPTY shell exe is `wsl.exe` (definitive for WSL terminal tabs)
+3. `detect_wsl_in_ancestry()` (reliable for WSL 1, fails for WSL 2 Hyper-V)
+4. Scoped UIA text Linux path patterns (good but fragile)
+5. CWD path style `\\wsl$\...` or starts with `/` (fallback)
+
+### Pattern 3: Single Snapshot, Multiple Queries
+
+**What:** Take one `CreateToolhelp32Snapshot` and build maps (parent_map, exe_map) that serve all queries: ConPTY shell finding, WSL ancestry detection, sub-shell filtering.
+
+**When:** Any function that needs multiple process tree queries.
+
+**Why:** Each snapshot is ~1ms. The old code takes 3+ snapshots per detection cycle (one in `find_shell_by_ancestry`, one in `detect_wsl_in_ancestry`, one in `scan_wsl_processes_diagnostic`). Sharing a single snapshot struct eliminates redundant work.
+
+```rust
+/// Shared process snapshot. Built once, queried many times.
+pub struct ProcessSnapshot {
+    parent_map: HashMap<u32, u32>,
+    exe_map: HashMap<u32, String>,
+    conhost_pids: Vec<u32>,
+    shell_pids: Vec<(u32, String)>,  // (pid, exe_name)
+    wsl_pids: Vec<u32>,
+}
+
+impl ProcessSnapshot {
+    pub fn capture() -> Option<Self> { /* single CreateToolhelp32Snapshot call */ }
+    pub fn find_conpty_shells(&self, app_pid: u32) -> Vec<ConPtyShell> { /* ... */ }
+    pub fn is_descendant_of(&self, pid: u32, ancestor: u32) -> bool { /* ... */ }
+    pub fn has_wsl_in_ancestry(&self, pid: u32) -> bool { /* ... */ }
+}
 ```
 
 ---
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: URL-Only Provider Switching
-**What:** Parameterize just the endpoint URL and keep the same request body / SSE parsing.
-**Why bad:** Anthropic uses `x-api-key` header (not `Authorization: Bearer`), requires `max_tokens`, puts system prompt outside messages, and has completely different SSE events (`content_block_delta` not `choices[0].delta`). Google uses query param auth and different response structure. Would break 2 of 5 providers.
-**Instead:** Per-provider `build_body()`, `headers()`, `extract_token()`, `is_done()` functions.
+### Anti-Pattern 1: Filtering by Shell Exe Name
 
-### Anti-Pattern 2: WSL Detection via Environment Variables
-**What:** Reading `$WSL_DISTRO_NAME` or checking `/proc/version` to detect WSL.
-**Why bad:** Those are only available INSIDE the WSL namespace. The Rust code runs on the Windows side and cannot read WSL-internal environment variables.
-**Instead:** Detect WSL by examining the Windows process tree for `wsl.exe` / `wslhost.exe`, then shell into WSL via `wsl.exe -e` commands for context.
+**What:** Hardcoding "exclude cmd.exe in IDEs" as the primary IDE process filter.
+**Why bad:** Users legitimately run cmd.exe terminal tabs. The filter removes correct results. Also doesn't handle internal wsl.exe processes.
+**Instead:** Filter by process parentage (ConPTY-hosted vs extension-hosted).
 
-### Anti-Pattern 3: Blocking Update Check on Launch
-**What:** Synchronous network call to check for updates during app startup.
-**Why bad:** The overlay must appear instantly on hotkey press. A slow/failed network request would block the main thread and delay the first overlay show.
-**Instead:** Fire-and-forget async update check. Store result. Show notification on next overlay open or in tray menu.
+### Anti-Pattern 2: Unscoped UIA Tree Walk for IDEs
 
-### Anti-Pattern 4: Single API Key Slot
-**What:** One keychain entry that changes based on the selected provider.
-**Why bad:** Users may want multiple providers configured and switch without re-entering keys. A single slot forces key re-entry on every provider switch.
-**Instead:** Per-provider keychain entries (`openai_api_key`, `anthropic_api_key`, etc.). All can exist simultaneously.
+**What:** Using `find_all(TreeScope::Descendants, &true_condition)` on the entire VS Code window.
+**Why bad:** Captures 50+ UI elements including editor text, sidebar labels, status bar. Creates false positives for WSL detection and shell inference. Produces huge text buffers.
+**Instead:** Scope UIA to the terminal panel element via focused element ancestry or control type filtering.
 
-### Anti-Pattern 5: Abstract Trait Object for Providers
-**What:** `Box<dyn AiProvider>` with dynamic dispatch.
-**Why bad:** Async methods require boxing futures. Only 5 fixed variants. Enum match gives exhaustiveness checking at compile time. No runtime allocation. Simpler error messages.
-**Instead:** `Provider` enum with `match` dispatch.
+### Anti-Pattern 3: Multiple Process Snapshots
+
+**What:** Calling `CreateToolhelp32Snapshot` separately in `find_shell_by_ancestry()`, `detect_wsl_in_ancestry()`, and `scan_wsl_processes_diagnostic()`.
+**Why bad:** Each snapshot is a full system process enumeration. Three snapshots = 3x the work. Process state can change between snapshots leading to inconsistencies.
+**Instead:** Single `ProcessSnapshot::capture()` shared across all queries.
+
+### Anti-Pattern 4: `wsl.exe -e pwd` for Active Session CWD
+
+**What:** Spawning `wsl.exe -e sh -c "pwd"` to get the terminal's CWD.
+**Why bad:** This spawns a NEW WSL session. It returns the HOME directory of the default user, not the CWD of the active terminal session. If user has multiple WSL distros, it queries the default one which may not be the one in the active tab.
+**Instead:** Infer CWD from scoped UIA terminal text (prompt patterns like `user@host:/path$`). Fall back to `wsl.exe` subprocess only when UIA text has no CWD signal.
 
 ---
 
 ## Build Order (Dependency-Driven)
 
-### Phase 1: Provider Abstraction (Rust-side only)
-1. Create `commands/providers/` module with Provider enum
-2. Implement xai.rs provider (extract from current ai.rs + xai.rs)
-3. Implement openai.rs provider (near-identical to xAI, same SSE format)
-4. Implement anthropic.rs provider (most divergent -- different everything)
-5. Implement google.rs provider (different auth and response format)
-6. Implement openrouter.rs provider (identical to OpenAI format)
-7. Refactor `commands/ai.rs` to accept `provider` parameter and delegate
-8. Refactor `commands/keychain.rs` to accept `provider` parameter
-9. Delete `commands/xai.rs`
-10. **Backward compatibility:** Default to "xai" if provider param is missing (transitional)
+### Phase 1: Process Snapshot Consolidation
 
-### Phase 2: Frontend Multi-Provider
-1. Add `selectedProvider` to Zustand store, persist to Tauri store
-2. Rename `XaiModelWithMeta` -> `ModelInfo` throughout frontend
-3. Create `StepProviderSelect.tsx` onboarding step
-4. Update `StepApiKey.tsx` for dynamic provider labels
-5. Update `AccountTab.tsx` for provider-aware key management
-6. Update `submitQuery()` to pass `provider` in invoke calls
-7. Update `validate_and_fetch_models` invoke to pass `provider`
-8. Remove "xai" default -- require explicit provider selection
+**Goal:** Single snapshot infrastructure, ConPTY shell discovery.
 
-### Phase 3: WSL Terminal Context (independent of Phases 1-2)
-1. Create `terminal/wsl.rs` with `is_wsl_process()` and `get_wsl_context()`
-2. Add WSL detection helper (`check_for_wsl_in_tree`) using existing snapshot infrastructure
-3. Integrate WSL branch into `detect_app_context_windows()`
-4. Add WSL system prompt template to `commands/ai.rs`
-5. Test: Windows Terminal WSL tab, VS Code Remote-WSL, standalone `wsl.exe`, Cursor
+1. Create `terminal/process_windows.rs` with `ProcessSnapshot` struct
+2. Implement `ProcessSnapshot::capture()` -- single `CreateToolhelp32Snapshot`
+3. Implement `ProcessSnapshot::find_conpty_shells(app_pid)` -- conhost-parented shell discovery
+4. Implement `ProcessSnapshot::is_descendant_of()` and `has_wsl_in_ancestry()`
+5. Refactor `find_shell_by_ancestry()` in process.rs to use `ProcessSnapshot`
+6. Remove redundant snapshots in `detect_wsl_in_ancestry()` and `scan_wsl_processes_diagnostic()`
 
-### Phase 4: Auto-Updater (independent of Phases 1-3)
-1. Generate signing keypair (`npx tauri signer generate`)
-2. Add public key to `tauri.conf.json` updater config
-3. Add `tauri-plugin-updater` to Cargo.toml and plugin chain in lib.rs
-4. Create `commands/updater.rs` with check/install IPC commands
-5. Modify CI workflow: add signing env vars, generate `.sig` files, build `latest.json`
-6. Add update notification (tray menu entry + settings indicator)
-7. Wire async update check into app startup
+**Validation:** Log output showing ConPTY shells found, internal processes excluded. Test with VS Code having 3+ terminal tabs and active extensions.
+
+**Risk:** MEDIUM -- changes core detection logic. Mitigate by keeping legacy `find_shell_by_ancestry` as fallback when ConPTY discovery returns empty (handles mintty and other non-ConPTY terminals).
+
+### Phase 2: UIA Terminal Scoping
+
+**Goal:** Eliminate false positives from IDE chrome in UIA text.
+
+1. Add `read_ide_terminal_text(hwnd)` to `uia_reader.rs` -- focused element scoping
+2. Modify `detect_full_with_hwnd()` in mod.rs to use scoped reader for IDEs
+3. Keep `read_terminal_text_windows()` as fallback for non-IDE terminals
+
+**Validation:** UIA text from VS Code contains only terminal panel content, not editor/sidebar text. WSL detection false positives eliminated.
+
+**Risk:** LOW -- additive function, existing path unchanged for non-IDE windows.
+
+**Dependency:** Independent of Phase 1. Can be developed in parallel.
+
+### Phase 3: Active Tab Matching
+
+**Goal:** Correctly identify the focused terminal tab's shell PID.
+
+1. Add window title parsing helpers to `detect_windows.rs`
+2. Enable CWD-based disambiguation in `find_shell_by_ancestry()` -- wire up `focused_cwd` parameter that currently goes unused on Windows
+3. Implement CWD extraction from scoped UIA terminal text (for IDE focused tab CWD)
+4. Integrate with Phase 1's ConPTY shell list: match CWD or title against candidates
+
+**Validation:** With 3 terminal tabs in VS Code, switching between tabs and pressing hotkey returns correct shell PID and CWD each time.
+
+**Risk:** MEDIUM -- CWD-via-UIA may not always work (terminals with non-standard prompts). Fallback to highest PID among ConPTY shells is still better than current behavior.
+
+**Dependency:** Depends on Phase 1 (ConPTY shell list to match against). Benefits from Phase 2 (scoped UIA for CWD extraction).
+
+### Phase 4: WSL Detection Hardening
+
+**Goal:** Reliable WSL detection without false positives.
+
+1. Use ConPTY shell's exe name (`wsl.exe`) as primary WSL signal
+2. Window title `[WSL: distro]` as secondary signal
+3. Scoped UIA text as tertiary signal (with fewer false positives from Phase 2)
+4. Fix `get_wsl_cwd()` to use UIA-inferred CWD when available, subprocess as last resort
+5. Extract WSL distro name from window title for multi-distro environments
+
+**Validation:** WSL correctly detected in: Windows Terminal WSL tab, VS Code WSL terminal tab, VS Code Remote-WSL mode, standalone wsl.exe. NOT falsely detected when editor has Linux paths.
+
+**Risk:** LOW -- mostly benefits from Phases 1-3 improvements.
+
+**Dependency:** Depends on Phase 1 (ConPTY shell list). Benefits from Phase 2 (scoped UIA).
 
 ### Dependency Graph
 
 ```
-Phase 1 (Provider Rust)
+Phase 1 (ConPTY Discovery)
     |
-    +---> Phase 2 (Provider Frontend -- depends on Phase 1 IPC)
-
-Phase 3 (WSL -- independent, can run in parallel with 1+2)
-
-Phase 4 (Auto-updater -- independent, can run in parallel with all)
+    +---> Phase 3 (Active Tab Matching -- needs ConPTY shell list)
+    |         |
+    |         +---> Phase 4 (WSL Hardening -- benefits from both)
+    |
+Phase 2 (UIA Scoping -- independent)
+    |
+    +---> Phase 3 (benefits from scoped UIA for CWD)
+    +---> Phase 4 (benefits from scoped text for WSL detection)
 ```
 
-**Phases 3 and 4 can be developed in parallel with each other and with Phase 2.** Phase 2 depends on Phase 1 completing first (frontend needs the new Rust IPC signatures).
+**Recommended sequence:** Phase 1 -> Phase 2 (parallel if possible) -> Phase 3 -> Phase 4.
+
+Each phase delivers standalone value:
+- After Phase 1: Internal IDE processes no longer pollute results
+- After Phase 2: UIA text is clean terminal content, no IDE chrome noise
+- After Phase 3: Multi-tab scenarios return correct tab's context
+- After Phase 4: WSL detection is reliable without false positives
+
+---
+
+## Scalability Considerations
+
+| Concern | Current State | After Fix |
+|---------|--------------|-----------|
+| Process snapshot cost | 3+ snapshots per detection (~3ms) | 1 snapshot (~1ms) |
+| UIA tree walk for VS Code | Full window walk (~50-200ms, 50+ elements) | Scoped terminal walk (~20-50ms, 5-10 elements) |
+| Detection budget (750ms timeout) | Tight with 3 snapshots + full UIA walk | Comfortable with consolidated approach |
+| Multi-tab accuracy | Wrong for 2+ tabs (highest PID guess) | Correct via CWD matching |
+| False positive rate (WSL) | High in IDEs (editor text triggers) | Low with scoped UIA + ConPTY signal |
 
 ---
 
 ## Sources
 
-- Codebase analysis: `src-tauri/src/commands/ai.rs` -- current xAI-hardcoded streaming (lines 8, 259, 307-308)
-- Codebase analysis: `src-tauri/src/commands/keychain.rs` -- current single-account key storage
-- Codebase analysis: `src-tauri/src/commands/xai.rs` -- xAI-specific model validation
-- Codebase analysis: `src-tauri/src/terminal/mod.rs` -- detection orchestration with WSL gap
-- Codebase analysis: `src-tauri/src/terminal/process.rs` -- Windows process tree walk, ConPTY fallback
-- Codebase analysis: `src-tauri/src/terminal/detect_windows.rs` -- Windows exe classification (no WSL entries)
-- Codebase analysis: `src/store/index.ts` -- Zustand state with xAI-specific types
-- Codebase analysis: `src/components/Onboarding/StepApiKey.tsx` -- xAI-hardcoded labels
-- Codebase analysis: `.github/workflows/release.yml` -- current CI pipeline for updater integration
-- Architecture inference: Provider API differences (OpenAI, Anthropic, Google Gemini SSE formats) -- MEDIUM confidence, verify against current API docs during implementation
-- Architecture inference: WSL process tree model (ConPTY -> OpenConsole -> wsl.exe) -- MEDIUM confidence, verify via runtime testing on Windows
-- Architecture inference: tauri-plugin-updater v2 setup and latest.json format -- MEDIUM confidence, verify against current plugin documentation during implementation
+- Codebase: `terminal/process.rs:767-896` -- current Windows `find_shell_by_ancestry()` with ConPTY fallback and IDE cmd.exe filter
+- Codebase: `terminal/process.rs:964-1017` -- `scan_wsl_processes_diagnostic()` showing 10-16+ wsl.exe processes in VS Code
+- Codebase: `terminal/mod.rs:108-200` -- `detect_full_with_hwnd()` detection pipeline with UIA + WSL signals
+- Codebase: `terminal/uia_reader.rs:120-153` -- `try_walk_children()` full descendant walk
+- Codebase: `terminal/detect_windows.rs:187-204` -- window title WSL detection
+- [ConPTY architecture blog post](https://devblogs.microsoft.com/commandline/windows-command-line-introducing-the-windows-pseudo-console-conpty/) -- ConPTY process model (HIGH confidence)
+- [OpenConsole.exe vs conhost.exe discussion](https://github.com/microsoft/terminal/discussions/12115) -- process tree structure (HIGH confidence)
+- [Windows Console Ecosystem Roadmap](https://learn.microsoft.com/en-us/windows/console/ecosystem-roadmap) -- ConPTY as standard pty mechanism (HIGH confidence)
+- [VS Code Terminal Advanced docs](https://code.visualstudio.com/docs/terminal/advanced) -- ConPTY integration, node-pty (MEDIUM confidence)
+- [microsoft/node-pty](https://github.com/microsoft/node-pty) -- VS Code pty backend, ConPTY-only since 2026 (MEDIUM confidence)
+- [VS Code Terminal Shell Integration](https://code.visualstudio.com/docs/terminal/shell-integration) -- terminal tab process identification (MEDIUM confidence)

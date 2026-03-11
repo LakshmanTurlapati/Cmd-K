@@ -1,500 +1,394 @@
-# Domain Pitfalls: Multi-Provider AI, WSL Terminal Context, and Auto-Updater
+# Domain Pitfalls: Windows Terminal Detection Fix (v0.2.8)
 
-**Domain:** Adding multi-provider AI support, WSL terminal context, and auto-updater to existing Tauri v2 app (CMD+K)
-**Researched:** 2026-03-08 (v0.2.6 milestone)
-**Confidence:** HIGH (verified against codebase architecture, API documentation patterns, and prior Windows pitfalls research)
+**Domain:** Windows terminal/shell detection in IDE environments (VS Code, Cursor) and standalone terminals
+**Researched:** 2026-03-11
+**Overall confidence:** HIGH (based on project's own failure history, code analysis, and prior pitfalls research)
 
-> This document supersedes the v0.2.1 PITFALLS.md. Prior pitfalls for the Windows port (UIPI, SmartScreen, ConPTY process tree, etc.) remain valid. This document covers ONLY pitfalls specific to the v0.2.6 features: multi-provider AI, WSL terminal context, and tauri-plugin-updater.
+> This document supersedes the v0.2.6 PITFALLS.md for terminal detection topics. Prior pitfalls for multi-provider AI (Pitfalls 1-2, 6-8, 11-12, 14) and auto-updater (Pitfalls 3, 5, 10) remain valid but are out of scope for v0.2.8. This document covers ONLY pitfalls specific to fixing Windows terminal detection: WSL detection, shell differentiation, IDE process filtering, and UIA/Win32 API usage with Electron apps.
 
 ---
 
 ## Critical Pitfalls
 
-Mistakes that cause rewrites, data loss, or broken update paths.
-
-### Pitfall 1: Hardcoded xAI Constants Scattered Across Multiple Files
-
-**What goes wrong:**
-The current codebase has xAI-specific constants, types, and logic hardcoded in at least 4 locations:
-- `ai.rs`: Hardcoded `https://api.x.ai/v1/chat/completions` endpoint (line 266), `SERVICE`/`ACCOUNT` keychain constants pointing to `xai_api_key` (lines 7-8)
-- `xai.rs`: Hardcoded `https://api.x.ai/v1/models` endpoint (line 105), xAI-specific model filtering (`grok-*` names, lines 23-35), xAI-specific hardcoded fallback models (lines 77-83)
-- `keychain.rs`: Single `ACCOUNT = "xai_api_key"` constant -- stores exactly one API key
-- `store/index.ts`: Single `apiKeyStatus`, single `selectedModel`, single `availableModels` array -- all assume one provider
-
-Developers attempt to add a provider abstraction layer but miss one of these hardcoded references. The app compiles, appears to work with the default provider, but silently uses the wrong API key or endpoint when the user switches providers. The most insidious case: `ai.rs` reads the API key from keychain using the hardcoded `xai_api_key` account name regardless of which provider is selected, so switching to OpenAI still sends the xAI key to OpenAI's endpoint.
-
-**Why it happens:**
-The xAI-only architecture was a deliberate scope decision for v1 (PROJECT.md: "xAI only for v1, provider architecture should allow easy addition later"). But the "should allow easy addition" never materialized as an actual abstraction layer. The xAI references are deeply embedded, not isolated behind an interface.
-
-**Consequences:**
-- User's xAI API key sent to OpenAI/Anthropic endpoint (security leak)
-- Wrong model names sent to wrong provider (API errors)
-- User switches provider but onboarding flow still validates against xAI
-- Keychain stores only one key, overwriting the previous provider's key when user configures a new one
-
-**Prevention:**
-1. Audit ALL xAI references before writing any provider code. Search for: `x.ai`, `xai`, `grok`, `xai_api_key`, `api.x.ai`. The current count is 15+ direct references across Rust and TypeScript
-2. Create a `Provider` trait/enum in Rust FIRST, before touching any existing code:
-   ```rust
-   enum Provider { OpenAI, Anthropic, Google, XAI, OpenRouter }
-   ```
-3. Change keychain account to include provider: `"openai_api_key"`, `"anthropic_api_key"`, etc. -- or use a single `"api_keys"` JSON blob
-4. The frontend store must change from `apiKeyStatus: string` to `apiKeyStatuses: Record<Provider, Status>` and from `selectedModel: string` to `selectedProvider: Provider` + `selectedModel: string`
-5. The `stream_ai_response` command must accept a `provider` parameter, not just `model` -- the model name alone is ambiguous across providers (e.g., "gpt-4o" vs "claude-3.5-sonnet" but what about custom model names on OpenRouter?)
-
-**Detection:**
-- Test switching providers in settings and immediately making a query
-- Log the actual HTTP request URL and Authorization header in debug mode
-- Verify different API keys are stored for different providers
-
-**Phase to address:**
-Phase 1 (Provider Abstraction Layer) -- must be the FIRST phase. All other multi-provider work depends on this being correct.
+Mistakes that cause reverts, regressions, or fundamental architectural failures. Each has already bitten this project at least once.
 
 ---
 
-### Pitfall 2: SSE Streaming Format Differs Between Providers
+### Pitfall 1: Treating wsl.exe as a Shell Process
 
-**What goes wrong:**
-The current `ai.rs` parses SSE (Server-Sent Events) with a specific JSON structure: `chunk["choices"][0]["delta"]["content"]` (line 308). This is the OpenAI-compatible format used by xAI. Developers assume all providers use the same SSE format and reuse the existing parser. But:
+**What goes wrong:** Adding wsl.exe to KNOWN_SHELL_EXES or KNOWN_TERMINAL_EXES causes ALL VS Code terminals to misdetect as WSL. VS Code spawns 10-16+ internal wsl.exe processes for file watching, Remote-WSL extension host, and other background features. None of these correspond to user terminal tabs.
 
-- **OpenAI**: `choices[0].delta.content` -- matches current code
-- **Anthropic**: Uses a completely different streaming format with `content_block_delta` events and `delta.text` field, NOT `choices[0].delta.content`. Anthropic also sends `message_start`, `content_block_start`, `content_block_delta`, `content_block_stop`, and `message_stop` event types
-- **Google Gemini**: Uses `candidates[0].content.parts[0].text` in streaming responses, NOT `choices[0].delta.content`
-- **OpenRouter**: Proxies to upstream providers and normalizes to OpenAI format, BUT error responses use OpenRouter's own format, and rate limiting headers are different
-- **xAI**: OpenAI-compatible format (current code works)
+**Why it happens:** The intuition "WSL terminals run under wsl.exe, so wsl.exe is a shell" seems logical. But wsl.exe is a launcher/bridge process, not a shell. VS Code uses wsl.exe for many non-terminal purposes. Any approach that counts wsl.exe instances or includes wsl.exe in shell candidate lists will be flooded with false positives.
 
-The app streams partial tokens correctly for xAI and OpenAI but silently produces empty responses for Anthropic and Google because the JSON path `choices[0].delta.content` does not exist in their SSE payloads.
-
-**Why it happens:**
-The OpenAI chat completions API has become a de facto standard, and many developers assume all providers follow it. Anthropic and Google explicitly chose different formats. Even providers claiming "OpenAI compatibility" (like OpenRouter) have edge cases in error handling, rate limiting, and streaming termination signals.
-
-**Consequences:**
-- Anthropic queries return empty responses (no tokens extracted)
-- Google Gemini queries return empty responses
-- OpenRouter works for GPT models but errors are misreported
-- Users think the provider is broken, not the parsing
+**Consequences:** Every VS Code terminal (PowerShell, CMD, Git Bash) gets detected as WSL. Already happened: fix in commit e0ef4be, reverted in commit bcea9cd. This burned a full debug-and-revert cycle.
 
 **Prevention:**
-1. Build a `StreamParser` trait with provider-specific implementations:
-   ```rust
-   trait StreamParser {
-       fn parse_token(&self, event_data: &str) -> Option<String>;
-       fn is_done(&self, event_data: &str) -> bool;
-   }
-   ```
-2. Anthropic requires parsing multiple event types (`content_block_delta` for tokens, `message_stop` for completion), not just looking for `[DONE]`
-3. Google Gemini uses a different SSE sentinel and response structure
-4. Test each provider's streaming with a real API key before considering it "done"
-5. The existing 10-second hard timeout (line 295 in `ai.rs`) may be too short for slower providers -- Anthropic Claude and Google Gemini can take 15-30 seconds for complex prompts. Make timeout provider-configurable or increase to 30 seconds
+- Never add wsl.exe to any "known shells" or "known terminals" list
+- WSL detection must use output-based signals (UIA text patterns, window title) not process-based signals
+- Any new WSL detection mechanism must be tested with VS Code open but with NO WSL terminal tabs active -- if it still detects WSL, it is broken
+- The existing code correctly removed wsl.exe from KNOWN_TERMINAL_EXES in commit 1e4cd7a -- any refactoring must preserve this removal
 
-**Detection:**
-- Test each provider with a simple prompt and verify tokens appear
-- Log raw SSE event data before parsing to diagnose empty responses
-- Verify `[DONE]` sentinel handling per provider (Anthropic uses `message_stop` event type, not `[DONE]`)
+**Detection:** If `is_wsl` returns true when the user has only a PowerShell tab open in VS Code, this pitfall has been hit.
 
-**Phase to address:**
-Phase 2 (Provider Implementations) -- immediately after the abstraction layer. Each provider must be tested individually.
+**Phase relevance:** Must be respected in every phase. Gate: any code change touching WSL detection must include a "no WSL terminal active" negative test scenario.
 
 ---
 
-### Pitfall 3: Auto-Updater Signing Key Is Different From Code Signing Certificate
+### Pitfall 2: Circular Dependency Between Process-Based and Text-Based Detection
 
-**What goes wrong:**
-Tauri's auto-updater (`tauri-plugin-updater`) requires a separate Ed25519 signing key pair for update verification. This is NOT the same as the Apple Developer ID certificate (used for macOS code signing) or the Windows code signing certificate (not yet purchased). Developers configure the Apple certificate in CI, assume auto-update signing is handled, and ship a release. The first update check succeeds (downloads the new version), but signature verification fails because the update binary was never signed with the Tauri updater key. The app shows "Update available" but installation fails silently or with a cryptic error.
+**What goes wrong:** Text-based WSL detection (UIA terminal output analysis) is gated behind `if terminal.is_wsl`, which can only be set by process-tree detection, which structurally fails for WSL 2. The text detection that COULD fix the problem never runs because it waits for the broken detector to succeed first.
 
-Worse: if the first release ships WITHOUT the updater key configured, there is NO way to push an auto-update to those users. They must manually download the new version because the old version has no updater key to verify against.
+**Why it happens:** The original code structure assumed process-tree WSL detection would work and UIA text was a refinement. When the process-tree approach was found to be architecturally broken (WSL 2 Hyper-V VM makes Linux processes invisible to Windows process APIs), the guard condition was not updated. Diagnosed in `.planning/debug/wsl-detection-failure.md` as "root cause #2: CIRCULAR DEPENDENCY."
 
-**Why it happens:**
-Tauri v2 has THREE separate signing concerns:
-1. **macOS code signing**: Apple Developer ID certificate (already configured in CI via `APPLE_CERTIFICATE_BASE64`)
-2. **Windows code signing**: Authenticode certificate (not yet purchased, conditional in CI)
-3. **Tauri updater signing**: Ed25519 key pair (`TAURI_SIGNING_PRIVATE_KEY` + `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`) -- this is what `tauri-plugin-updater` verifies
-
-The naming is confusing. "Signing" in the Tauri docs refers to updater signing, not code signing. The updater public key goes in `tauri.conf.json` under `plugins.updater.pubkey`, and the private key is used during `tauri build` via environment variables.
-
-**Consequences:**
-- First release with updater has no signing key: all users on that version can NEVER auto-update
-- Key generated but not stored securely: key loss means future updates break for ALL existing users
-- Key generated but not added to CI: local builds work, CI builds produce unsigned updates
-- Public key in `tauri.conf.json` but private key not in GitHub Secrets: builds succeed but updates fail signature check
+**Consequences:** WSL is never detected. UIA text with clear Linux prompts (user@host:~$) is available but the code skips it because is_wsl is already false.
 
 **Prevention:**
-1. Generate the Ed25519 key pair BEFORE building the first updater-enabled release: `tauri signer generate -w ~/.tauri/cmd-k.key`
-2. Store the private key in a SECURE location (password manager, not git). Loss of this key is catastrophic -- you cannot issue updates to existing users
-3. Add `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` to GitHub Secrets BEFORE the first CI build with the updater
-4. Add the PUBLIC key to `tauri.conf.json` under `plugins.updater.pubkey`
-5. Test the full update cycle locally before shipping: build v0.2.5 with updater, build v0.2.6, verify v0.2.5 can detect, download, verify, and install v0.2.6
-6. The CI workflow (`release.yml`) must be updated to pass these environment variables to the `tauri build` step
+- UIA text WSL detection must run UNCONDITIONALLY, not gated behind any prior WSL flag
+- Structure detection as a waterfall: each subsequent check can SET is_wsl=true but should never require it to already be true
+- The current code (post-fix in mod.rs lines 148-157) already runs `detect_wsl_from_text` unconditionally -- any refactoring MUST preserve this property
+- Write the detection pipeline as: `process_tree -> title_check -> uia_text_check -> cwd_path_check`, where each can independently set is_wsl=true
+- Code review check: grep for `if.*is_wsl.*detect_wsl` or `if.*is_wsl.*infer.*wsl` -- any such pattern is a potential circular dependency
 
-**Detection:**
-- Check `tauri.conf.json` for `plugins.updater.pubkey` field
-- Check CI workflow for `TAURI_SIGNING_PRIVATE_KEY` environment variable
-- Run `tauri build` locally and check if `.sig` files are generated alongside the installer
+**Detection:** Add a log line "WSL text detection skipped because is_wsl already false" -- if this ever appears in production, the circular dependency is back.
 
-**Phase to address:**
-Phase 1 of auto-updater work -- key generation and CI configuration must happen before the first updater-enabled release ships.
+**Phase relevance:** Any refactoring of detect_full_with_hwnd or the WSL detection pipeline. Must be explicitly verified in code review.
 
 ---
 
-### Pitfall 4: WSL Process Tree Is Invisible to Win32 APIs
+### Pitfall 3: "Highest PID = Active Terminal" Heuristic Picks Internal IDE Processes
 
-**What goes wrong:**
-The current Windows terminal context detection walks the Win32 process tree via `CreateToolhelp32Snapshot` to find shell PIDs descended from the terminal app (see `find_shell_by_ancestry` in `process.rs`). This works for native Windows shells (PowerShell, CMD, Git Bash). For WSL, the process tree crosses a namespace boundary: `wsl.exe` is a Win32 process, but the actual shell (`bash`, `zsh`) runs inside the WSL Linux namespace. Win32 process APIs cannot see WSL-internal processes. `CreateToolhelp32Snapshot` returns `wsl.exe` as the leaf process -- it cannot enumerate `bash` or `zsh` running inside the Linux namespace.
+**What goes wrong:** When multiple shell processes are descendants of an IDE (VS Code/Cursor), the code picks the one with the highest PID assuming it was most recently spawned and therefore most likely the active terminal tab. This is wrong -- internal IDE processes (extension hosts, task runners, git helper shells) are often spawned AFTER user terminal tabs and have higher PIDs.
 
-Current code handles this partially: `detect_windows.rs` lists `bash.exe` in `KNOWN_SHELL_EXES` (line 45), but this is Git Bash's `bash.exe`, not WSL's bash. WSL does not spawn a `bash.exe` visible to Win32. The process tree walk finds `wsl.exe` and stops.
+**Why it happens:** PID assignment order correlates with spawn time on most OSes, so "highest PID" seems like a reasonable proxy for "most recent." But IDE internals continuously spawn and despawn processes. A git fetch, extension activation, or background task can spawn a cmd.exe or powershell.exe with a PID higher than the user's terminal shell.
 
-**Why it happens:**
-WSL runs a real Linux kernel in a lightweight VM (WSL2) or a translation layer (WSL1). Linux processes inside WSL have their own PID namespace. Win32 APIs like `CreateToolhelp32Snapshot`, `OpenProcess`, `ReadProcessMemory`, and `NtQueryInformationProcess` do not cross the WSL boundary. The only Win32 process visible is `wsl.exe` (or `wslhost.exe` for WSL2).
-
-**Consequences:**
-- Shell type detection fails: app cannot determine if user is running bash, zsh, or fish inside WSL
-- CWD detection via PEB reading fails: `wsl.exe`'s CWD is its Windows launch directory, not the user's current directory inside the WSL filesystem
-- Running process detection fails: cannot see if user is running `vim`, `node`, etc. inside WSL
-- Window key computation uses `wsl.exe` PID, which is shared across all WSL sessions -- history/context bleeds between WSL terminals
+**Consequences:** The wrong shell is detected. User opens a bash terminal, but CMD+K reads context from an internal cmd.exe spawned by a VS Code extension. This is currently the ACTIVE bug that v0.2.8 must fix.
 
 **Prevention:**
-1. Detect WSL sessions by checking if the shell process is `wsl.exe` or `wslhost.exe` in the process tree
-2. For CWD: execute `wsl.exe -e pwd` (or `wsl.exe --exec pwd`) to get the current working directory inside WSL. This spawns a quick subprocess that runs inside the WSL namespace and returns the Linux path
-3. For shell type: execute `wsl.exe -e basename "$SHELL"` or `wsl.exe -e ps -o comm= -p $$` to get the running shell name
-4. For path translation: use `wsl.exe -e wslpath -w "$(pwd)"` to convert Linux paths to Windows paths (e.g., `/home/user/project` -> `\\wsl$\Ubuntu\home\user\project`), or use `wslpath -u` for the reverse
-5. Handle the latency cost: `wsl.exe -e` subprocess calls take 200-500ms (WSL must translate the call into the Linux namespace). This is slower than the native Win32 process inspection. Consider caching results with a 2-second TTL
-6. For VS Code Remote-WSL and Cursor with WSL: the IDE process tree will show `Code.exe` -> `wslhost.exe` -> (invisible WSL processes). Detect Remote-WSL by checking VS Code's window title (contains "[WSL: distroname]") or by checking for `wslhost.exe` in the process tree
+- Filter out non-interactive shell processes BEFORE applying any PID-based selection
+- The existing IDE-mode cmd.exe deprioritization (process.rs `find_shell_by_ancestry`) is a partial fix but insufficient -- internal powershell.exe processes also exist
+- Better approach: use CWD-based matching (compare shell CWD against focused tab CWD from UIA) as primary disambiguation, PID as last resort only
+- On Windows, CWD-based matching is already implemented for macOS (`focused_cwd` parameter) but the Windows path ignores it (`_focused_cwd` with underscore prefix)
+- Consider additional signals: does the shell have a ConPTY/OpenConsole parent? Does it have a visible console allocation? Is its parent a known pty-helper process?
 
-**Detection:**
-- Open Windows Terminal with a WSL tab, trigger CMD+K, check if shell_type is detected
-- Check CWD -- if it shows `C:\Windows\System32` or the Windows home directory instead of the WSL directory, PEB reading is being used instead of WSL interop
-- Verify different WSL distributions (Ubuntu, Debian) produce correct context
+**Detection:** Compare the detected shell_type and cwd against what the user actually sees in their focused terminal tab. If they don't match, this pitfall is active.
 
-**Phase to address:**
-Phase 2 (WSL Terminal Context) -- core WSL support. Must handle the namespace boundary explicitly, not attempt to reuse Win32 process tree walking.
+**Phase relevance:** Shell disambiguation phase. The Windows `find_shell_by_ancestry` currently discards the `_focused_cwd` parameter -- implementing CWD matching requires finding the focused tab's identity through UIA or another mechanism first.
 
 ---
 
-### Pitfall 5: Auto-Updater Update Endpoint URL Becomes a Single Point of Failure
+### Pitfall 4: WSL 2 Hyper-V VM Makes Linux Processes Invisible to Windows APIs
 
-**What goes wrong:**
-Tauri's auto-updater checks a URL endpoint for update metadata (a JSON file containing version, download URL, signature, and release notes). Most Tauri apps use GitHub Releases as the update endpoint. The updater is configured with an `endpoints` URL in `tauri.conf.json` that points to a JSON file served from GitHub (either a static `latest.json` in the release assets, or a dynamic endpoint). If the endpoint URL is wrong, returns 404, or GitHub is down, the app silently fails to check for updates. Users are stuck on old versions with no feedback.
+**What goes wrong:** Process tree walking (CreateToolhelp32Snapshot) finds only Windows-native processes. WSL 2 runs Linux processes (bash, zsh, etc.) inside a lightweight Hyper-V VM. These processes do not appear in the Windows process table. The detected "shell" is always a Windows-side process like cmd.exe or conhost.exe.
 
-More critically: the endpoint URL format differs between Tauri v1 and v2. Tauri v2 uses a different JSON schema for the update manifest. If you follow a Tauri v1 tutorial (which dominate search results), the update check will fail silently.
+**Why it happens:** WSL 1 ran Linux binaries as pico processes visible to Windows APIs. WSL 2 switched to a real Linux kernel in a VM. wsl.exe is a bridge that connects a Windows ConPTY to the VM's /dev/pts, but the actual shell process lives in the Linux namespace, invisible to Win32 APIs. Diagnosed in `.planning/debug/wsl-detection-failure.md` as "root cause #1: ARCHITECTURAL."
 
-**Why it happens:**
-The update manifest must be generated and uploaded to a specific URL pattern. GitHub Releases do not automatically create a Tauri-compatible update manifest. You need either:
-- A GitHub Action that generates `latest.json` and uploads it to the release
-- A static server/CDN that serves the manifest
-- The `tauri-action` GitHub Action which handles this automatically
-
-Developers configure the updater plugin, point it at their GitHub releases URL, and assume the manifest exists. It does not -- GitHub Releases serves HTML or the raw binary, not the JSON manifest the updater expects.
-
-**Consequences:**
-- App silently never finds updates (endpoint returns HTML or 404)
-- Users manually check for updates, see "You're up to date" because the check failed (not because there's no update)
-- If using a custom server, server downtime means no updates for anyone
+**Consequences:** Process tree detection finds cmd.exe (the ConPTY host) instead of bash/zsh. `detect_wsl_in_ancestry` walks from cmd.exe up to Code.exe/explorer.exe -- no wsl.exe ancestor exists. WSL detection based purely on process tree will ALWAYS fail for WSL 2.
 
 **Prevention:**
-1. Use the `tauri-plugin-updater` with GitHub Releases: configure the endpoint as `https://github.com/user/repo/releases/latest/download/latest.json`
-2. The CI workflow must generate and upload `latest.json` alongside the installer artifacts. This file must contain: `version`, `notes`, `pub_date`, and per-platform entries with `url` and `signature`
-3. Generate platform-specific JSON: the manifest needs `platforms` keys like `darwin-aarch64`, `darwin-x86_64`, `windows-x86_64` mapping to the correct download URLs and `.sig` signature files
-4. The `.sig` files are generated automatically by `tauri build` when `TAURI_SIGNING_PRIVATE_KEY` is set -- ensure they are uploaded to the release
-5. Test the update flow end-to-end: build v0.2.5, publish to GitHub, build v0.2.6, publish to GitHub, run v0.2.5 and verify it detects and installs v0.2.6
-6. Add error logging for update check failures -- the default behavior is silent failure
+- Process tree is useful for: finding Windows-native shells (PowerShell, cmd.exe, Git Bash)
+- Process tree is useless for: detecting WSL sessions or finding Linux shells
+- WSL detection MUST use output-based signals: UIA terminal text patterns, window title "[WSL: distro]", CWD path style (\\wsl$\..., /home/...)
+- Never add a "detect WSL from process tree" approach for WSL 2 -- it is architecturally impossible
+- The wsl.exe subprocess calls (get_wsl_cwd, get_wsl_shell) are the correct approach for reading Linux-side context AFTER WSL is detected through other means
 
-**Detection:**
-- After publishing a release, manually `curl` the endpoint URL and verify it returns valid JSON
-- Check that `.sig` files exist alongside the installer in GitHub Releases
-- Check app logs for update check errors (network errors, parse errors, signature verification errors)
+**Detection:** If WSL detection works for WSL 1 but not WSL 2, this is the cause.
 
-**Phase to address:**
-Phase 3 (Auto-Updater Implementation) -- CI workflow changes and endpoint configuration are part of the updater setup.
+**Phase relevance:** Foundational constraint that must be documented and understood before any WSL detection code is written. All WSL detection code must be output-based, not process-based.
 
 ---
 
-### Pitfall 6: System Prompt Becomes Provider-Specific Due to Model Capabilities
+### Pitfall 5: UIA Focused-Element Strategy Fails for Electron/VS Code
 
-**What goes wrong:**
-The current system prompts in `ai.rs` are tailored for xAI/Grok models (lines 13-54). They use a specific instruction style that works well with Grok. When switching providers, the same system prompt produces different quality results:
+**What goes wrong:** Using `UIAutomation::focused_element()` to find the active terminal area returns the CMD+K overlay element (or nothing useful) because focus has already moved away from VS Code by the time UIA reading runs. Additionally, VS Code does not reliably expose xterm.js accessibility tree elements without screen reader mode enabled.
 
-- **Anthropic Claude**: Tends to follow "output ONLY the exact command" instructions more literally but may refuse to generate destructive commands even when asked. Claude also has a `system` parameter separate from the messages array (not a `"role": "system"` message)
-- **OpenAI GPT**: Follows system prompts well but may add markdown formatting despite being told not to. Models like GPT-4o may add explanatory text
-- **Google Gemini**: The `system_instruction` is a separate field in the API, not part of the messages array. Gemini may also wrap responses in markdown code fences despite instructions
-- **OpenRouter**: Passes system prompts through to the underlying model, but different models behind OpenRouter behave differently
+**Why it happens:** The hotkey handler captures PID and HWND synchronously before showing the overlay, but the actual UIA tree traversal happens on a background thread after the overlay is visible. By then, the focused element is the overlay, not the VS Code terminal. Chromium-based apps (VS Code, Cursor) only fully populate the xterm.js accessibility tree when screen reader mode is detected. This strategy was researched in Phase 23.1 and found to be unreliable.
 
-The most dangerous case: Anthropic's API structure requires the system prompt as a top-level `system` parameter, NOT as a message with `"role": "system"`. If you send `{"role": "system", "content": "..."}` in the messages array to the Anthropic API, it returns an error. The current code builds messages with `"role": "system"` (line 230-232), which works for OpenAI-compatible APIs but breaks for Anthropic.
-
-**Why it happens:**
-Each LLM provider has different API conventions, different model behaviors, and different prompt engineering best practices. The "one prompt fits all" approach silently degrades quality rather than failing loudly.
-
-**Consequences:**
-- Anthropic API calls fail with 400 error because system prompt is in the wrong location
-- Google Gemini returns markdown-wrapped commands that break when pasted into terminal
-- Different models produce inconsistent output quality with the same prompt
-- Temperature setting (0.1) may be too low for some models, causing repetitive outputs
+**Consequences:** UIA focused-element returns overlay UI elements. The xterm.js accessibility subtree may be empty or minimal. Phase 23.1 research concluded: "UIA focused element approach: LOW confidence -- theoretical, needs testing to verify viability."
 
 **Prevention:**
-1. Build the system prompt as part of the provider abstraction, not as a shared constant. Each provider implementation constructs its own request body with the system prompt in the correct location
-2. For Anthropic: move system prompt to the top-level `system` field in the request body
-3. For Google Gemini: use `system_instruction` field, not messages
-4. Consider provider-specific prompt tweaks (e.g., adding "Do not use markdown code fences" for models that tend to wrap output)
-5. The `temperature` parameter should be provider-configurable -- some models work better at 0.0, others at 0.2
-6. Test the ACTUAL output of each provider with 10 common terminal tasks and verify commands are clean, unformatted, and pasteable
+- Do NOT rely on `UIAutomation::focused_element()` for determining which terminal tab is active
+- Use `element_from_handle(hwnd)` with the pre-captured HWND to root UIA traversal at the correct window
+- Accept that VS Code UIA tree walking will return mixed content (menus, sidebar, editor, terminal) and make detection patterns specific enough to handle noise
+- For active tab identification, use: window title (contains file/project info), UIA tab list with selection state, or process-tree CWD matching
+- Do NOT assume xterm.js accessibility tree is always populated -- it requires VS Code's `terminal.integrated.accessibilitySupport` setting or system screen reader detection
 
-**Detection:**
-- Anthropic queries fail with HTTP 400
-- Google Gemini responses wrapped in triple backticks
-- Commands pasted into terminal include markdown formatting (backticks, language tags)
+**Detection:** If UIA text is empty for VS Code windows, or if the text contains only overlay content, this pitfall is active.
 
-**Phase to address:**
-Phase 2 (Provider Implementations) -- system prompt handling is part of each provider's request builder.
+**Phase relevance:** Any phase implementing UIA-based terminal text reading or active-tab detection for Electron IDEs.
 
 ---
 
 ## Moderate Pitfalls
 
-### Pitfall 7: Keychain Migration -- Existing Users Lose Their API Key
-
-**What goes wrong:**
-The current keychain stores a single API key under `SERVICE = "com.lakshmanturlapati.cmd-k"` and `ACCOUNT = "xai_api_key"`. When refactoring to multi-provider, the account naming scheme changes (e.g., `"provider_openai_api_key"` or a JSON blob). If the new code does not check for the legacy `"xai_api_key"` account, existing users who upgrade from v0.2.4 to v0.2.6 will find their API key gone. They must re-enter it, and worse, the old key remains orphaned in the keychain/credential manager.
-
-**Prevention:**
-1. On first launch of v0.2.6, check for the legacy `"xai_api_key"` entry in the keychain
-2. If found, migrate it to the new provider-specific entry (e.g., `"xai_api_key"` -> new xAI provider storage)
-3. Set the user's default provider to xAI if a legacy key is found (preserving their existing workflow)
-4. Delete the legacy entry after successful migration to avoid confusion
-5. Run migration logic BEFORE showing onboarding -- the user should never see "no API key" if they had one before
-
-**Detection:**
-- Upgrade a test build from v0.2.4 to v0.2.6 and verify the API key persists
-- Check that the old keychain entry is cleaned up after migration
-
-**Phase to address:**
-Phase 1 (Provider Abstraction Layer) -- migration must be in place before the first release that changes keychain structure.
+These cause incorrect behavior but are recoverable without rewrites.
 
 ---
 
-### Pitfall 8: Model Listing Endpoints Differ Across Providers
+### Pitfall 6: VS Code Internal cmd.exe Processes Polluting Shell Candidates
 
-**What goes wrong:**
-The current `xai.rs` fetches models from `GET /v1/models` and falls back to a hardcoded list. Each provider has a different model listing approach:
+**What goes wrong:** VS Code spawns multiple cmd.exe processes for git operations, task runners, extension host startup, and other internal features. These appear as descendants of Code.exe in the process tree and are indistinguishable from user-created cmd.exe terminal tabs.
 
-- **OpenAI**: `GET https://api.openai.com/v1/models` -- works, returns all models including fine-tunes and embeddings that must be filtered
-- **Anthropic**: NO model listing endpoint. You must hardcode the available models. The Anthropic API does not have a `/v1/models` equivalent
-- **Google Gemini**: `GET https://generativelanguage.googleapis.com/v1beta/models?key=API_KEY` -- API key goes in URL parameter, not Authorization header
-- **xAI**: `GET https://api.x.ai/v1/models` -- current approach works
-- **OpenRouter**: `GET https://openrouter.ai/api/v1/models` -- returns 200+ models from all providers, needs heavy filtering
-
-The developer builds a generic "fetch models" function and expects all providers to support it. Anthropic fails because there is no endpoint. Google fails because the auth mechanism is different (key in URL, not Bearer token). OpenRouter returns hundreds of irrelevant models.
+**Why it happens:** VS Code uses cmd.exe as a general-purpose process launcher on Windows. The `find_shell_by_ancestry` function correctly finds these as shell descendants of Code.exe, but cannot tell which (if any) is the user's active terminal tab.
 
 **Prevention:**
-1. Make model listing a per-provider method, not a generic API call. Some providers return lists, others require hardcoded lists
-2. Anthropic: hardcode `claude-sonnet-4-20250514`, `claude-3.5-haiku-20241022`, etc. Update on new releases. This is what the Anthropic docs recommend
-3. Google Gemini: handle the different auth pattern (API key in query parameter) in the provider implementation
-4. OpenRouter: filter to only show chat-capable models, group by provider, respect model pricing information
-5. Cache model lists to avoid repeated API calls (models change rarely)
+- The existing IDE-mode deprioritization (prefer powershell/pwsh/bash/zsh over cmd.exe) is the right direction
+- To improve: check if cmd.exe has an associated ConPTY/OpenConsole parent, which would indicate it is a terminal session rather than an internal process
+- Consider checking if the cmd.exe process has child processes (interactive cmd.exe terminals often have children; internal VS Code cmd.exe calls are fire-and-forget)
+- Long-term: CWD matching against the focused tab is the reliable disambiguation
 
-**Phase to address:**
-Phase 2 (Provider Implementations) -- each provider's model listing is unique.
+**Detection:** If shell_type returns "cmd" when the user has a PowerShell tab focused in VS Code, internal cmd.exe is being selected.
+
+**Phase relevance:** IDE process filtering phase.
 
 ---
 
-### Pitfall 9: WSL Path Translation Breaks Terminal Context Display
+### Pitfall 7: ConPTY Architecture Breaks Parent-Child Process Tree Assumptions
 
-**What goes wrong:**
-WSL uses Linux-style paths (`/home/user/project`) while Windows uses Windows-style paths (`C:\Users\user\project`). The WSL filesystem is mounted at `\\wsl$\DistroName\` (or `\\wsl.localhost\DistroName\` on newer Windows). When the overlay displays CWD from a WSL terminal, it must decide: show the Linux path or the Windows path?
+**What goes wrong:** Windows Terminal uses ConPTY, where shell processes are NOT descendants of WindowsTerminal.exe. The process tree looks like: WindowsTerminal.exe (no children) and separately OpenConsole.exe -> shell.exe. The parent-child relationship between the terminal app and its shells does not exist.
 
-If it shows the Linux path (`/home/user/project`), the AI receives a Linux path and generates Linux commands -- correct. But the user may be confused because they see a path that does not exist in Windows Explorer.
-
-If it shows the Windows path (`\\wsl$\Ubuntu\home\user\project`), the AI receives a Windows-style path and may generate Windows commands even though the user is in a WSL bash shell -- incorrect.
-
-Additionally, the system prompt currently says "You are a terminal command generator for Windows" when running on Windows (line 23-30 of `ai.rs`). But WSL sessions should use the macOS/Linux system prompt because the user is running Linux commands.
+**Why it happens:** ConPTY is a pseudo-terminal implementation where the hosting process (Windows Terminal) communicates with shells through pipes, not process hierarchy. OpenConsole.exe is the PTY master that spawns the shell, but OpenConsole.exe is not a child of WindowsTerminal.exe.
 
 **Prevention:**
-1. When WSL is detected, use the Linux path as CWD in the AI context -- the user wants Linux commands
-2. Switch the system prompt to the Linux variant for WSL sessions, not the Windows variant
-3. Set shell_type to the WSL shell (`bash`, `zsh`) not `wsl` -- the user's actual shell matters for command generation
-4. Include "WSL" context in the system prompt so the AI knows it can reference Windows files via `/mnt/c/` paths
-5. Display the Linux path in the overlay badge but consider showing `WSL: /path` for clarity
+- The existing ConPTY fallback in `find_shell_by_ancestry` (searching for shells parented by OpenConsole.exe) is the correct approach for Windows Terminal
+- When no descendant shells are found and the app is a known terminal (WindowsTerminal.exe), always try the ConPTY fallback
+- The default "powershell" fallback in `detect_app_context_windows` (line 505) is a reasonable last resort but should be documented as a guess
+- Any new shell-finding logic must be tested with Windows Terminal specifically because its process architecture is unlike other terminal hosts
 
-**Phase to address:**
-Phase 2 (WSL Terminal Context) -- path handling is integral to WSL context detection.
+**Detection:** If Windows Terminal detection consistently returns the default shell_type="powershell" regardless of what shell is actually running, ConPTY disambiguation needs improvement.
+
+**Phase relevance:** Any phase modifying process tree walking or shell detection.
 
 ---
 
-### Pitfall 10: Auto-Updater Blocks UI on Download or Triggers Unwanted Restarts
+### Pitfall 8: UIA Text Is Noisy for Electron Apps (VS Code/Cursor)
 
-**What goes wrong:**
-The updater downloads the update binary (10-30MB for a DMG/NSIS installer) and installs it. If the download runs on the main thread or blocks the UI, the overlay becomes unresponsive during the download. If the updater automatically restarts the app after installation, the user loses their current workflow without warning.
+**What goes wrong:** UIA tree walking for VS Code returns text from the entire window: menus ("File", "Edit", "View"), sidebar file names, editor content, status bar items, AND terminal text. WSL detection patterns must work despite this noise.
 
-Additionally, on macOS, replacing the running app binary requires the app to quit. If the user is in the middle of a terminal task and the updater restarts the app, they lose their overlay session, turn history, and in-progress context.
+**Why it happens:** VS Code is a single-HWND Electron app. Unlike Windows Terminal which has a dedicated UIA TextPattern provider for terminal content, VS Code's UIA tree is the full Chromium accessibility tree. The `try_walk_children` function walks all descendants and collects Name properties indiscriminately.
 
 **Prevention:**
-1. Download updates in the background on a separate async task. Show a non-blocking notification in the system tray or overlay: "Update available -- will install on next launch"
-2. Do NOT auto-restart. Let the user choose when to restart. The update installs on the next app launch
-3. Use the `on_before_restart` hook to save any transient state (though current architecture is session-scoped, so this is less critical)
-4. Show download progress if the user opens settings -- do not hide the download entirely
-5. Handle download interruption gracefully: if the user loses internet mid-download, do not leave a corrupted partial download. Clean up temp files
-6. Milestone spec already says "check on launch, prompt user, install on next launch" -- follow this pattern, do not deviate to auto-install
+- Detection patterns (detect_wsl_from_text, infer_shell_from_text) must be specific enough to avoid false positives from editor/menu content
+- The user@host:path prompt pattern is highly specific and unlikely to appear in editor content -- prioritize this over bare path detection
+- Consider filtering UIA elements by control type: List elements correspond to xterm.js accessibility tree
+- The `is_window_chrome` filter already rejects title bar button text -- extend this approach to filter known non-terminal patterns
+- For VS Code, attempt to find the terminal-specific UIA subtree (List control type with xterm.js characteristics) before falling back to full-tree walking
 
-**Phase to address:**
-Phase 3 (Auto-Updater Implementation) -- UX for update flow.
+**Detection:** If detect_wsl_from_text returns true when the user has a Python file open containing Linux paths but NO WSL terminal, this noise is causing false positives.
+
+**Phase relevance:** UIA text reading and WSL detection phases.
 
 ---
 
-### Pitfall 11: OpenRouter Requires Additional Headers and Has Provider-Specific Quirks
+### Pitfall 9: Window Title WSL Detection Only Works for Remote-WSL Mode
 
-**What goes wrong:**
-OpenRouter is a meta-provider that routes requests to upstream providers (OpenAI, Anthropic, Google, etc.). It mostly follows the OpenAI API format, but has specific requirements:
-- Requires `HTTP-Referer` header (or `X-Title` header) for leaderboard ranking. Without it, requests may be deprioritized
-- Rate limiting is per-user-key, not per-model. OpenRouter may return 429 even when the upstream provider has capacity
-- Error responses include `provider_name` field indicating which upstream provider failed
-- Some models on OpenRouter have different context windows or capabilities than their direct API equivalents
-- OpenRouter returns `model` in the response indicating which actual model served the request (it may route to a different model than requested if the requested model is overloaded)
+**What goes wrong:** `detect_wsl_from_title` checks for "[WSL: Ubuntu]" in the VS Code window title. This pattern only appears when VS Code is connected via Remote-WSL extension (full WSL mode). When a user opens a local WSL terminal profile (Terminal > New Terminal > Ubuntu), the window title does NOT contain "[WSL:]".
 
-Developers treat OpenRouter as "just another OpenAI-compatible endpoint" and miss these quirks.
+**Why it happens:** Remote-WSL is a full VS Code operating mode where the extension host runs inside WSL. The window title reflects this mode. A local WSL terminal profile is just another terminal tab -- VS Code does not change the window title for individual terminal profiles.
+
+**Consequences:** Remote-WSL terminals are detected but local WSL terminal tabs in VS Code are not. This means WSL detection depends entirely on UIA text patterns for the local-WSL-terminal-profile case.
 
 **Prevention:**
-1. Set `HTTP-Referer` header to the app's homepage URL and `X-Title` to "CMD+K" in OpenRouter requests
-2. Parse the `model` field in the response to log which model actually served the request (useful for debugging)
-3. Handle OpenRouter-specific error codes (e.g., 402 = insufficient credits, different from standard 401/429)
-4. Consider that OpenRouter keys have credit balances -- validate by checking credits, not just model listing
-5. Document to users that OpenRouter is a proxy and may have higher latency than direct API access
+- Window title detection is a fast, reliable signal but only for Remote-WSL mode
+- For local WSL terminal profiles, fall through to UIA text-based detection (detect_wsl_from_text)
+- The multi-signal approach (title -> UIA text -> CWD path) handles both scenarios -- do not short-circuit after title check fails
+- Document this limitation: window title is a fast-path optimization, not the sole detection mechanism
 
-**Phase to address:**
-Phase 2 (Provider Implementations) -- OpenRouter-specific adapter.
+**Detection:** If Remote-WSL terminals are detected but local WSL terminal tabs in VS Code are not, this is the cause.
+
+**Phase relevance:** WSL detection in non-Remote-WSL mode -- the primary v0.2.8 target.
+
+---
+
+### Pitfall 10: wsl.exe Subprocess Returns Home Directory, Not Active Terminal CWD
+
+**What goes wrong:** `get_wsl_cwd()` spawns `wsl.exe -e sh -c "pwd"` which returns the default user's home directory (/home/user), not the CWD of the user's active WSL terminal session. Similarly, `get_wsl_shell()` reads $SHELL which is the configured default, not necessarily the running shell.
+
+**Why it happens:** `wsl.exe -e` starts a new shell process in the default WSL distro. This new process has its own CWD (home directory) and reads the system $SHELL variable. It has no connection to the user's existing terminal session.
+
+**Prevention:**
+- Use wsl.exe subprocess values as FALLBACK only, after UIA text inference fails
+- UIA text inference (`infer_linux_cwd_from_text`) provides the actual terminal CWD by parsing prompt patterns like `user@host:/actual/path$` -- this is more accurate
+- The current code uses `.or()` pattern: `process::get_wsl_cwd().or(terminal.cwd.take())` -- when UIA CWD is available, it should take precedence
+- The comment in process.rs (line 1080) already documents this: "returns the HOME directory... UIA text inference provides better CWD when available"
+
+**Detection:** If WSL CWD always shows as /home/username regardless of the actual directory, subprocess values are overriding UIA-inferred values.
+
+**Phase relevance:** WSL context accuracy. Ensure UIA-inferred CWD overrides subprocess CWD in the pipeline ordering.
+
+---
+
+### Pitfall 11: detect_wsl_from_text False Positives from Editor Content
+
+**What goes wrong:** The function checks for Linux paths (/home/, /root/, /var/, etc.) anywhere in the UIA text. If a user is editing a file that contains these paths (a Dockerfile, a shell script, Python code with path strings), WSL will be falsely detected even when no WSL terminal is open.
+
+**Why it happens:** The current `detect_wsl_from_text` scans ALL UIA text for Linux path strings. In VS Code, UIA text includes editor content alongside terminal output. A Python file containing `open("/home/user/data.csv")` would trigger the `/home/` pattern.
+
+**Consequences:** Non-WSL sessions get WSL context applied. The system prompt switches to Linux mode. Generated commands are Linux commands pasted into a PowerShell terminal.
+
+**Prevention:**
+- Require multiple signals: Linux path + Linux prompt pattern (user@host:) together, not just a bare path
+- Weight prompt patterns (user@host:path$ or user@host:~$) more heavily than bare path mentions
+- Consider checking only the last N lines of text for prompt patterns (prompts appear at the bottom of terminal output)
+- For VS Code specifically: if both terminal text and editor text are mixed, a single "/home/" in editor code should not trigger WSL detection without a corroborating prompt pattern
+- Add negative signals: if the text also contains "PS C:\>" or "C:\>" patterns, it is NOT WSL despite any Linux paths in editor content
+
+**Detection:** Trigger CMD+K from VS Code with a Python/Shell/Docker file open that contains Linux paths, but with a PowerShell terminal tab. If is_wsl=true, false positive is occurring.
+
+**Phase relevance:** WSL detection accuracy. Should be addressed when refining detect_wsl_from_text.
 
 ---
 
 ## Minor Pitfalls
 
-### Pitfall 12: Tauri Plugin Store Settings Schema Changes Break Existing User Preferences
-
-**What goes wrong:**
-The current `tauri-plugin-store` stores settings like `selectedModel`, `turnLimit`, `autoPasteEnabled`, etc. Adding multi-provider support requires new fields: `selectedProvider`, per-provider `selectedModel`, etc. If the schema changes without migration, existing users' store files contain the old schema. The app reads `selectedModel` and gets `"grok-3"` but the new code expects `selectedProvider` to be set alongside it. The provider defaults to the first option (possibly OpenAI), and the user's `"grok-3"` model name is sent to OpenAI, causing an error.
-
-**Prevention:**
-1. Add a `schemaVersion` field to the store
-2. On launch, check schema version and migrate old settings to new format
-3. Map legacy `selectedModel` (xAI model names) to `selectedProvider: "xai"` + `selectedModel: "grok-3"`
-4. Default new fields gracefully: if `selectedProvider` is missing, infer from the existing model name
-
-**Phase to address:**
-Phase 1 (Provider Abstraction Layer) -- settings migration runs alongside keychain migration.
+These cause suboptimal behavior or developer confusion but are not user-facing regressions.
 
 ---
 
-### Pitfall 13: WSL Distribution Detection -- Multiple Distros and Default Distro
+### Pitfall 12: Multiple CreateToolhelp32Snapshot Calls Per Detection Cycle
 
-**What goes wrong:**
-Users can have multiple WSL distributions installed (Ubuntu, Debian, Arch, etc.). `wsl.exe` launches the default distribution unless `wsl -d DistroName` is used. When running `wsl.exe -e pwd` to get CWD, it runs in the DEFAULT distribution, which may not be the one the user has open in their terminal. If the user has Ubuntu and Debian installed, with Debian as default, but is working in an Ubuntu terminal, the CWD query goes to Debian and returns the wrong path.
+**What goes wrong:** The current code takes 3-4 separate process snapshots per detection cycle: one in `find_shell_by_ancestry`, one in `detect_wsl_in_ancestry`, one in `scan_wsl_processes_diagnostic`, and one in `get_child_pids_windows`. Each snapshot is ~1ms but they add up, and the process table can change between snapshots leading to inconsistent parent-child views.
 
 **Prevention:**
-1. When detecting WSL, try to identify the specific distribution from the Windows Terminal tab title or `wsl.exe` command-line arguments
-2. The `wsl.exe` process for a specific tab has command-line arguments like `wsl.exe -d Ubuntu` -- read these via `QueryFullProcessImageNameW` + command-line extraction to determine which distro
-3. Use `wsl.exe -d <distro> -e pwd` instead of just `wsl.exe -e pwd`
-4. Fall back to the default distribution if the specific distro cannot be determined
+- Take a single snapshot at the start of detection, build the parent map and exe map once, pass them through all functions
+- `find_shell_by_ancestry` already builds a local parent_map but `detect_wsl_in_ancestry` takes its own separate snapshot
+- Refactoring to a shared snapshot would improve both consistency and performance
+- Consider adding a `ProcessSnapshot` struct that encapsulates parent_map + exe_map, created once per detection cycle
 
-**Phase to address:**
-Phase 2 (WSL Terminal Context) -- distribution detection is part of WSL context accuracy.
+**Phase relevance:** Performance optimization phase. Not a correctness issue but improves detection consistency.
 
 ---
 
-### Pitfall 14: Rate Limiting Behavior Varies Drastically Between Providers
+### Pitfall 13: Shell Type Normalization Inconsistency
 
-**What goes wrong:**
-The current code handles rate limiting with a simple message: "Rate limit exceeded. Please wait a moment and try again." (line 283 in `ai.rs`). Different providers have different rate limiting behaviors:
-- **OpenAI**: Returns HTTP 429 with `Retry-After` header
-- **Anthropic**: Returns HTTP 429 with `retry-after` header (lowercase) and includes rate limit details in response body
-- **Google Gemini**: Returns HTTP 429 but uses a different quota system based on RPM (requests per minute) and TPM (tokens per minute)
-- **xAI**: Returns HTTP 429 (current handling)
-- **OpenRouter**: Returns HTTP 429 but rate limits are per-key and per-model, with credits-based throttling
+**What goes wrong:** Shell names are normalized differently in different code paths. `get_process_name` strips ".exe" but not lowercasing. `exe_to_shell_type` lowercases and strips ".exe". `infer_shell_from_text` returns lowercase strings. The `KNOWN_SHELLS` list uses lowercase without ".exe" but `KNOWN_SHELL_EXES` uses original case with ".exe".
 
 **Prevention:**
-1. Parse the `Retry-After` header (case-insensitive) and show the user how long to wait
-2. For Anthropic, parse the rate limit response body to show specific limits
-3. Consider implementing automatic retry with exponential backoff for transient rate limits
-4. Display different error messages based on the rate limit type (RPM vs TPM vs credits)
+- Establish a single canonical form: lowercase, no ".exe" suffix (e.g., "powershell", "cmd", "bash")
+- Normalize at the boundary (when reading process name or inferring from text) and use canonical form everywhere internally
+- The existing shell_type stripping in `detect_app_context_windows` (lines 479-483) is a symptom of this inconsistency -- it should happen once in the detection layer, not at consumption time
 
-**Phase to address:**
-Phase 2 (Provider Implementations) -- error handling is part of each provider's implementation.
+**Phase relevance:** Any phase touching shell type values. Low priority but prevents confusion.
+
+---
+
+### Pitfall 14: 750ms Timeout Budget Pressure
+
+**What goes wrong:** The `detect_full_with_hwnd` function has a 750ms hard timeout. Adding more detection steps (additional UIA traversals, wsl.exe subprocess calls, multiple snapshot walks) risks exceeding this budget, causing the function to return None and losing all context.
+
+**Prevention:**
+- Budget (approximate): window title < 1ms, process tree walk ~5-10ms, single UIA text read 50-200ms, wsl.exe subprocess 100-300ms
+- Total sequential: title + process + UIA + WSL subprocess = ~250-500ms, within budget
+- Danger zone: multiple UIA traversals (e.g., tree walk + focused element + tab list) or serial wsl.exe calls
+- Combine wsl.exe CWD and shell queries into a single subprocess call if both are needed
+- Make wsl.exe subprocess calls lazy -- only invoke AFTER WSL is detected through faster means (title or UIA text)
+- The current code already follows this pattern: wsl.exe subprocess only runs when is_wsl is already true
+
+**Detection:** If detect_full_with_hwnd intermittently returns None (visible as missing context in the overlay), timeout pressure is the likely cause.
+
+**Phase relevance:** Any phase adding detection steps. Must measure timing on real Windows hardware before merging.
 
 ---
 
 ## Phase-Specific Warnings
 
-| Phase Topic | Likely Pitfall | Mitigation |
-|-------------|---------------|------------|
-| Provider Abstraction Layer | Pitfall 1: missed xAI references cause key leaks | Grep audit of ALL xAI references before writing abstraction code |
-| Provider Abstraction Layer | Pitfall 7: existing users lose API key on upgrade | Keychain migration logic runs before onboarding |
-| Provider Abstraction Layer | Pitfall 12: settings schema breaks | Schema version + migration in store |
-| Provider Implementations | Pitfall 2: SSE parsing differs per provider | Per-provider stream parser, not shared parser |
-| Provider Implementations | Pitfall 6: system prompt format differs | System prompt construction inside provider, not shared constant |
-| Provider Implementations | Pitfall 8: model listing differs | Per-provider model listing, hardcoded for Anthropic |
-| WSL Terminal Context | Pitfall 4: process tree invisible across namespace | Use `wsl.exe -e` subprocess for WSL context, not Win32 APIs |
-| WSL Terminal Context | Pitfall 9: path translation confuses AI | Use Linux paths for CWD, Linux system prompt for WSL sessions |
-| WSL Terminal Context | Pitfall 13: wrong WSL distribution queried | Detect distro from process arguments before querying |
-| Auto-Updater Setup | Pitfall 3: updater signing key not configured | Generate Ed25519 key, add to CI, BEFORE first updater release |
-| Auto-Updater Setup | Pitfall 5: update endpoint 404 | CI generates and uploads `latest.json` to GitHub Release |
-| Auto-Updater UX | Pitfall 10: UI blocked or unwanted restart | Background download, user-initiated install on next launch |
+| Phase Topic | Likely Pitfall | Mitigation | Severity |
+|-------------|---------------|------------|----------|
+| IDE process filtering | Pitfall 3, 6 (highest PID picks internal process, cmd.exe pollution) | Filter by ConPTY parent, CWD match, deprioritize known-internal patterns | Critical |
+| WSL detection in non-Remote-WSL | Pitfall 1, 2, 4, 9 (wsl.exe as shell, circular deps, Hyper-V invisibility, title-only) | Multi-signal output-based detection, unconditional UIA text check | Critical |
+| cmd vs PowerShell differentiation | Pitfall 3, 6, 13 (wrong process selected, cmd.exe internal, normalization) | IDE-mode filtering, consistent normalization, CWD-based disambiguation | Moderate |
+| UIA/Win32 with Electron | Pitfall 5, 8, 14 (focused element fails, noisy text, timeout) | Use HWND-based element, specific patterns, budget management | Moderate |
+| CWD reading for WSL | Pitfall 10, 11 (subprocess returns home dir, false positives from editor) | Prefer UIA-inferred CWD, require multiple WSL signals | Moderate |
+| Refactoring detection pipeline | Pitfall 2, 12 (circular dependency reintroduction, multiple snapshots) | Waterfall structure, shared snapshot | Critical during refactor |
+
+---
+
+## Integration Pitfalls (Adding Fixes to Existing System)
+
+These are specific to the v0.2.8 scenario: modifying a working detection pipeline to fix specific bugs without breaking other paths.
+
+---
+
+### Integration Risk 1: Fixing VS Code Detection Breaks Windows Terminal or Standalone Shells
+
+**What goes wrong:** The detection pipeline has 4 terminal host paths: Windows Terminal (ConPTY), VS Code, Cursor, and standalone terminals (powershell.exe, cmd.exe directly). Changes to IDE-specific logic inadvertently affect non-IDE paths. For example, adding process filtering that deprioritizes cmd.exe globally would break standalone cmd.exe terminal detection.
+
+**Prevention:**
+- ALL IDE-specific logic MUST be gated behind `is_ide_with_terminal_exe` checks -- never apply IDE heuristics globally
+- Test matrix after every change: {Windows Terminal, VS Code, Cursor, standalone PowerShell, standalone cmd} x {PowerShell tab, CMD tab, WSL bash tab, Git Bash} = 20 scenarios
+- The current code correctly gates IDE cmd.exe deprioritization behind `if is_ide && descendant_shells.len() > 1` -- preserve this pattern
+- Add regression tests (even manual) for Windows Terminal ConPTY fallback -- it is the most fragile path
+
+---
+
+### Integration Risk 2: Ordering Changes in Multi-Signal Detection Pipeline
+
+**What goes wrong:** The detection pipeline runs signals in order: process tree -> window title -> UIA text -> CWD path. Changing the order, adding early returns, or restructuring can skip signals that would have caught a case the earlier signal missed.
+
+**Prevention:**
+- Each signal should be able to SET is_wsl=true but should NEVER CLEAR it (no `is_wsl = false` after initial detection)
+- Later signals should REFINE context (better CWD, better shell_type) not OVERRIDE earlier detection
+- If window title says WSL, UIA text should not contradict it -- but UIA text CAN provide CWD/shell details that title lacks
+- The `.or()` chaining pattern (e.g., `process::get_wsl_cwd().or(terminal.cwd.take())`) determines priority -- ensure UIA-inferred values are preferred when available
+
+---
+
+### Integration Risk 3: Breaking the Pre-Capture-Before-Show Pattern
+
+**What goes wrong:** Terminal context detection requires the frontmost app's PID and HWND captured BEFORE the overlay steals focus. Any refactoring that moves detection logic to a different point in the pipeline may not have access to the pre-captured values.
+
+**Prevention:**
+- The hotkey handler in `commands/hotkey.rs` captures PID and HWND synchronously before calling toggle_overlay
+- These values must flow through to `detect_full_with_hwnd` unchanged
+- Never call UIA or process APIs with the overlay's own PID/HWND -- this returns CMD+K's own process info
+- If adding new detection logic, verify it receives the ORIGINAL HWND/PID, not current-foreground values
+
+---
+
+### Integration Risk 4: Losing Existing WSL Detection That Works
+
+**What goes wrong:** The current multi-signal pipeline (title + UIA text + CWD path) already works for some WSL scenarios: Remote-WSL in VS Code (via title), WSL in Windows Terminal (via UIA text), and WSL with UNC paths (via CWD). Refactoring to fix other scenarios (local WSL terminal profiles) risks breaking these working paths.
+
+**Prevention:**
+- Document which scenarios currently work BEFORE making changes
+- Currently working: Remote-WSL (title "[WSL: distro]"), Windows Terminal WSL (UIA text Linux prompts), CWD \\wsl$\ paths
+- Currently broken: local WSL terminal profiles in VS Code without Remote-WSL, cmd vs PowerShell misdetection in IDE
+- Changes must preserve the working paths while fixing the broken ones
+- Consider additive changes (new signals, new patterns) over restructuring changes (reordering, replacing existing logic)
+
+---
 
 ## "Looks Done But Isn't" Checklist
 
-Things that appear complete but are missing critical pieces for v0.2.6.
+Things that appear complete but are missing critical verification for v0.2.8.
 
-- [ ] **Provider switching:** Switching provider in settings works -- but verify the API key for the NEW provider is read from keychain, not the old provider's key
-- [ ] **Anthropic streaming:** Tokens stream in overlay -- but verify the system prompt is in the `system` parameter, not in the messages array
-- [ ] **Google Gemini auth:** API key is validated -- but verify it is sent as a URL parameter, not a Bearer token (Google supports both, but URL param is the basic auth method)
-- [ ] **OpenRouter models:** Model list loads -- but verify it is filtered to chat models only, not showing embedding/image models
-- [ ] **WSL CWD:** CWD displays in overlay -- but verify it is the Linux path from inside WSL, not `wsl.exe`'s Windows CWD
-- [ ] **WSL system prompt:** AI generates commands -- but verify they are Linux commands, not Windows commands (the system prompt must switch to Linux mode for WSL)
-- [ ] **Auto-updater signing:** Build succeeds -- but verify `.sig` files are generated alongside installers in CI output
-- [ ] **Update manifest:** `latest.json` is uploaded to GitHub Release -- but verify it contains both `darwin-aarch64` and `windows-x86_64` platform entries with correct download URLs
-- [ ] **Keychain migration:** New v0.2.6 settings work -- but verify upgrading from v0.2.4 preserves the existing xAI API key
-- [ ] **Onboarding flow:** New provider selection step works -- but verify existing users who upgrade skip provider selection and go straight to the overlay (their settings are migrated)
-- [ ] **Streaming timeout:** All providers stream responses -- but verify 10-second timeout is increased for slower providers (Anthropic Claude can take 15+ seconds for complex prompts)
-- [ ] **Error messages:** Provider errors show in overlay -- but verify error messages reference the correct provider name, not hardcoded "xAI" or "Grok"
+- [ ] **WSL detection in VS Code:** is_wsl=true when WSL tab is active -- but verify is_wsl=false when ONLY PowerShell tabs are open (Pitfall 1 negative test)
+- [ ] **Shell type differentiation:** shell_type shows "powershell" for PowerShell tab -- but verify it is the USER's PowerShell terminal, not an internal VS Code powershell.exe process (Pitfall 3)
+- [ ] **cmd.exe filtering:** cmd.exe is deprioritized in IDE mode -- but verify standalone cmd.exe (not in IDE) still detects correctly (Integration Risk 1)
+- [ ] **UIA text WSL detection:** detect_wsl_from_text finds Linux prompts -- but verify it does NOT false-positive on editor content containing Linux paths (Pitfall 11)
+- [ ] **CWD for WSL sessions:** CWD shows Linux path -- but verify it is the ACTUAL terminal CWD, not /home/username (Pitfall 10)
+- [ ] **Windows Terminal still works:** All changes pass Windows Terminal test -- verify ConPTY fallback path is untouched (Integration Risk 1)
+- [ ] **Detection pipeline ordering:** All WSL signals run -- but verify no signal can CLEAR is_wsl after it is set to true (Integration Risk 2)
+- [ ] **Timeout budget:** Detection completes within 750ms -- but verify on actual Windows hardware, not just local dev (Pitfall 14)
 
-## Recovery Strategies
-
-When pitfalls occur despite prevention, how to recover.
-
-| Pitfall | Recovery Cost | Recovery Steps |
-|---------|---------------|----------------|
-| xAI key sent to wrong provider (Pitfall 1) | LOW | Fix keychain lookup to use provider-scoped account names. No data loss, key still in keychain under old name |
-| Empty responses from Anthropic/Gemini (Pitfall 2) | LOW | Add provider-specific SSE parser. Existing xAI/OpenAI path unaffected |
-| First release ships without updater signing key (Pitfall 3) | CRITICAL | Cannot push auto-updates to those users. Must ask them to manually download. Consider shipping a "bridge" release that adds the updater before adding multi-provider |
-| WSL CWD returns Windows path (Pitfall 4) | MEDIUM | Switch to `wsl.exe -e pwd` approach. Requires adding subprocess call and WSL detection logic |
-| Update endpoint returns 404 (Pitfall 5) | LOW | Fix CI to upload `latest.json`. Existing users will get the update on next check after fix |
-| Anthropic API rejects system prompt in messages (Pitfall 6) | LOW | Move system prompt to top-level `system` parameter. Isolated change in Anthropic provider |
-| Existing users lose API key on upgrade (Pitfall 7) | MEDIUM | Ship a hotfix that checks for legacy keychain entry and migrates. Users must wait for hotfix (manual download since they just broke auto-update) |
-| Settings schema breaks (Pitfall 12) | MEDIUM | Ship a patch that handles both old and new schema. May require clearing settings for affected users |
+---
 
 ## Sources
 
-### Codebase Analysis
-- `src-tauri/src/commands/ai.rs` -- Current streaming implementation with hardcoded xAI endpoints and SSE parsing
-- `src-tauri/src/commands/xai.rs` -- xAI-specific model listing with hardcoded fallbacks
-- `src-tauri/src/commands/keychain.rs` -- Single-provider keychain storage with hardcoded `xai_api_key` account
-- `src-tauri/src/terminal/process.rs` -- Process tree walking with Win32 API (CreateToolhelp32Snapshot) and macOS libproc
-- `src-tauri/src/terminal/detect_windows.rs` -- Windows terminal detection with known exe lists
-- `src-tauri/src/terminal/mod.rs` -- Full context detection orchestration including UIA text reading
-- `src/store/index.ts` -- Frontend state with single-provider assumptions throughout
-- `.github/workflows/release.yml` -- Current CI pipeline without updater signing
+### Primary (HIGH confidence -- project's own failure history)
+- Commit bcea9cd: Revert of wsl.exe in shell list, commit message documents VS Code spawning 16+ internal wsl.exe processes
+- Commit e0ef4be: Original WSL fix that was reverted
+- Commit 1e4cd7a: Removal of wsl.exe from KNOWN_TERMINAL_EXES (correct fix)
+- Commit d63f909: UIA fix removing broken focused subtree approach
+- `.planning/debug/wsl-detection-failure.md`: Detailed diagnosis of 3 compounding root causes (architectural, circular dependency, missing patterns)
+- `.planning/milestones/v0.2.6-phases/23.1-vs-code-wsl-terminal-tab-detection-via-uia/23.1-RESEARCH.md`: UIA strategy research with VS Code accessibility tree analysis
+- Source code: `src-tauri/src/terminal/mod.rs` (detection pipeline), `process.rs` (process tree walking), `detect_windows.rs` (shell/terminal lists), `uia_reader.rs` (UIA text reading)
 
-### Provider API Documentation (from training data -- MEDIUM confidence)
-- OpenAI Chat Completions API: `choices[0].delta.content` streaming format, `Authorization: Bearer` header
-- Anthropic Messages API: `content_block_delta` event type, `system` top-level parameter (not in messages), `x-api-key` header (not Bearer token)
-- Google Gemini API: `candidates[0].content.parts[0].text` response format, API key in URL parameter, `system_instruction` field
-- OpenRouter API: OpenAI-compatible with `HTTP-Referer` requirement, 402 credits error code
-- xAI API: OpenAI-compatible format (current code works)
-
-### Tauri Plugin Documentation (from training data -- MEDIUM confidence)
-- `tauri-plugin-updater`: Ed25519 signing separate from code signing, `plugins.updater.pubkey` in `tauri.conf.json`, `TAURI_SIGNING_PRIVATE_KEY` env var
-- Update manifest format: per-platform entries with `url` and `signature` fields
-
-### WSL Architecture (from training data -- HIGH confidence)
-- WSL process isolation: Linux processes invisible to Win32 APIs
-- `wsl.exe -e` for cross-namespace command execution
-- `wslpath` for path translation between Linux and Windows
-- `\\wsl$\DistroName\` mount point for WSL filesystem access from Windows
+### Secondary (MEDIUM confidence -- domain knowledge from prior research)
+- WSL 2 architecture: Linux processes in Hyper-V VM, invisible to CreateToolhelp32Snapshot
+- VS Code Remote-WSL window title format "[WSL: distro]" is stable across versions
+- ConPTY architecture: shells not descendants of WindowsTerminal.exe, connected via OpenConsole.exe
+- Chromium UIA bridge: Electron apps expose DOM accessibility tree via UIA, xterm.js accessibility tree requires screen reader mode
 
 ---
-*Pitfalls research for: CMD+K v0.2.6 Multi-Provider AI, WSL Terminal Context, and Auto-Updater*
-*Researched: 2026-03-08*
+*Pitfalls research for: CMD+K v0.2.8 Windows Terminal Detection Fix*
+*Researched: 2026-03-11*
