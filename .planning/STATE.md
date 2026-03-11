@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
-status: planning
-stopped_at: Phase 27 context gathered
-last_updated: "2026-03-11T07:47:30.315Z"
-last_activity: 2026-03-11 -- Roadmap created for v0.2.8 Windows Terminal Detection Fix
+status: executing
+stopped_at: Completed 27-01-PLAN.md
+last_updated: "2026-03-11T08:33:03.536Z"
+last_activity: 2026-03-11 -- Completed 27-01 ProcessSnapshot & cmd.exe filtering
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 2
+  completed_plans: 1
   percent: 0
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-03-11)
 ## Current Position
 
 Phase: 27 of 30 (ConPTY Discovery & Process Snapshot)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-03-11 -- Roadmap created for v0.2.8 Windows Terminal Detection Fix
+Plan: 1 of 2 in current phase
+Status: executing
+Last activity: 2026-03-11 -- Completed 27-01 ProcessSnapshot & cmd.exe filtering
 
 Progress: [░░░░░░░░░░] 0% (v0.2.8)
 
@@ -54,6 +54,8 @@ Recent decisions affecting current work:
 - [v0.2.8]: No new crates -- uses existing windows-sys 0.59 + uiautomation 0.24
 - [v0.2.8]: Never add wsl.exe to KNOWN_SHELL_EXES (caused prior revert)
 - [v0.2.8]: WSL 2 Linux processes invisible to Win32 APIs -- output signals only
+- [Phase 27]: Check both conhost.exe and OpenConsole.exe as ConPTY hosts for Win10/Win11 compatibility
+- [Phase 27]: Conservative fallback: treat cmd.exe as interactive when PEB read fails
 
 ### Pending Todos
 
@@ -67,6 +69,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-11T07:47:30.296Z
-Stopped at: Phase 27 context gathered
+Last session: 2026-03-11T08:33:03.503Z
+Stopped at: Completed 27-01-PLAN.md
 Next action: Plan Phase 27

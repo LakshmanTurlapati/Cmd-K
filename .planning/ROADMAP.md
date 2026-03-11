@@ -96,7 +96,7 @@
   1. In VS Code or Cursor with multiple terminal tabs, CMD+K detects the correct interactive shell (PowerShell, cmd.exe, or bash) -- not an internal IDE git or extension process
   2. Opening CMD+K in a terminal running cmd.exe correctly identifies "cmd" as the shell type, while internal IDE cmd.exe processes (running /C or /D /C flags) are ignored
   3. A single process snapshot is taken per hotkey press and reused for all detection queries (shell discovery, WSL check, diagnostics) -- no redundant CreateToolhelp32Snapshot calls
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 27-01-PLAN.md -- ProcessSnapshot struct, PEB command line reader, cmd.exe filtering logic with unit tests
 - [ ] 27-02-PLAN.md -- ConPTY-first shell selection, snapshot threading through detection pipeline
@@ -143,7 +143,7 @@ Phases execute in numeric order: 27 -> 28 -> 29 -> 30
 | 17-20 | v0.2.4 | 5/5 | Complete | 2026-03-04 |
 | 21-24 | v0.2.6 | 10/10 | Complete | 2026-03-09 |
 | 25-26 | v0.2.7 | 3/3 | Complete | 2026-03-10 |
-| 27. ConPTY Discovery | v0.2.8 | 0/2 | In progress | - |
+| 27. ConPTY Discovery | 1/2 | In Progress|  | - |
 | 28. UIA Scoping | v0.2.8 | 0/0 | Not started | - |
 | 29. Tab Matching | v0.2.8 | 0/0 | Not started | - |
 | 30. WSL Hardening | v0.2.8 | 0/0 | Not started | - |
