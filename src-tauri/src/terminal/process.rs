@@ -1234,6 +1234,7 @@ pub fn has_batch_flag_in_cmdline(cmdline: &str) -> bool {
 }
 
 /// Check if a string starts with cmd.exe batch execution flags.
+/// Handles /S and /D in any order before /C (e.g., /D /S /C, /S /D /C, /D /C, /S /C).
 fn check_batch_flags(s: &str) -> bool {
     if s.is_empty() {
         return false;
@@ -1242,14 +1243,15 @@ fn check_batch_flags(s: &str) -> bool {
     let upper = s.to_uppercase();
     let mut remaining = upper.as_str();
 
-    // Strip optional /S prefix
-    if remaining.starts_with("/S") {
-        remaining = remaining[2..].trim_start();
-    }
-
-    // Strip optional /D prefix
-    if remaining.starts_with("/D") {
-        remaining = remaining[2..].trim_start();
+    // Strip optional /S and /D prefixes in any order (loop handles both orderings)
+    loop {
+        if remaining.starts_with("/S") {
+            remaining = remaining[2..].trim_start();
+        } else if remaining.starts_with("/D") {
+            remaining = remaining[2..].trim_start();
+        } else {
+            break;
+        }
     }
 
     // Check for /C (with space, quote, or end after it)
@@ -1523,6 +1525,21 @@ mod tests {
     #[test]
     fn test_cmd_batch_flag_s_d_c() {
         assert!(has_batch_flag_in_cmdline("/S /D /C dir"));
+    }
+
+    #[test]
+    fn test_cmd_batch_flag_d_s_c() {
+        assert!(has_batch_flag_in_cmdline("/D /S /C dir"));
+    }
+
+    #[test]
+    fn test_cmd_batch_flag_d_s_c_full_path() {
+        assert!(has_batch_flag_in_cmdline("C:\\Windows\\system32\\cmd.exe /d /s /c tauri dev"));
+    }
+
+    #[test]
+    fn test_cmd_batch_flag_d_s_c_vite() {
+        assert!(has_batch_flag_in_cmdline("C:\\Windows\\system32\\cmd.exe /d /s /c vite"));
     }
 
     #[test]
