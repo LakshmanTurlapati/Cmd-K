@@ -191,7 +191,7 @@ pub fn get_foreground_info(terminal_pid: i32) -> ProcessInfo {
         eprintln!("[process]   child {} -> name: {:?}", child, name);
     }
 
-    let shell_pid = match find_shell_pid(terminal_pid, None) {
+    let shell_pid = match find_shell_pid(terminal_pid, None, None) {
         Some(pid) => {
             eprintln!("[process] found shell pid: {} (name: {:?})", pid, get_process_name(pid));
             pid
@@ -617,9 +617,9 @@ pub(crate) fn find_shell_pid(terminal_pid: i32, focused_cwd: Option<&str>, snaps
     }
 }
 
-/// Find the shell PID for a terminal. Non-Windows version (no snapshot parameter).
+/// Find the shell PID for a terminal. Non-Windows version (snapshot parameter unused).
 #[cfg(not(target_os = "windows"))]
-pub(crate) fn find_shell_pid(terminal_pid: i32, focused_cwd: Option<&str>) -> Option<i32> {
+pub(crate) fn find_shell_pid(terminal_pid: i32, focused_cwd: Option<&str>, _snapshot: Option<&()>) -> Option<i32> {
     // Try the fast recursive walk first (works for simple terminal apps).
     if let Some(pid) = find_shell_recursive(terminal_pid, 3) {
         return Some(pid);
