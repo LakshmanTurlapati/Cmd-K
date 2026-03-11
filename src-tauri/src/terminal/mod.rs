@@ -610,56 +610,83 @@ fn infer_shell_from_text(text: &str) -> &'static str {
 #[allow(dead_code)]
 fn detect_wsl_from_text(text: &str) -> bool {
     eprintln!("[detect_wsl_from_text] scanning {} bytes of UIA text", text.len());
-    let linux_paths = ["/home/", "/root/", "/var/", "/etc/", "/usr/", "/tmp/", "/opt/"];
+    let mut score: u32 = 0;
 
-    // Check for Linux paths anywhere in text
-    for lp in &linux_paths {
-        if text.contains(lp) {
-            eprintln!("[detect_wsl_from_text] WSL detected: Linux path {}", lp);
-            return true;
+    // Signal 1: WSL mount paths (/mnt/c/, /mnt/d/, etc.) -- strong signal, score 2
+    // These are unambiguous: only WSL mounts Windows drives at /mnt/<letter>/
+    let has_wsl_mount = ('a'..='z').any(|c| text.contains(&format!("/mnt/{}/", c)));
+    if has_wsl_mount {
+        score += 2;
+        eprintln!("[detect_wsl_from_text] +2 WSL mount path detected (score={})", score);
+    }
+
+    // Signal 2: Linux paths (/home/, /root/, /var/, /etc/, /usr/, /tmp/, /opt/) -- weak signal, score 1
+    // A single Linux path could be editor content (Dockerfile, README, config file)
+    let linux_paths = ["/home/", "/root/", "/var/", "/etc/", "/usr/", "/tmp/", "/opt/"];
+    if score < 2 {
+        for lp in &linux_paths {
+            if text.contains(lp) {
+                score += 1;
+                eprintln!("[detect_wsl_from_text] +1 Linux path {} (score={})", lp, score);
+                break; // Only count once even if multiple paths present
+            }
         }
     }
 
-    // Check ALL lines — UIA text can have prompts at top and UI chrome at bottom
+    // Signal 3 & 4: Check lines for prompt patterns
+    let mut has_prompt_pattern = false; // user@host:/path or user@host:~
+    let mut has_prompt_ending = false;  // user@host...$ or user@host...#
+
     for line in text.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
         }
 
-        // Pattern 1: user@host:/path or user@host:~ (canonical Linux prompt)
-        if let Some(colon_pos) = trimmed.find(':') {
-            let before_colon = &trimmed[..colon_pos];
-            if before_colon.contains('@') {
-                let after_colon = &trimmed[colon_pos + 1..];
-                let path_part = after_colon
-                    .trim_end_matches(|c: char| c == '$' || c == '#' || c == ' ')
-                    .trim();
-                if path_part.starts_with('/') || path_part.starts_with('~') {
-                    eprintln!("[detect_wsl_from_text] WSL detected: user@host:path prompt '{}'", trimmed);
-                    return true;
+        // Pattern: user@host:/path or user@host:~ (canonical Linux prompt)
+        if !has_prompt_pattern {
+            if let Some(colon_pos) = trimmed.find(':') {
+                let before_colon = &trimmed[..colon_pos];
+                if before_colon.contains('@') {
+                    let after_colon = &trimmed[colon_pos + 1..];
+                    let path_part = after_colon
+                        .trim_end_matches(|c: char| c == '$' || c == '#' || c == ' ')
+                        .trim();
+                    if path_part.starts_with('/') || path_part.starts_with('~') {
+                        has_prompt_pattern = true;
+                        score += 1;
+                        eprintln!("[detect_wsl_from_text] +1 prompt pattern '{}' (score={})", trimmed, score);
+                    }
                 }
             }
         }
 
-        // Pattern 2: user@host...$ or user@host...# without Windows backslash paths
-        if trimmed.contains('@') {
-            if let Some(at_pos) = trimmed.find('@') {
-                let after_at = &trimmed[at_pos + 1..];
-                let host_part = after_at.split(|c: char| c.is_whitespace() || c == ':').next().unwrap_or("");
-                if !host_part.contains('\\')
-                    && (trimmed.ends_with('$') || trimmed.ends_with('#')
-                        || trimmed.contains("$ ") || trimmed.contains("# "))
-                {
-                    eprintln!("[detect_wsl_from_text] WSL detected: user@host prompt with $ or #: '{}'", trimmed);
-                    return true;
+        // Pattern: user@host...$ or user@host...# without Windows backslash paths
+        if !has_prompt_ending {
+            if trimmed.contains('@') {
+                if let Some(at_pos) = trimmed.find('@') {
+                    let after_at = &trimmed[at_pos + 1..];
+                    let host_part = after_at.split(|c: char| c.is_whitespace() || c == ':').next().unwrap_or("");
+                    if !host_part.contains('\\')
+                        && (trimmed.ends_with('$') || trimmed.ends_with('#')
+                            || trimmed.contains("$ ") || trimmed.contains("# "))
+                    {
+                        has_prompt_ending = true;
+                        score += 1;
+                        eprintln!("[detect_wsl_from_text] +1 prompt ending '{}' (score={})", trimmed, score);
+                    }
                 }
             }
+        }
+
+        // Early exit if we already have enough
+        if score >= 2 {
+            break;
         }
     }
 
-    eprintln!("[detect_wsl_from_text] no WSL patterns found");
-    false
+    eprintln!("[detect_wsl_from_text] final score={} (threshold=2), result={}", score, score >= 2);
+    score >= 2
 }
 
 /// Attempt to infer the Linux CWD from visible terminal text.
