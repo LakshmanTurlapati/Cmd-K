@@ -201,7 +201,7 @@ fn compute_window_key_windows(hwnd: isize) -> String {
 
     let key = if let Some(pid) = pid {
         if is_terminal || is_ide {
-            match terminal::process::find_shell_pid(pid as i32, None) {
+            match terminal::process::find_shell_pid(pid as i32, None, None) {
                 Some(shell_pid) => format!("{}:{}", exe_str, shell_pid),
                 None => format!("{}:{}", exe_str, pid),
             }
