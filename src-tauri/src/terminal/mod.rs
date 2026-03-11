@@ -285,8 +285,8 @@ fn detect_inner_windows(previous_app_pid: i32) -> Option<TerminalContext> {
         eprintln!("[detect_inner_windows] {} is not a terminal or IDE, trying generic shell detection", exe_str);
     }
 
-    // Walk process tree to find shell
-    let proc_info = process::get_foreground_info(previous_app_pid);
+    // Walk process tree to find shell (no shared snapshot in detect_inner path)
+    let proc_info = process::get_foreground_info(previous_app_pid, None);
 
     if proc_info.shell_type.is_none() && proc_info.cwd.is_none() {
         eprintln!("[detect_inner_windows] no shell found in process tree of {} ({})", previous_app_pid, exe_str);
@@ -458,8 +458,12 @@ fn detect_app_context_windows(previous_app_pid: i32, _pre_captured_text: Option<
 
     eprintln!("[detect_app_context_windows] exe={} app_name={:?}", exe_str, &app_name);
 
-    // Walk process tree to find shell
-    let proc_info = process::get_foreground_info(previous_app_pid);
+    // Create a single ProcessSnapshot for the entire detection pipeline (PROC-03)
+    let snapshot = process::ProcessSnapshot::capture();
+    eprintln!("[detect_app_context_windows] ProcessSnapshot: {}", if snapshot.is_some() { "captured" } else { "failed" });
+
+    // Walk process tree to find shell using shared snapshot
+    let proc_info = process::get_foreground_info(previous_app_pid, snapshot.as_ref());
     let has_shell = proc_info.shell_type.is_some() || proc_info.cwd.is_some();
 
     let terminal = if has_shell {

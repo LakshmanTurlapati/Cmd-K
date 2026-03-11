@@ -86,6 +86,102 @@ pub struct ProcessInfo {
 ///
 /// Walks the process tree from the terminal app PID to find the foreground shell,
 /// handles tmux/screen multiplexers by walking deeper (max 3 levels).
+///
+/// On Windows, accepts an optional ProcessSnapshot to avoid redundant CreateToolhelp32Snapshot calls.
+/// If None on Windows, creates one internally as fallback.
+#[cfg(target_os = "windows")]
+pub fn get_foreground_info(terminal_pid: i32, snapshot: Option<&ProcessSnapshot>) -> ProcessInfo {
+    eprintln!("[process] get_foreground_info for terminal_pid={}", terminal_pid);
+    let children = get_child_pids(terminal_pid);
+    eprintln!("[process] direct children of {}: {:?}", terminal_pid, children);
+    for &child in &children {
+        let name = get_process_name(child);
+        eprintln!("[process]   child {} -> name: {:?}", child, name);
+    }
+
+    // Create a fallback snapshot if none was provided
+    let owned_snapshot = if snapshot.is_none() {
+        ProcessSnapshot::capture()
+    } else {
+        None
+    };
+    let snap = snapshot.or(owned_snapshot.as_ref());
+
+    let shell_pid = match find_shell_pid(terminal_pid, None, snap) {
+        Some(pid) => {
+            eprintln!("[process] found shell pid: {} (name: {:?})", pid, get_process_name(pid));
+            pid
+        }
+        None => {
+            eprintln!("[process] no shell pid found for terminal_pid={}", terminal_pid);
+            return ProcessInfo {
+                cwd: None,
+                shell_type: None,
+                running_process: None,
+                is_wsl: false,
+            }
+        }
+    };
+
+    // Get CWD from the shell process via PEB on Windows
+    let cwd = get_process_cwd(shell_pid);
+    eprintln!("[process] cwd for shell_pid {}: {:?}", shell_pid, cwd);
+
+    // Get shell type from actual binary name (not $SHELL -- avoids Pitfall 7)
+    let shell_name = get_process_name(shell_pid);
+    let shell_type = shell_name.clone();
+    eprintln!("[process] shell_type for {}: {:?}", shell_pid, shell_type);
+
+    // Check if a foreground process is running inside the shell (e.g., node, python)
+    let running_process = find_running_process(shell_pid, &shell_name);
+
+    // Detect WSL session on Windows
+    let is_wsl = {
+        // Check 1: wsl.exe in the process ancestry (using shared snapshot)
+        let mut wsl = if let Some(s) = snap {
+            detect_wsl_in_ancestry(shell_pid, s)
+        } else {
+            false
+        };
+
+        // Check 2: wsl.exe as a CHILD of the shell process (VS Code WSL terminal)
+        if !wsl {
+            let children = get_child_pids(shell_pid);
+            eprintln!("[process] shell pid {} children: {:?}", shell_pid,
+                children.iter().map(|&c| (c, get_process_name(c))).collect::<Vec<_>>());
+            for &child in &children {
+                if let Some(name) = get_process_name(child) {
+                    if name.eq_ignore_ascii_case("wsl") {
+                        eprintln!("[process] WSL detected: wsl.exe (pid {}) is child of shell pid {}", child, shell_pid);
+                        wsl = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Check 3: scan ALL wsl.exe under app for diagnostic visibility
+        if !wsl {
+            if let Some(s) = snap {
+                eprintln!("[process] WSL diagnostic: scanning all wsl.exe under app tree...");
+                scan_wsl_processes_diagnostic(shell_pid, s);
+            }
+        }
+
+        wsl
+    };
+
+    ProcessInfo {
+        cwd,
+        shell_type,
+        running_process,
+        is_wsl,
+    }
+}
+
+/// Get CWD, shell type, and running process for the terminal identified by `terminal_pid`.
+/// Non-Windows version (macOS / other platforms).
+#[cfg(not(target_os = "windows"))]
 pub fn get_foreground_info(terminal_pid: i32) -> ProcessInfo {
     eprintln!("[process] get_foreground_info for terminal_pid={}", terminal_pid);
     let children = get_child_pids(terminal_pid);
@@ -123,37 +219,6 @@ pub fn get_foreground_info(terminal_pid: i32) -> ProcessInfo {
     // Check if a foreground process is running inside the shell (e.g., node, python)
     let running_process = find_running_process(shell_pid, &shell_name);
 
-    // Detect WSL session on Windows
-    #[cfg(target_os = "windows")]
-    let is_wsl = {
-        // Check 1: wsl.exe in the process ancestry (existing)
-        let mut wsl = detect_wsl_in_ancestry(shell_pid);
-
-        // Check 2: wsl.exe as a CHILD of the shell process (VS Code WSL terminal)
-        if !wsl {
-            let children = get_child_pids(shell_pid);
-            eprintln!("[process] shell pid {} children: {:?}", shell_pid,
-                children.iter().map(|&c| (c, get_process_name(c))).collect::<Vec<_>>());
-            for &child in &children {
-                if let Some(name) = get_process_name(child) {
-                    if name.eq_ignore_ascii_case("wsl") {
-                        eprintln!("[process] WSL detected: wsl.exe (pid {}) is child of shell pid {}", child, shell_pid);
-                        wsl = true;
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Check 3: scan ALL wsl.exe under app for diagnostic visibility
-        if !wsl {
-            eprintln!("[process] WSL diagnostic: scanning all wsl.exe under app tree...");
-            scan_wsl_processes_diagnostic(shell_pid);
-        }
-
-        wsl
-    };
-    #[cfg(not(target_os = "windows"))]
     let is_wsl = false;
 
     ProcessInfo {
@@ -535,11 +600,27 @@ fn get_child_pids(_pid: i32) -> Vec<i32> {
 /// `focused_cwd`: AX-derived CWD from the focused terminal tab. Used to
 /// disambiguate between multiple candidate shells in Electron IDEs with
 /// multiple terminal tabs. Pass `None` for non-IDE callers.
+/// Find the shell PID for a terminal. Windows version accepts optional ProcessSnapshot.
+#[cfg(target_os = "windows")]
+pub(crate) fn find_shell_pid(terminal_pid: i32, focused_cwd: Option<&str>, snapshot: Option<&ProcessSnapshot>) -> Option<i32> {
+    // Try the fast recursive walk first (works for simple terminal apps).
+    if let Some(pid) = find_shell_recursive(terminal_pid, 3) {
+        return Some(pid);
+    }
+
+    // Broad search: find shells that are descendants of this app
+    eprintln!("[process] recursive walk failed for {}, trying ancestry search", terminal_pid);
+    if let Some(snap) = snapshot {
+        find_shell_by_ancestry(terminal_pid, focused_cwd, snap)
+    } else {
+        find_shell_by_ancestry_no_snapshot(terminal_pid, focused_cwd)
+    }
+}
+
+/// Find the shell PID for a terminal. Non-Windows version (no snapshot parameter).
+#[cfg(not(target_os = "windows"))]
 pub(crate) fn find_shell_pid(terminal_pid: i32, focused_cwd: Option<&str>) -> Option<i32> {
     // Try the fast recursive walk first (works for simple terminal apps).
-    // The fast path does NOT need focused_cwd because it only returns a result
-    // when there is exactly one shell in a shallow tree (Terminal.app, iTerm2
-    // single tab), where ambiguity does not arise.
     if let Some(pid) = find_shell_recursive(terminal_pid, 3) {
         return Some(pid);
     }
@@ -760,145 +841,175 @@ fn is_sub_shell_of_any(pid: i32, ancestor_pids: &[i32], parent_map: &std::collec
     false
 }
 
-/// Windows: find shell processes that are descendants of the given app PID.
-///
-/// Uses CreateToolhelp32Snapshot to build a full process tree and walk ancestors.
+/// Get the creation time of a process using GetProcessTimes.
+/// Returns the creation time as a u64 (FILETIME as single value) for comparison.
 #[cfg(target_os = "windows")]
-fn find_shell_by_ancestry(app_pid: i32, _focused_cwd: Option<&str>) -> Option<i32> {
-    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
-    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
-        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
-        TH32CS_SNAPPROCESS,
+fn get_process_creation_time(pid: u32) -> Option<u64> {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{
+        GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
     };
 
     unsafe {
-        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-        if snapshot == INVALID_HANDLE_VALUE {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if handle.is_null() {
             return None;
         }
-
-        // Build parent map and collect shell candidates
-        let mut parent_map: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
-        let mut shell_candidates: Vec<(u32, String)> = Vec::new();
-        let mut openconsole_pids: Vec<u32> = Vec::new();
-
-        let mut entry: PROCESSENTRY32W = std::mem::zeroed();
-        entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
-
-        if Process32FirstW(snapshot, &mut entry) != 0 {
-            loop {
-                parent_map.insert(entry.th32ProcessID, entry.th32ParentProcessID);
-
-                // Get exe name from the entry
-                let name_len = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
-                let name = String::from_utf16_lossy(&entry.szExeFile[..name_len]);
-
-                if name.eq_ignore_ascii_case("OpenConsole.exe") {
-                    openconsole_pids.push(entry.th32ProcessID);
-                }
-                if super::detect_windows::is_known_shell_exe(&name) {
-                    shell_candidates.push((entry.th32ProcessID, name));
-                }
-
-                if Process32NextW(snapshot, &mut entry) == 0 {
-                    break;
-                }
-            }
+        let mut creation: windows_sys::Win32::Foundation::FILETIME = std::mem::zeroed();
+        let mut exit: windows_sys::Win32::Foundation::FILETIME = std::mem::zeroed();
+        let mut kernel: windows_sys::Win32::Foundation::FILETIME = std::mem::zeroed();
+        let mut user: windows_sys::Win32::Foundation::FILETIME = std::mem::zeroed();
+        let ok = GetProcessTimes(handle, &mut creation, &mut exit, &mut kernel, &mut user);
+        CloseHandle(handle);
+        if ok != 0 {
+            let time = (creation.dwHighDateTime as u64) << 32 | (creation.dwLowDateTime as u64);
+            Some(time)
+        } else {
+            None
         }
-        CloseHandle(snapshot);
-
-        let app_pid_u32 = app_pid as u32;
-
-        // Check which shells are descendants of app_pid
-        let mut descendant_shells: Vec<(u32, String)> = Vec::new();
-        for (pid, name) in &shell_candidates {
-            let mut current = *pid;
-            let mut is_desc = false;
-            for _ in 0..20 {
-                match parent_map.get(&current) {
-                    Some(&ppid) if ppid == app_pid_u32 => {
-                        is_desc = true;
-                        break;
-                    }
-                    Some(&ppid) if ppid <= 1 || ppid == current => break,
-                    Some(&ppid) => current = ppid,
-                    None => break,
-                }
-            }
-            if is_desc {
-                eprintln!("[process] Windows shell pid {} ({}) is a descendant of {}", pid, name, app_pid);
-                descendant_shells.push((*pid, name.clone()));
-            }
-        }
-
-        if descendant_shells.is_empty() {
-            eprintln!("[process] no shell found as descendant of {} on Windows", app_pid);
-
-            // Fallback for Windows Terminal: shells are children of OpenConsole.exe
-            // which is NOT a descendant of WindowsTerminal.exe in the process tree
-            // (ConPTY architecture). Search for shells parented by OpenConsole.exe.
-            eprintln!("[process] ConPTY fallback: {} OpenConsole PIDs found, {} shell candidates", openconsole_pids.len(), shell_candidates.len());
-            for (pid, name) in &shell_candidates {
-                let ppid = parent_map.get(pid).copied();
-                eprintln!("[process]   shell candidate: pid={} name={} ppid={:?}", pid, name, ppid);
-            }
-            if !openconsole_pids.is_empty() {
-                let mut conpty_shells: Vec<(u32, String)> = Vec::new();
-                for (pid, name) in &shell_candidates {
-                    if let Some(&ppid) = parent_map.get(pid) {
-                        if openconsole_pids.contains(&ppid) {
-                            eprintln!("[process] ConPTY shell: pid {} ({}) is child of OpenConsole.exe {}", pid, name, ppid);
-                            conpty_shells.push((*pid, name.clone()));
-                        }
-                    }
-                }
-                if !conpty_shells.is_empty() {
-                    return conpty_shells.iter()
-                        .max_by_key(|(pid, _)| *pid)
-                        .map(|(pid, _)| *pid as i32);
-                }
-            }
-
-            return None;
-        }
-
-        // For IDE terminals (VS Code, Cursor), deprioritize cmd.exe.
-        // VS Code spawns many internal cmd.exe processes for git, tasks, and extensions.
-        // User terminal tabs are typically powershell.exe, pwsh.exe, bash.exe, etc.
-        let is_ide = super::detect_windows::is_ide_with_terminal_exe(
-            &super::detect_windows::get_exe_name_for_pid(app_pid_u32).unwrap_or_default()
-        );
-        if is_ide && descendant_shells.len() > 1 {
-            let interactive: Vec<_> = descendant_shells.iter()
-                .filter(|(_, name)| {
-                    let lower = name.to_lowercase();
-                    // Keep only real interactive shells, exclude cmd.exe (VS Code internal)
-                    lower != "cmd.exe"
-                })
-                .collect();
-            if !interactive.is_empty() {
-                eprintln!("[process] IDE mode: preferring interactive shells ({} of {} descendants)",
-                    interactive.len(), descendant_shells.len());
-                for (pid, name) in &interactive {
-                    eprintln!("[process]   interactive shell: pid={} name={}", pid, name);
-                }
-                return interactive.iter()
-                    .max_by_key(|(pid, _)| *pid)
-                    .map(|(pid, _)| *pid as i32);
-            }
-        }
-
-        // Pick the most recently spawned (highest PID) shell
-        descendant_shells.iter()
-            .max_by_key(|(pid, _)| *pid)
-            .map(|(pid, _)| *pid as i32)
     }
+}
+
+/// Pick the most recently created process from candidates using GetProcessTimes.
+/// Falls back to highest PID if GetProcessTimes fails for all candidates.
+#[cfg(target_os = "windows")]
+fn pick_most_recent(candidates: &[(u32, String)]) -> Option<i32> {
+    if candidates.is_empty() {
+        return None;
+    }
+    // Try GetProcessTimes-based sorting
+    let mut with_times: Vec<(u32, u64)> = Vec::new();
+    for (pid, _) in candidates {
+        if let Some(time) = get_process_creation_time(*pid) {
+            with_times.push((*pid, time));
+        }
+    }
+    if !with_times.is_empty() {
+        // Most recent = highest creation time
+        with_times.sort_by(|a, b| b.1.cmp(&a.1));
+        return Some(with_times[0].0 as i32);
+    }
+    // Fallback: highest PID
+    candidates.iter()
+        .max_by_key(|(pid, _)| *pid)
+        .map(|(pid, _)| *pid as i32)
+}
+
+/// Windows: find shell processes using a shared ProcessSnapshot.
+///
+/// Detection priority:
+/// 1. ConPTY-hosted shells (parent is conhost.exe/OpenConsole.exe) that are descendants of app_pid
+/// 2. Direct descendant shells of app_pid (standalone terminal scenario)
+/// 3. All ConPTY shells as fallback (Windows Terminal architecture: shells not descendants of WT)
+///
+/// cmd.exe candidates are filtered through is_interactive_cmd() instead of blanket exclusion.
+/// Recency is determined by GetProcessTimes (with PID fallback).
+#[cfg(target_os = "windows")]
+fn find_shell_by_ancestry(app_pid: i32, _focused_cwd: Option<&str>, snapshot: &ProcessSnapshot) -> Option<i32> {
+    let app_pid_u32 = app_pid as u32;
+
+    // Helper: check if a PID is a descendant of app_pid using snapshot's parent_map
+    let is_descendant = |pid: u32| -> bool {
+        let mut current = pid;
+        for _ in 0..20 {
+            match snapshot.parent_map.get(&current) {
+                Some(&ppid) if ppid == app_pid_u32 => return true,
+                Some(&ppid) if ppid <= 1 || ppid == current => return false,
+                Some(&ppid) => current = ppid,
+                None => return false,
+            }
+        }
+        false
+    };
+
+    // Filter cmd.exe through is_interactive_cmd instead of blanket exclusion
+    let filter_cmd = |candidates: &[(u32, String)]| -> Vec<(u32, String)> {
+        candidates.iter()
+            .filter(|(pid, name)| {
+                if name.eq_ignore_ascii_case("cmd.exe") {
+                    let interactive = is_interactive_cmd(*pid, snapshot);
+                    if !interactive {
+                        eprintln!("[process] cmd.exe pid {} filtered out (non-interactive)", pid);
+                    }
+                    interactive
+                } else {
+                    true
+                }
+            })
+            .cloned()
+            .collect()
+    };
+
+    // PRIORITY 1: ConPTY-hosted shells that are descendants of app_pid
+    if !snapshot.conpty_host_pids.is_empty() {
+        let mut conpty_descendant_shells: Vec<(u32, String)> = Vec::new();
+        for (pid, name) in &snapshot.shell_candidates {
+            if let Some(&ppid) = snapshot.parent_map.get(pid) {
+                if snapshot.conpty_host_pids.contains(&ppid) && is_descendant(*pid) {
+                    eprintln!("[process] ConPTY descendant shell: pid {} ({}) parent {} is ConPTY host, descendant of {}", pid, name, ppid, app_pid);
+                    conpty_descendant_shells.push((*pid, name.clone()));
+                }
+            }
+        }
+        let filtered = filter_cmd(&conpty_descendant_shells);
+        if !filtered.is_empty() {
+            eprintln!("[process] ConPTY descendant selection: {} candidates after cmd.exe filter", filtered.len());
+            return pick_most_recent(&filtered);
+        }
+    }
+
+    // PRIORITY 2: Direct descendant shells (standalone terminal scenario)
+    let mut descendant_shells: Vec<(u32, String)> = Vec::new();
+    for (pid, name) in &snapshot.shell_candidates {
+        if is_descendant(*pid) {
+            eprintln!("[process] Windows shell pid {} ({}) is a descendant of {}", pid, name, app_pid);
+            descendant_shells.push((*pid, name.clone()));
+        }
+    }
+    let filtered_descendants = filter_cmd(&descendant_shells);
+    if !filtered_descendants.is_empty() {
+        eprintln!("[process] descendant selection: {} candidates after cmd.exe filter", filtered_descendants.len());
+        return pick_most_recent(&filtered_descendants);
+    }
+
+    eprintln!("[process] no shell found as descendant of {} on Windows", app_pid);
+
+    // PRIORITY 3: All ConPTY shells (Windows Terminal architecture: shells not descendants of WT)
+    if !snapshot.conpty_host_pids.is_empty() {
+        let mut all_conpty_shells: Vec<(u32, String)> = Vec::new();
+        for (pid, name) in &snapshot.shell_candidates {
+            if let Some(&ppid) = snapshot.parent_map.get(pid) {
+                if snapshot.conpty_host_pids.contains(&ppid) {
+                    eprintln!("[process] ConPTY shell: pid {} ({}) is child of ConPTY host {}", pid, name, ppid);
+                    all_conpty_shells.push((*pid, name.clone()));
+                }
+            }
+        }
+        let filtered = filter_cmd(&all_conpty_shells);
+        if !filtered.is_empty() {
+            eprintln!("[process] ConPTY fallback: {} candidates after cmd.exe filter", filtered.len());
+            return pick_most_recent(&filtered);
+        }
+    }
+
+    None
 }
 
 /// Non-macOS, non-Windows stub.
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn find_shell_by_ancestry(_app_pid: i32, _focused_cwd: Option<&str>) -> Option<i32> {
     None
+}
+
+/// Windows stub that accepts snapshot (used by find_shell_pid when snapshot is available).
+#[cfg(target_os = "windows")]
+fn find_shell_by_ancestry_no_snapshot(app_pid: i32, focused_cwd: Option<&str>) -> Option<i32> {
+    // Create an internal snapshot as fallback when no snapshot is provided
+    if let Some(snapshot) = ProcessSnapshot::capture() {
+        find_shell_by_ancestry(app_pid, focused_cwd, &snapshot)
+    } else {
+        None
+    }
 }
 
 /// Recursively walk child processes to find a shell, walking through
@@ -960,118 +1071,53 @@ fn find_running_process(shell_pid: i32, shell_name: &Option<String>) -> Option<S
 
 /// Diagnostic: find ALL wsl.exe processes and log their parent chain.
 /// Helps debug VS Code WSL terminal detection by showing where wsl.exe lives.
+/// Uses the shared ProcessSnapshot instead of taking its own snapshot.
 #[cfg(target_os = "windows")]
-fn scan_wsl_processes_diagnostic(_shell_pid: i32) {
-    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
-    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
-        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
-        TH32CS_SNAPPROCESS,
-    };
+fn scan_wsl_processes_diagnostic(_shell_pid: i32, snapshot: &ProcessSnapshot) {
+    // Find all wsl.exe PIDs from the snapshot's exe_map
+    let wsl_pids: Vec<u32> = snapshot.exe_map.iter()
+        .filter(|(_, name)| name.eq_ignore_ascii_case("wsl.exe"))
+        .map(|(&pid, _)| pid)
+        .collect();
 
-    unsafe {
-        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-        if snapshot == INVALID_HANDLE_VALUE {
-            return;
-        }
-
-        let mut parent_map: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
-        let mut exe_map: std::collections::HashMap<u32, String> = std::collections::HashMap::new();
-        let mut wsl_pids: Vec<u32> = Vec::new();
-
-        let mut entry: PROCESSENTRY32W = std::mem::zeroed();
-        entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
-
-        if Process32FirstW(snapshot, &mut entry) != 0 {
-            loop {
-                parent_map.insert(entry.th32ProcessID, entry.th32ParentProcessID);
-                let name_len = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
-                let name = String::from_utf16_lossy(&entry.szExeFile[..name_len]);
-                if name.eq_ignore_ascii_case("wsl.exe") {
-                    wsl_pids.push(entry.th32ProcessID);
-                }
-                exe_map.insert(entry.th32ProcessID, name);
-                if Process32NextW(snapshot, &mut entry) == 0 {
-                    break;
-                }
+    eprintln!("[process] WSL diagnostic: found {} wsl.exe processes total", wsl_pids.len());
+    for &wsl_pid in &wsl_pids {
+        // Build parent chain for this wsl.exe
+        let mut chain = Vec::new();
+        let mut current = wsl_pid;
+        for _ in 0..10 {
+            let name = snapshot.exe_map.get(&current).cloned().unwrap_or_else(|| "?".to_string());
+            chain.push(format!("{}({})", name, current));
+            match snapshot.parent_map.get(&current) {
+                Some(&ppid) if ppid > 1 && ppid != current => current = ppid,
+                _ => break,
             }
         }
-        CloseHandle(snapshot);
-
-        eprintln!("[process] WSL diagnostic: found {} wsl.exe processes total", wsl_pids.len());
-        for &wsl_pid in &wsl_pids {
-            // Build parent chain for this wsl.exe
-            let mut chain = Vec::new();
-            let mut current = wsl_pid;
-            for _ in 0..10 {
-                let name = exe_map.get(&current).cloned().unwrap_or_else(|| "?".to_string());
-                chain.push(format!("{}({})", name, current));
-                match parent_map.get(&current) {
-                    Some(&ppid) if ppid > 1 && ppid != current => current = ppid,
-                    _ => break,
-                }
-            }
-            chain.reverse();
-            eprintln!("[process] WSL diagnostic: wsl.exe {} chain: {}", wsl_pid, chain.join(" → "));
-        }
+        chain.reverse();
+        eprintln!("[process] WSL diagnostic: wsl.exe {} chain: {}", wsl_pid, chain.join(" -> "));
     }
 }
 
 /// Detect if wsl.exe is in the process ancestry of the given PID.
-///
-/// Takes a separate process snapshot and walks the parent chain looking for wsl.exe.
-/// The snapshot is cheap (~1ms) and avoids changing find_shell_by_ancestry's signature.
+/// Uses the shared ProcessSnapshot instead of taking its own snapshot.
 #[cfg(target_os = "windows")]
-fn detect_wsl_in_ancestry(pid: i32) -> bool {
-    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
-    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
-        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
-        TH32CS_SNAPPROCESS,
-    };
-
-    unsafe {
-        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-        if snapshot == INVALID_HANDLE_VALUE {
-            return false;
-        }
-
-        let mut parent_map: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
-        let mut exe_map: std::collections::HashMap<u32, String> = std::collections::HashMap::new();
-
-        let mut entry: PROCESSENTRY32W = std::mem::zeroed();
-        entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
-
-        if Process32FirstW(snapshot, &mut entry) != 0 {
-            loop {
-                parent_map.insert(entry.th32ProcessID, entry.th32ParentProcessID);
-
-                let name_len = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
-                let name = String::from_utf16_lossy(&entry.szExeFile[..name_len]);
-                exe_map.insert(entry.th32ProcessID, name);
-
-                if Process32NextW(snapshot, &mut entry) == 0 {
-                    break;
-                }
+fn detect_wsl_in_ancestry(pid: i32, snapshot: &ProcessSnapshot) -> bool {
+    // Walk ancestry from the given PID looking for wsl.exe
+    let mut current = pid as u32;
+    for _ in 0..20 {
+        if let Some(exe) = snapshot.exe_map.get(&current) {
+            if exe.eq_ignore_ascii_case("wsl.exe") {
+                eprintln!("[process] WSL detected: wsl.exe found at pid {} in ancestry of {}", current, pid);
+                return true;
             }
         }
-        CloseHandle(snapshot);
-
-        // Walk ancestry from the given PID looking for wsl.exe
-        let mut current = pid as u32;
-        for _ in 0..20 {
-            if let Some(exe) = exe_map.get(&current) {
-                if exe.eq_ignore_ascii_case("wsl.exe") {
-                    eprintln!("[process] WSL detected: wsl.exe found at pid {} in ancestry of {}", current, pid);
-                    return true;
-                }
-            }
-            match parent_map.get(&current) {
-                Some(&ppid) if ppid <= 1 || ppid == current => break,
-                Some(&ppid) => current = ppid,
-                None => break,
-            }
+        match snapshot.parent_map.get(&current) {
+            Some(&ppid) if ppid <= 1 || ppid == current => break,
+            Some(&ppid) => current = ppid,
+            None => break,
         }
-        false
     }
+    false
 }
 
 /// Get the Linux CWD from WSL via subprocess.
