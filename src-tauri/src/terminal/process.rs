@@ -1136,3 +1136,381 @@ pub fn get_wsl_shell() -> Option<String> {
 pub fn get_wsl_shell() -> Option<String> {
     None
 }
+
+// ---------------------------------------------------------------------------
+// ProcessSnapshot & cmd.exe filtering infrastructure
+// ---------------------------------------------------------------------------
+
+/// Extract the arguments portion from a full command line string, stripping the exe path.
+///
+/// Handles both quoted paths (`"C:\Program Files\cmd.exe" /C dir` -> `/C dir`)
+/// and unquoted paths (`cmd.exe /C dir` -> `/C dir`).
+/// Returns an empty string if no arguments are present.
+pub fn extract_cmd_args(cmdline: &str) -> &str {
+    let trimmed = cmdline.trim();
+    if trimmed.is_empty() {
+        return "";
+    }
+
+    if trimmed.starts_with('"') {
+        // Quoted exe path: skip to closing quote, then take the rest
+        if let Some(close) = trimmed[1..].find('"') {
+            let after = &trimmed[close + 2..]; // +1 for the opening quote offset, +1 for the closing quote
+            return after.trim_start();
+        }
+        // Unclosed quote -- treat entire thing as exe path
+        return "";
+    }
+
+    // Unquoted exe path: split at first space
+    match trimmed.find(' ') {
+        Some(idx) => trimmed[idx + 1..].trim_start(),
+        None => "",
+    }
+}
+
+/// Check if a full command line string contains batch execution flags.
+///
+/// Returns true if cmd.exe was launched with `/C`, `/D /C`, `/S /D /C`, or `/C"...`
+/// (case-insensitive). These indicate non-interactive batch execution.
+pub fn has_batch_flag_in_cmdline(cmdline: &str) -> bool {
+    let trimmed = cmdline.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+
+    // Try extracting args after exe path first
+    let args = extract_cmd_args(trimmed);
+
+    // Check both the extracted args and the raw input (for cases where
+    // the input is just flags without an exe prefix, e.g. "/C dir")
+    check_batch_flags(args) || check_batch_flags(trimmed)
+}
+
+/// Check if a string starts with cmd.exe batch execution flags.
+fn check_batch_flags(s: &str) -> bool {
+    if s.is_empty() {
+        return false;
+    }
+
+    let upper = s.to_uppercase();
+    let mut remaining = upper.as_str();
+
+    // Strip optional /S prefix
+    if remaining.starts_with("/S") {
+        remaining = remaining[2..].trim_start();
+    }
+
+    // Strip optional /D prefix
+    if remaining.starts_with("/D") {
+        remaining = remaining[2..].trim_start();
+    }
+
+    // Check for /C (with space, quote, or end after it)
+    if remaining.starts_with("/C") {
+        let after_c = &remaining[2..];
+        if after_c.is_empty() || after_c.starts_with(' ') || after_c.starts_with('"') {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Windows-only ProcessSnapshot: captures all process info in a single snapshot call.
+#[cfg(target_os = "windows")]
+pub(crate) struct ProcessSnapshot {
+    pub parent_map: std::collections::HashMap<u32, u32>,
+    pub exe_map: std::collections::HashMap<u32, String>,
+    pub shell_candidates: Vec<(u32, String)>,
+    pub conpty_host_pids: Vec<u32>,
+}
+
+#[cfg(target_os = "windows")]
+impl ProcessSnapshot {
+    /// Capture a single process snapshot, building all maps at once.
+    pub fn capture() -> Option<Self> {
+        use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+        use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+            CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+            TH32CS_SNAPPROCESS,
+        };
+
+        unsafe {
+            let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+            if snapshot == INVALID_HANDLE_VALUE {
+                return None;
+            }
+
+            let mut parent_map: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
+            let mut exe_map: std::collections::HashMap<u32, String> = std::collections::HashMap::new();
+            let mut shell_candidates: Vec<(u32, String)> = Vec::new();
+            let mut conpty_host_pids: Vec<u32> = Vec::new();
+
+            let mut entry: PROCESSENTRY32W = std::mem::zeroed();
+            entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+
+            let mut process_count: u32 = 0;
+
+            if Process32FirstW(snapshot, &mut entry) != 0 {
+                loop {
+                    process_count += 1;
+                    parent_map.insert(entry.th32ProcessID, entry.th32ParentProcessID);
+
+                    let name_len = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
+                    let name = String::from_utf16_lossy(&entry.szExeFile[..name_len]);
+
+                    // Check for ConPTY hosts: both OpenConsole.exe (Win11) and conhost.exe (Win10)
+                    if name.eq_ignore_ascii_case("OpenConsole.exe")
+                        || name.eq_ignore_ascii_case("conhost.exe")
+                    {
+                        conpty_host_pids.push(entry.th32ProcessID);
+                    }
+
+                    if super::detect_windows::is_known_shell_exe(&name) {
+                        shell_candidates.push((entry.th32ProcessID, name.clone()));
+                    }
+
+                    exe_map.insert(entry.th32ProcessID, name);
+
+                    if Process32NextW(snapshot, &mut entry) == 0 {
+                        break;
+                    }
+                }
+            }
+            CloseHandle(snapshot);
+
+            eprintln!(
+                "[process] ProcessSnapshot captured: {} processes, {} shells, {} ConPTY hosts",
+                process_count,
+                shell_candidates.len(),
+                conpty_host_pids.len()
+            );
+
+            Some(ProcessSnapshot {
+                parent_map,
+                exe_map,
+                shell_candidates,
+                conpty_host_pids,
+            })
+        }
+    }
+}
+
+/// Read the command line from a process's PEB (RTL_USER_PROCESS_PARAMETERS.CommandLine).
+///
+/// Same pattern as `read_cwd_from_peb` but reads at offset 0x70 (CommandLine) instead
+/// of 0x38 (CurrentDirectory.DosPath).
+#[cfg(target_os = "windows")]
+unsafe fn read_command_line_from_peb(handle: windows_sys::Win32::Foundation::HANDLE) -> Option<String> {
+    use std::mem::size_of;
+    use windows_sys::Wdk::System::Threading::NtQueryInformationProcess;
+
+    #[repr(C)]
+    struct ProcessBasicInformation {
+        _reserved1: usize,
+        peb_base_address: usize,
+        _reserved2: [usize; 2],
+        unique_process_id: usize,
+        _reserved3: usize,
+    }
+
+    let mut pbi = std::mem::zeroed::<ProcessBasicInformation>();
+    let mut return_length: u32 = 0;
+    let status = NtQueryInformationProcess(
+        handle,
+        0, // ProcessBasicInformation
+        &mut pbi as *mut _ as *mut _,
+        size_of::<ProcessBasicInformation>() as u32,
+        &mut return_length,
+    );
+
+    if status != 0 {
+        eprintln!("[process] read_command_line_from_peb: NtQueryInformationProcess failed: 0x{:08x}", status);
+        return None;
+    }
+
+    if pbi.peb_base_address == 0 {
+        return None;
+    }
+
+    // Read ProcessParameters pointer from PEB (offset 0x20 on 64-bit)
+    let params_ptr_addr = pbi.peb_base_address + 0x20;
+    let mut params_ptr: usize = 0;
+    let ok = read_process_memory(handle, params_ptr_addr, &mut params_ptr as *mut _ as *mut u8, size_of::<usize>());
+    if !ok || params_ptr == 0 {
+        return None;
+    }
+
+    // RTL_USER_PROCESS_PARAMETERS: CommandLine is a UNICODE_STRING at offset 0x70
+    // UNICODE_STRING layout: u16 Length, u16 MaxLength, padding, u64 Buffer pointer
+    let cmdline_unicode_string_addr = params_ptr + 0x70;
+    let mut length: u16 = 0;
+    let ok = read_process_memory(handle, cmdline_unicode_string_addr, &mut length as *mut _ as *mut u8, size_of::<u16>());
+    if !ok || length == 0 {
+        return None;
+    }
+
+    let mut buffer_ptr: usize = 0;
+    let buffer_ptr_addr = cmdline_unicode_string_addr + 8; // skip Length (2), MaxLength (2), padding (4)
+    let ok = read_process_memory(handle, buffer_ptr_addr, &mut buffer_ptr as *mut _ as *mut u8, size_of::<usize>());
+    if !ok || buffer_ptr == 0 {
+        return None;
+    }
+
+    // Read the actual command line string (UTF-16)
+    let char_count = (length as usize) / 2;
+    let mut buf = vec![0u16; char_count];
+    let ok = read_process_memory(handle, buffer_ptr, buf.as_mut_ptr() as *mut u8, length as usize);
+    if !ok {
+        eprintln!("[process] read_command_line_from_peb: ReadProcessMemory failed for command line buffer");
+        return None;
+    }
+
+    let cmdline = String::from_utf16_lossy(&buf);
+    let cmdline = cmdline.trim().to_string();
+    if cmdline.is_empty() {
+        None
+    } else {
+        Some(cmdline)
+    }
+}
+
+/// Determine if a cmd.exe process is interactive (user shell) vs background (IDE internal).
+///
+/// Uses a two-signal approach:
+/// 1. FAST CHECK: Is parent a ConPTY host (conhost.exe/OpenConsole.exe)? -> interactive
+/// 2. DEFINITIVE CHECK: Read PEB command line for /C or /D /C flags -> not interactive
+///
+/// Conservative fallback: if PEB read fails, treat as interactive.
+#[cfg(target_os = "windows")]
+pub(crate) fn is_interactive_cmd(pid: u32, snapshot: &ProcessSnapshot) -> bool {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ,
+    };
+
+    // FAST CHECK: parent is a ConPTY host -> interactive
+    if let Some(&ppid) = snapshot.parent_map.get(&pid) {
+        if snapshot.conpty_host_pids.contains(&ppid) {
+            eprintln!("[process] is_interactive_cmd: pid {} parent {} is ConPTY host -> interactive", pid, ppid);
+            return true;
+        }
+
+        // Check if parent is an IDE process (node.exe, Code.exe, Code Helper, Cursor.exe)
+        // If so, do the definitive PEB check
+        let parent_name = snapshot.exe_map.get(&ppid).map(|s| s.to_lowercase()).unwrap_or_default();
+        let is_ide_child = parent_name.contains("node")
+            || parent_name.contains("code")
+            || parent_name.contains("cursor");
+
+        if !is_ide_child {
+            // Parent is not an IDE process and not a ConPTY host.
+            // Conservative fallback: treat as interactive.
+            return true;
+        }
+    }
+
+    // DEFINITIVE CHECK: Read PEB command line
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, pid);
+        if handle.is_null() {
+            eprintln!("[process] is_interactive_cmd: OpenProcess failed for pid {} (access denied?) -> fallback interactive", pid);
+            return true; // Conservative fallback
+        }
+
+        let cmdline = read_command_line_from_peb(handle);
+        CloseHandle(handle);
+
+        match cmdline {
+            Some(ref cl) => {
+                let has_batch = has_batch_flag_in_cmdline(cl);
+                eprintln!("[process] is_interactive_cmd: pid {} cmdline={:?} batch_flag={} -> {}", pid, cl, has_batch, if has_batch { "background" } else { "interactive" });
+                !has_batch
+            }
+            None => {
+                eprintln!("[process] is_interactive_cmd: pid {} PEB read failed -> fallback interactive", pid);
+                true // Conservative fallback
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -- extract_cmd_args tests --
+
+    #[test]
+    fn test_extract_cmd_args_unquoted_with_flags() {
+        assert_eq!(extract_cmd_args("C:\\Windows\\system32\\cmd.exe /D /C git status"), "/D /C git status");
+    }
+
+    #[test]
+    fn test_extract_cmd_args_quoted_path() {
+        assert_eq!(extract_cmd_args("\"C:\\Program Files\\cmd.exe\" /C dir"), "/C dir");
+    }
+
+    #[test]
+    fn test_extract_cmd_args_bare_exe() {
+        assert_eq!(extract_cmd_args("cmd.exe"), "");
+    }
+
+    #[test]
+    fn test_extract_cmd_args_simple_unquoted() {
+        assert_eq!(extract_cmd_args("cmd.exe /C dir"), "/C dir");
+    }
+
+    // -- has_batch_flag_in_cmdline tests --
+
+    #[test]
+    fn test_cmd_batch_flag_slash_c() {
+        assert!(has_batch_flag_in_cmdline("/C dir"));
+    }
+
+    #[test]
+    fn test_cmd_batch_flag_d_c() {
+        assert!(has_batch_flag_in_cmdline("/D /C dir"));
+    }
+
+    #[test]
+    fn test_cmd_batch_flag_s_d_c() {
+        assert!(has_batch_flag_in_cmdline("/S /D /C dir"));
+    }
+
+    #[test]
+    fn test_cmd_batch_flag_lowercase() {
+        assert!(has_batch_flag_in_cmdline("/c dir"));
+    }
+
+    #[test]
+    fn test_cmd_batch_flag_k_not_batch() {
+        assert!(!has_batch_flag_in_cmdline("/K dir"));
+    }
+
+    #[test]
+    fn test_cmd_batch_flag_empty() {
+        assert!(!has_batch_flag_in_cmdline(""));
+    }
+
+    #[test]
+    fn test_cmd_batch_flag_just_exe() {
+        assert!(!has_batch_flag_in_cmdline("cmd.exe"));
+    }
+
+    #[test]
+    fn test_cmd_batch_flag_no_space_after_c() {
+        assert!(has_batch_flag_in_cmdline("cmd.exe /C\"echo hello\""));
+    }
+
+    #[test]
+    fn test_cmd_batch_flag_full_path_with_flags() {
+        assert!(has_batch_flag_in_cmdline("C:\\Windows\\system32\\cmd.exe /D /C git status"));
+    }
+
+    #[test]
+    fn test_cmd_batch_flag_full_path_no_flags() {
+        assert!(!has_batch_flag_in_cmdline("C:\\Windows\\system32\\cmd.exe"));
+    }
+}
