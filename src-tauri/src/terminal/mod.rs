@@ -601,11 +601,13 @@ fn infer_shell_from_text(text: &str) -> &'static str {
 /// This is the PRIMARY WSL detection mechanism -- process tree ancestry fails for WSL 2
 /// where Linux processes run in a Hyper-V VM invisible to Windows process APIs.
 ///
-/// Checks the last 15 lines of terminal text for Linux/WSL indicators:
-/// - user@host:/path or user@host:~ prompt patterns
-/// - user@host...$ or user@host...# prompt endings (without Windows backslash paths)
-/// - Linux-specific paths like /home/, /root/, /var/, /etc/, /usr/, /tmp/, /opt/
-#[cfg(target_os = "windows")]
+/// Uses a multi-signal scoring system (threshold >= 2) to avoid false positives
+/// from editor content that happens to contain Linux paths:
+/// - score += 1 for Linux paths (/home/, /root/, /var/, /etc/, /usr/, /tmp/, /opt/)
+/// - score += 2 for WSL mount paths (/mnt/c/, /mnt/d/, etc.) -- strong signal
+/// - score += 1 for user@host:/path or user@host:~ prompt pattern
+/// - score += 1 for user@host...$ or user@host...# prompt ending
+#[allow(dead_code)]
 fn detect_wsl_from_text(text: &str) -> bool {
     eprintln!("[detect_wsl_from_text] scanning {} bytes of UIA text", text.len());
     let linux_paths = ["/home/", "/root/", "/var/", "/etc/", "/usr/", "/tmp/", "/opt/"];
@@ -681,4 +683,90 @@ fn infer_linux_cwd_from_text(text: &str) -> Option<String> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::detect_wsl_from_text;
+
+    // === MUST RETURN FALSE (single weak signal) ===
+
+    #[test]
+    fn test_single_linux_path_no_prompt_is_false() {
+        // A single /home/user path without any prompt should NOT trigger WSL
+        assert!(!detect_wsl_from_text("/home/user/.bashrc"));
+    }
+
+    #[test]
+    fn test_editor_content_etc_path_is_false() {
+        // Editor viewing a config file with Linux path
+        assert!(!detect_wsl_from_text("/etc/nginx/nginx.conf"));
+    }
+
+    #[test]
+    fn test_dockerfile_content_is_false() {
+        // Dockerfile content with Linux paths should not false-positive
+        let text = "FROM ubuntu:22.04\nRUN apt-get update\nCOPY /home/app/config .";
+        assert!(!detect_wsl_from_text(text));
+    }
+
+    #[test]
+    fn test_powershell_viewing_linux_path_is_false() {
+        // PowerShell prompt with a Linux path argument
+        let text = "PS C:\\Users\\dev> cat /home/user/readme.md";
+        assert!(!detect_wsl_from_text(text));
+    }
+
+    #[test]
+    fn test_user_at_host_without_path_or_prompt_ending_is_false() {
+        // Just user@host with no path or prompt ending
+        assert!(!detect_wsl_from_text("user@host"));
+    }
+
+    // === MUST RETURN TRUE (multiple signals or strong signal) ===
+
+    #[test]
+    fn test_wsl_mount_mnt_c_is_true() {
+        // WSL mount path is a strong signal (score 2)
+        assert!(detect_wsl_from_text("/mnt/c/Users/dev"));
+    }
+
+    #[test]
+    fn test_wsl_mount_mnt_d_is_true() {
+        // WSL mount path for D: drive
+        assert!(detect_wsl_from_text("/mnt/d/projects"));
+    }
+
+    #[test]
+    fn test_prompt_with_path_is_true() {
+        // user@host:/path$ is prompt + path = score 2
+        assert!(detect_wsl_from_text("user@ubuntu:/home/user$"));
+    }
+
+    #[test]
+    fn test_linux_path_plus_prompt_is_true() {
+        // Linux path on one line, prompt on another = score 2
+        let text = "/home/user\nuser@host:~$";
+        assert!(detect_wsl_from_text(text));
+    }
+
+    #[test]
+    fn test_prompt_pattern_with_ending_is_true() {
+        // Full WSL terminal with prompt pattern + ending = score 2
+        let text = "user@myhost:~/projects$ ls\nfile1 file2\nuser@myhost:~/projects$";
+        assert!(detect_wsl_from_text(text));
+    }
+
+    #[test]
+    fn test_full_wsl_terminal_output_is_true() {
+        // Full WSL terminal output with multiple signals
+        let text = "user@ubuntu:~$ cd /home/user/projects\nuser@ubuntu:~/projects$ ls\nfile1\nuser@ubuntu:~/projects$";
+        assert!(detect_wsl_from_text(text));
+    }
+
+    #[test]
+    fn test_mnt_c_alone_is_true() {
+        // /mnt/c/ alone is a strong signal (score 2)
+        assert!(detect_wsl_from_text("/mnt/c/"));
+    }
 }
