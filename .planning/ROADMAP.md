@@ -81,7 +81,7 @@
 
 **Milestone Goal:** Fix unreliable WSL detection and shell type differentiation across all Windows terminal hosts.
 
-- [x] **Phase 27: ConPTY Discovery & Process Snapshot** - Replace highest-PID heuristic with ConPTY-aware shell discovery and consolidated process snapshot (completed 2026-03-11)
+- [ ] **Phase 27: ConPTY Discovery & Process Snapshot** - Replace highest-PID heuristic with ConPTY-aware shell discovery and consolidated process snapshot
 - [ ] **Phase 28: UIA Terminal Text Scoping** - Scope UIA text reading to terminal panel elements only, eliminating false positives from IDE chrome
 - [ ] **Phase 29: Active Tab Matching** - Identify the active terminal tab's shell via CWD-based disambiguation and window title parsing
 - [ ] **Phase 30: WSL Detection Hardening** - Reliable WSL detection across all scenarios using multi-signal waterfall with sibling and environment detection
@@ -96,10 +96,11 @@
   1. In VS Code or Cursor with multiple terminal tabs, CMD+K detects the correct interactive shell (PowerShell, cmd.exe, or bash) -- not an internal IDE git or extension process
   2. Opening CMD+K in a terminal running cmd.exe correctly identifies "cmd" as the shell type, while internal IDE cmd.exe processes (running /C or /D /C flags) are ignored
   3. A single process snapshot is taken per hotkey press and reused for all detection queries (shell discovery, WSL check, diagnostics) -- no redundant CreateToolhelp32Snapshot calls
-**Plans:** 2/2 plans complete
+**Plans:** 3 plans (2 complete, 1 gap closure)
 Plans:
-- [ ] 27-01-PLAN.md -- ProcessSnapshot struct, PEB command line reader, cmd.exe filtering logic with unit tests
-- [ ] 27-02-PLAN.md -- ConPTY-first shell selection, snapshot threading through detection pipeline
+- [x] 27-01-PLAN.md -- ProcessSnapshot struct, PEB command line reader, cmd.exe filtering logic with unit tests
+- [x] 27-02-PLAN.md -- ConPTY-first shell selection, snapshot threading through detection pipeline
+- [ ] 27-03-PLAN.md -- UIA shell type hint for multi-tab disambiguation (gap closure)
 
 ### Phase 28: UIA Terminal Text Scoping
 **Goal**: Terminal text reading captures only terminal panel content, not editor or sidebar text from the IDE window
@@ -143,7 +144,7 @@ Phases execute in numeric order: 27 -> 28 -> 29 -> 30
 | 17-20 | v0.2.4 | 5/5 | Complete | 2026-03-04 |
 | 21-24 | v0.2.6 | 10/10 | Complete | 2026-03-09 |
 | 25-26 | v0.2.7 | 3/3 | Complete | 2026-03-10 |
-| 27. ConPTY Discovery | 2/2 | Complete    | 2026-03-11 | - |
+| 27. ConPTY Discovery | v0.2.8 | 2/3 | Gap closure | 2026-03-11 |
 | 28. UIA Scoping | v0.2.8 | 0/0 | Not started | - |
 | 29. Tab Matching | v0.2.8 | 0/0 | Not started | - |
 | 30. WSL Hardening | v0.2.8 | 0/0 | Not started | - |
