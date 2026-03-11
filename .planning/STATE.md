@@ -1,35 +1,36 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.2.7
-milestone_name: Cost Estimation
-status: complete
-stopped_at: Milestone v0.2.7 shipped
-last_updated: "2026-03-10"
-last_activity: 2026-03-10 -- Milestone v0.2.7 complete
+milestone: v0.2.8
+milestone_name: Windows Terminal Detection Fix
+status: active
+stopped_at: null
+last_updated: "2026-03-11"
+last_activity: 2026-03-11 -- Milestone v0.2.8 started
 progress:
-  total_phases: 2
-  completed_phases: 2
-  total_plans: 3
-  completed_plans: 3
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-10)
+See: .planning/PROJECT.md (updated 2026-03-11)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Planning next milestone
+**Current focus:** v0.2.8 Windows Terminal Detection Fix
 
 ## Current Position
 
-Phase: All complete
-Status: Milestone v0.2.7 shipped
-Last activity: 2026-03-10 -- Milestone complete
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-11 — Milestone v0.2.8 started
 
-Progress: [██████████] 100% (v0.2.7)
+Progress: [░░░░░░░░░░] 0% (v0.2.8)
 
 ## Performance Metrics
 
@@ -55,9 +56,11 @@ None.
 ### Blockers/Concerns
 
 - Phase 23.1 KNOWN GAP: IDE terminal type detection faulty -- always detects cmd.exe instead of active shell in VS Code.
+- WSL detection in IDE local terminal profiles (non-Remote-WSL) not working.
+- All Windows UAT test cases from v0.2.1/v0.2.6 pending hardware verification.
 
 ## Session Continuity
 
-Last session: 2026-03-10
-Stopped at: Milestone v0.2.7 shipped
-Next action: /gsd:new-milestone to start next milestone
+Last session: 2026-03-11
+Stopped at: Defining requirements for v0.2.8
+Next action: Define requirements and create roadmap

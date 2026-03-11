@@ -66,7 +66,15 @@ The overlay must appear on top of the currently active application and feel inst
 
 ### Active
 
-(No active milestone — run `/gsd:new-milestone` to start next)
+## Current Milestone: v0.2.8 Windows Terminal Detection Fix
+
+**Goal:** Fix unreliable WSL detection and shell type differentiation (cmd vs PowerShell vs bash) across all Windows terminal hosts — Windows Terminal, VS Code, Cursor, and standalone terminals.
+
+**Target features:**
+- Reliable WSL detection in IDE terminals (not just Remote-WSL mode)
+- Correct cmd.exe vs PowerShell vs bash differentiation in VS Code/Cursor
+- Eliminate false positives from internal IDE processes (cmd.exe, wsl.exe)
+- Verified on real Windows hardware with all terminal hosts
 
 ### Out of Scope
 
@@ -83,7 +91,7 @@ The overlay must appear on top of the currently active application and feel inst
 
 ## Context
 
-Shipped v0.2.7 with session cost estimation across all 5 AI providers.
+Shipped v0.2.7 with session cost estimation across all 5 AI providers. v0.2.8 focuses on fixing Windows terminal detection reliability.
 Tech stack: Tauri v2 (Rust + React + TypeScript), NSPanel for overlay, 5 AI providers (OpenAI/Anthropic/Gemini/xAI/OpenRouter), macOS Accessibility API + raw libproc FFI, Win32 APIs + UIA for Windows, WSL process ancestry + wsl.exe subprocess for Linux context.
 29 phases across 7 milestones (v0.1.0, v0.1.1, v0.2.1, v0.2.4, v0.2.6, v0.2.7), 56 plans executed over 17 days.
 All 86 requirements satisfied across milestones. 7,967 LOC Rust + 3,878 LOC TypeScript.
@@ -139,4 +147,4 @@ Ed25519 update signing configured with GitHub secrets.
 | Div-based sparkline | Angular bars with flex layout, no canvas/SVG | Good -- simple, matches design system |
 
 ---
-*Last updated: 2026-03-10 after v0.2.7 milestone*
+*Last updated: 2026-03-11 after v0.2.8 milestone start*
