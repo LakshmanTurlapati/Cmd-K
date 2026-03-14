@@ -1,11 +1,11 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.1
-milestone_name: milestone
-status: in-progress
-stopped_at: Completed 29-01-PLAN.md
-last_updated: "2026-03-11T22:49:33.852Z"
-last_activity: 2026-03-11 -- Completed 29-01 provider icon branding
+milestone: v0.2.8
+milestone_name: Windows Terminal Detection Fix & Provider Icons
+status: milestone-complete
+stopped_at: Milestone v0.2.8 archived
+last_updated: "2026-03-14"
+last_activity: 2026-03-14 -- Milestone v0.2.8 completed and archived
 progress:
   total_phases: 3
   completed_phases: 3
@@ -18,17 +18,15 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-11)
+See: .planning/PROJECT.md (updated 2026-03-14)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Phase 29 - Provider Icon Branding
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 29 of 30 (Provider Icon Branding)
-Plan: 1 of 1 in current phase (phase complete)
-Status: in-progress
-Last activity: 2026-03-11 -- Completed 29-01 provider icon branding
+Milestone v0.2.8 complete. No active milestone.
+Next action: `/gsd:new-milestone` to start next milestone cycle.
 
 Progress: [██████████] 100%
 
@@ -41,28 +39,14 @@ Progress: [██████████] 100%
 - v0.2.4: 4 phases, 5 plans, 2 days
 - v0.2.6: 5 phases, 10 plans, 1 day
 - v0.2.7: 2 phases, 3 plans, 1 day
-- Cumulative: 29 phases, 56 plans, 17 days
+- v0.2.8: 3 phases, 6 plans, 1 day
+- Cumulative: 32 phases, 62 plans, 18 days
 
 ## Accumulated Context
 
 ### Decisions
 
 All decisions archived in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- [v0.2.8]: ConPTY parentage replaces highest-PID heuristic for shell discovery
-- [v0.2.8]: No new crates -- uses existing windows-sys 0.59 + uiautomation 0.24
-- [v0.2.8]: Never add wsl.exe to KNOWN_SHELL_EXES (caused prior revert)
-- [v0.2.8]: WSL 2 Linux processes invisible to Win32 APIs -- output signals only
-- [Phase 27]: Check both conhost.exe and OpenConsole.exe as ConPTY hosts for Win10/Win11 compatibility
-- [Phase 27]: Conservative fallback: treat cmd.exe as interactive when PEB read fails
-- [Phase 27]: UIA text read before process tree walk to extract shell type hint for multi-tab disambiguation
-- [Phase 28]: Scoring threshold >= 2 for WSL text detection eliminates single-path false positives
-- [Phase 28]: WSL mount paths (/mnt/c/) score 2 (strong signal); Linux paths score 1 (weak signal)
-- [Phase 28]: ControlType::List identifies xterm.js terminal panels in VS Code UIA tree
-- [Phase 28]: IsOffscreen property filters inactive terminal tabs from text capture
-- [Phase 28]: 3-strategy UIA text cascade: TextPattern -> scoped walk -> full tree fallback
-- [Phase 29]: No icon appearance change on selection -- existing row highlight is sufficient
 
 ### Pending Todos
 
@@ -70,12 +54,11 @@ None.
 
 ### Blockers/Concerns
 
-- ~~UIA tree structure for VS Code terminal panel needs empirical verification (Phase 28)~~ -- RESOLVED: ControlType::List confirmed correct
-- Cursor IDE assumed same as VS Code fork -- needs testing (Phase 27)
+- Cursor IDE assumed same as VS Code fork -- needs testing
 - Windows 10 vs 11 ConPTY differences may exist (conhost.exe vs OpenConsole.exe)
 
 ## Session Continuity
 
-Last session: 2026-03-11T22:47:31.718Z
-Stopped at: Completed 29-01-PLAN.md
-Next action: Plan Phase 29 (Active Tab Matching)
+Last session: 2026-03-14
+Stopped at: Milestone v0.2.8 archived
+Next action: /gsd:new-milestone

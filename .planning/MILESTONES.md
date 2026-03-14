@@ -1,5 +1,28 @@
 # Milestones
 
+## v0.2.8 Windows Terminal Detection Fix & Provider Icons (Shipped: 2026-03-14)
+
+**Phases completed:** 3 phases (27-29), 6 plans
+**Timeline:** 2026-03-11 (1 day)
+**Git range:** 51 files changed, 6,345 insertions, 2,561 deletions
+**Codebase:** 185K LOC Rust + 5.6K LOC TypeScript
+
+**Key accomplishments:**
+1. ConPTY-aware shell discovery replacing unreliable highest-PID heuristic — ConPTY-hosted shells prioritized, cmd.exe filtered by PEB command line analysis
+2. Consolidated ProcessSnapshot struct eliminating redundant CreateToolhelp32Snapshot calls across shell discovery, WSL detection, and diagnostics
+3. UIA-guided shell type disambiguation for multi-tab IDE terminals — UIA text read before process tree walk
+4. Multi-signal WSL text detection with scoring threshold (≥2) eliminating single-path false positives from editor content
+5. Scoped UIA tree walk targeting ControlType::List elements (xterm.js accessibility nodes) with 3-strategy cascade
+6. Provider SVG icon branding in onboarding wizard and settings provider selector for all 5 providers
+
+**Delivered:** Reliable Windows terminal detection with ConPTY-first shell discovery, scoped UIA text reading, multi-signal WSL scoring, and branded provider icons.
+
+**Archives:**
+- milestones/v0.2.8-ROADMAP.md
+- milestones/v0.2.8-REQUIREMENTS.md
+
+---
+
 ## v0.2.7 Cost Estimation (Shipped: 2026-03-10)
 
 **Phases completed:** 2 phases (25-26), 3 plans, 6 tasks

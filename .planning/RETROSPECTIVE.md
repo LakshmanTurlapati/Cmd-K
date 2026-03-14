@@ -128,6 +128,48 @@
 
 ---
 
+## Milestone: v0.2.8 -- Windows Terminal Detection Fix & Provider Icons
+
+**Shipped:** 2026-03-14
+**Phases:** 3 | **Plans:** 6
+
+### What Was Built
+- ConPTY-aware shell discovery with ProcessSnapshot struct replacing highest-PID heuristic
+- PEB command line analysis filtering batch cmd.exe from interactive sessions
+- UIA-guided shell type disambiguation for multi-tab IDE terminals
+- Multi-signal WSL text detection with scoring threshold (≥2) eliminating false positives
+- Scoped UIA tree walk targeting ControlType::List terminal panels with 3-strategy cascade
+- Provider SVG icon branding in onboarding and settings for all 5 providers
+
+### What Worked
+- TDD approach in Phase 28 (12 tests written before implementation) caught edge cases early
+- UAT-driven gap closure: Phase 27 UAT identified multi-tab disambiguation gap, spawned Plan 27-03
+- UIA text read before process tree walk was a key architectural insight -- single read serves 3 purposes
+- ProcessSnapshot consolidation eliminated redundant system calls across the detection pipeline
+- Provider icons phase was clean UI-only work -- completed in a single plan
+
+### What Was Inefficient
+- Phase 27 initially planned for 2 plans but needed a 3rd (27-03) after UAT revealed multi-tab disambiguation gap -- better upfront analysis of multi-tab scenarios would have caught this
+- Cross-plan compilation errors in Phase 28 when parallel execution created conflicting function signatures
+
+### Patterns Established
+- ProcessSnapshot as shared context passed through detection pipeline (capture once, query many times)
+- Scoring-based text classification with weighted signals for ambiguous detection scenarios
+- 3-strategy cascade pattern for graceful degradation (preferred → scoped → full fallback)
+- UIA ControlType targeting for precise element selection in complex accessibility trees
+
+### Key Lessons
+1. UAT as a gap-finding mechanism works well -- invest in thorough UAT criteria upfront to catch gaps before verification
+2. PEB command line analysis is a reliable Windows process classification technique -- cheaper than WMI, more informative than just exe name
+3. Scoring thresholds for multi-signal detection should be set conservatively (≥2) to eliminate false positives at the cost of occasional false negatives
+
+### Cost Observations
+- Model mix: opus for execution, sonnet for planning/verification agents
+- 6 plans completed in a single day -- mid-size milestone
+- Notable: UAT-driven gap closure (Plan 27-03) added minimal overhead and significantly improved detection quality
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -140,6 +182,7 @@
 | v0.2.4 | 4 | 5 | UX polish + infra, yolo mode with plan-check |
 | v0.2.6 | 5 | 10 | Multi-provider + WSL + auto-update, single-day milestone |
 | v0.2.7 | 2 | 3 | Cost estimation, smallest milestone, fully cross-platform |
+| v0.2.8 | 3 | 6 | Terminal detection fix + icons, UAT-driven gap closure, TDD |
 
 ### Top Lessons (Verified Across Milestones)
 
@@ -148,3 +191,5 @@
 3. In-memory state with no disk persistence is almost always the right v1 choice for transient preferences
 4. Always commit code changes before tagging -- verified by v0.2.6 tag recreation incident
 5. Multi-signal detection is more robust than single-heuristic approaches for complex environments (IDE terminals, WSL)
+6. UAT-driven gap closure catches real-world issues that unit tests miss -- worth the verification overhead
+7. Scoring-based classification with weighted signals handles ambiguous detection better than binary heuristics

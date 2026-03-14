@@ -63,18 +63,13 @@ The overlay must appear on top of the currently active application and feel inst
 - TRAK-01 through TRAK-04: Token extraction from OpenAI-compat, Anthropic, Gemini streaming adapters with session-scoped accumulation -- v0.2.7
 - PRIC-01 through PRIC-03: Curated pricing for 47 models, OpenRouter dynamic pricing, pricing-unavailable indicator -- v0.2.7
 - DISP-01 through DISP-04: Live cost display in Settings Model tab with token breakdown, sparkline, and reset -- v0.2.7
+- PROC-01 through PROC-03: ConPTY-aware shell discovery, cmd.exe filtering, consolidated ProcessSnapshot -- v0.2.8
+- UIAS-01, UIAS-02: Scoped UIA terminal text reading, multi-signal WSL detection scoring -- v0.2.8
+- ICON-01, ICON-02: Provider SVG icons in onboarding and settings UI -- v0.2.8
 
 ### Active
 
-## Current Milestone: v0.2.8 Windows Terminal Detection Fix
-
-**Goal:** Fix unreliable WSL detection and shell type differentiation (cmd vs PowerShell vs bash) across all Windows terminal hosts — Windows Terminal, VS Code, Cursor, and standalone terminals.
-
-**Target features:**
-- Reliable WSL detection in IDE terminals (not just Remote-WSL mode)
-- Correct cmd.exe vs PowerShell vs bash differentiation in VS Code/Cursor
-- Eliminate false positives from internal IDE processes (cmd.exe, wsl.exe)
-- Verified on real Windows hardware with all terminal hosts
+(No active milestone — run `/gsd:new-milestone` to plan next)
 
 ### Out of Scope
 
@@ -91,10 +86,10 @@ The overlay must appear on top of the currently active application and feel inst
 
 ## Context
 
-Shipped v0.2.7 with session cost estimation across all 5 AI providers. v0.2.8 focuses on fixing Windows terminal detection reliability.
+Shipped v0.2.8 with reliable Windows terminal detection (ConPTY-first shell discovery, scoped UIA text reading, multi-signal WSL scoring) and provider icon branding.
 Tech stack: Tauri v2 (Rust + React + TypeScript), NSPanel for overlay, 5 AI providers (OpenAI/Anthropic/Gemini/xAI/OpenRouter), macOS Accessibility API + raw libproc FFI, Win32 APIs + UIA for Windows, WSL process ancestry + wsl.exe subprocess for Linux context.
-29 phases across 7 milestones (v0.1.0, v0.1.1, v0.2.1, v0.2.4, v0.2.6, v0.2.7), 56 plans executed over 17 days.
-All 86 requirements satisfied across milestones. 7,967 LOC Rust + 3,878 LOC TypeScript.
+32 phases across 8 milestones (v0.1.0 through v0.2.8), 62 plans executed over 18 days.
+All 93 requirements satisfied across milestones. ~185K LOC Rust + 5.6K LOC TypeScript.
 CI/CD pipeline produces signed macOS DMG, Windows installer, and auto-update artifacts (latest.json + .sig files) on every v* tag push.
 Ed25519 update signing configured with GitHub secrets.
 
@@ -145,6 +140,13 @@ Ed25519 update signing configured with GitHub secrets.
 | Two-tier pricing lookup | Curated models first, OpenRouter dynamic as fallback | Good -- fast for known models |
 | Per-query cost at read time | QueryRecord stores raw tokens; cost calculated in get_usage_stats | Good -- pricing changes apply retroactively |
 | Div-based sparkline | Angular bars with flex layout, no canvas/SVG | Good -- simple, matches design system |
+| ConPTY parentage for shell discovery | Replaces highest-PID heuristic with ConPTY-hosted shell prioritization | Good -- reliable multi-tab detection |
+| PEB command line analysis for cmd.exe | Read process command line to filter batch cmd.exe from interactive | Good -- eliminates IDE false positives |
+| UIA text before process tree walk | Single UIA read reused for shell hint + WSL detection + visible output | Good -- fewer UIA calls |
+| Scoring threshold ≥2 for WSL text | Requires multiple corroborating signals, not single Linux path | Good -- no false positives from editor |
+| ControlType::List for terminal panels | xterm.js accessibility nodes are List elements in UIA tree | Good -- precise terminal scoping |
+| 3-strategy UIA text cascade | TextPattern → scoped walk → full tree fallback | Good -- graceful degradation |
+| Inline SVG paths for provider icons | No external assets, same paths as showcase site | Good -- zero network, consistent branding |
 
 ---
-*Last updated: 2026-03-11 after v0.2.8 milestone start*
+*Last updated: 2026-03-14 after v0.2.8 milestone completion*
