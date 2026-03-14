@@ -891,6 +891,62 @@ fn is_sub_shell_of_any(pid: i32, ancestor_pids: &[i32], parent_map: &std::collec
     false
 }
 
+/// Linux: check if `pid` is a descendant of `ancestor_pid` by walking up the parent chain.
+/// Walks at most 15 levels to avoid infinite loops.
+#[cfg(target_os = "linux")]
+fn is_descendant_of(pid: i32, ancestor_pid: i32) -> bool {
+    let mut current = pid;
+    for _ in 0..15 {
+        let parent = get_parent_pid(current);
+        match parent {
+            Some(ppid) if ppid == ancestor_pid => return true,
+            Some(ppid) if ppid <= 1 => return false,
+            Some(ppid) => current = ppid,
+            None => return false,
+        }
+    }
+    false
+}
+
+/// Linux: build a PID -> parent PID map from a single /proc scan.
+/// Replaces macOS `ps -eo pid=,ppid=` approach with direct /proc reads.
+#[cfg(target_os = "linux")]
+fn build_parent_map() -> std::collections::HashMap<i32, i32> {
+    let mut map = std::collections::HashMap::new();
+    if let Ok(entries) = std::fs::read_dir("/proc") {
+        for entry in entries.flatten() {
+            if let Some(name) = entry.file_name().to_str() {
+                if let Ok(pid) = name.parse::<i32>() {
+                    if let Some(ppid) = get_parent_pid(pid) {
+                        map.insert(pid, ppid);
+                    }
+                }
+            }
+        }
+    }
+    map
+}
+
+/// Linux: check if `pid` is a descendant of any PID in `ancestor_pids` using the pre-built parent map.
+/// Identifies sub-shells (e.g., Claude Code's bash spawned from a user's zsh).
+#[cfg(target_os = "linux")]
+fn is_sub_shell_of_any(pid: i32, ancestor_pids: &[i32], parent_map: &std::collections::HashMap<i32, i32>) -> bool {
+    let mut current = pid;
+    for _ in 0..20 {
+        match parent_map.get(&current) {
+            Some(&ppid) if ppid <= 1 => return false,
+            Some(&ppid) => {
+                if ancestor_pids.contains(&ppid) {
+                    return true;
+                }
+                current = ppid;
+            }
+            None => return false,
+        }
+    }
+    false
+}
+
 /// Linux: get parent PID by parsing /proc/PID/stat.
 /// Handles comm fields containing spaces and parentheses by finding the last ')'.
 #[cfg(target_os = "linux")]
@@ -1075,10 +1131,137 @@ fn find_shell_by_ancestry(app_pid: i32, _focused_cwd: Option<&str>, snapshot: &P
     None
 }
 
-/// Non-macOS, non-Windows stub.
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
-fn find_shell_by_ancestry(_app_pid: i32, _focused_cwd: Option<&str>) -> Option<i32> {
-    None
+/// Linux: find shell processes descended from app_pid via /proc scan.
+/// Replaces macOS pgrep-based approach with direct /proc/*/exe reads.
+/// Uses same filtering logic: sub-shell filter, $SHELL preference, CWD match, highest PID.
+#[cfg(target_os = "linux")]
+fn find_shell_by_ancestry(app_pid: i32, focused_cwd: Option<&str>) -> Option<i32> {
+    // Build parent map from single /proc scan
+    let parent_map = build_parent_map();
+
+    // Find all shell processes by scanning /proc/*/exe
+    let mut shell_pids: Vec<i32> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir("/proc") {
+        for entry in entries.flatten() {
+            if let Some(name) = entry.file_name().to_str() {
+                if let Ok(pid) = name.parse::<i32>() {
+                    if let Some(proc_name) = get_process_name(pid) {
+                        if KNOWN_SHELLS.contains(&proc_name.as_str()) {
+                            shell_pids.push(pid);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    eprintln!("[process] found {} shell processes system-wide, checking ancestry to {}", shell_pids.len(), app_pid);
+
+    // Filter to shells that are descendants of the app using parent_map
+    let mut descendant_shells: Vec<(i32, Option<String>)> = Vec::new();
+    for &shell_pid in &shell_pids {
+        // Walk parent_map to check ancestry (avoids re-reading /proc)
+        let mut current = shell_pid;
+        let mut is_desc = false;
+        for _ in 0..15 {
+            match parent_map.get(&current) {
+                Some(&ppid) if ppid == app_pid => { is_desc = true; break; }
+                Some(&ppid) if ppid <= 1 => break,
+                Some(&ppid) => current = ppid,
+                None => break,
+            }
+        }
+        if is_desc {
+            let name = get_process_name(shell_pid);
+            eprintln!("[process] shell pid {} ({:?}) is a descendant of app {}", shell_pid, name, app_pid);
+            descendant_shells.push((shell_pid, name));
+        }
+    }
+
+    if descendant_shells.is_empty() {
+        eprintln!("[process] no shell found as descendant of {}", app_pid);
+        return None;
+    }
+
+    eprintln!("[process] found {} descendant shells: {:?}", descendant_shells.len(),
+        descendant_shells.iter().map(|(pid, n)| (*pid, n.clone())).collect::<Vec<_>>());
+
+    // Step 1: Filter out sub-shells (shells spawned from within another shell)
+    let shell_pid_set: Vec<i32> = descendant_shells.iter().map(|(pid, _)| *pid).collect();
+
+    let top_level: Vec<&(i32, Option<String>)> = descendant_shells.iter()
+        .filter(|(pid, name)| {
+            let is_sub = is_sub_shell_of_any(*pid, &shell_pid_set, &parent_map);
+            if is_sub {
+                eprintln!("[process] filtering out sub-shell pid {} ({:?}) -- descendant of another shell", pid, name);
+            }
+            !is_sub
+        })
+        .collect();
+
+    let remaining = if top_level.is_empty() {
+        descendant_shells.iter().collect::<Vec<_>>()
+    } else {
+        top_level
+    };
+
+    // Step 2: If mixed shell types, prefer $SHELL
+    let has_mixed_types = {
+        let first = remaining.first().and_then(|(_, n)| n.as_deref());
+        remaining.iter().any(|(_, n)| n.as_deref() != first)
+    };
+
+    let candidates = if has_mixed_types {
+        let preferred = std::env::var("SHELL").ok()
+            .and_then(|s| std::path::Path::new(&s).file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n.to_string()));
+
+        if let Some(ref pref) = preferred {
+            let matching: Vec<_> = remaining.iter()
+                .filter(|(_, name)| name.as_deref() == Some(pref.as_str()))
+                .cloned()
+                .collect();
+            if !matching.is_empty() {
+                eprintln!("[process] mixed shell types, preferring {} matching $SHELL ({} found)", pref, matching.len());
+                matching
+            } else {
+                remaining
+            }
+        } else {
+            remaining
+        }
+    } else {
+        remaining
+    };
+
+    // Step 2.5: CWD-based focused tab matching
+    if let Some(target_cwd) = focused_cwd {
+        if candidates.len() > 1 {
+            let mut cwd_matches: Vec<&(i32, Option<String>)> = Vec::new();
+            for candidate in &candidates {
+                if let Some(shell_cwd) = get_process_cwd(candidate.0) {
+                    eprintln!("[process] shell pid {} CWD: {}", candidate.0, &shell_cwd);
+                    if shell_cwd == target_cwd {
+                        cwd_matches.push(candidate);
+                    }
+                }
+            }
+            if cwd_matches.len() == 1 {
+                let matched = cwd_matches[0];
+                eprintln!("[process] CWD match: shell pid {} matches focused tab CWD {}", matched.0, target_cwd);
+                return Some(matched.0);
+            } else if cwd_matches.len() > 1 {
+                eprintln!("[process] {} shells match focused CWD {} -- falling through to highest PID among matches", cwd_matches.len(), target_cwd);
+                return cwd_matches.iter().max_by_key(|(pid, _)| *pid).map(|(pid, _)| *pid);
+            }
+            eprintln!("[process] no CWD match for focused tab CWD {} among {} candidates", target_cwd, candidates.len());
+        }
+    }
+
+    // Step 3: Pick highest PID (most recently spawned)
+    let best = candidates.iter().max_by_key(|(pid, _)| *pid);
+    best.map(|(pid, _)| *pid)
 }
 
 /// Windows stub that accepts snapshot (used by find_shell_pid when snapshot is available).
