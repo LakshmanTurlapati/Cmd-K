@@ -1,607 +1,656 @@
 # Architecture Patterns
 
-**Domain:** Windows terminal detection fixes -- WSL, shell differentiation, IDE process filtering
-**Researched:** 2026-03-11
-**Confidence:** HIGH (process tree architecture, ConPTY model), MEDIUM (VS Code pty-host internals, UIA text filtering)
+**Domain:** Linux platform support + smart terminal context for existing cross-platform Tauri v2 app
+**Researched:** 2026-03-13
 
----
+## Recommended Architecture
 
-## Current Architecture Snapshot (Detection Path)
+The existing codebase already has a clean `#[cfg(target_os = "...")]` gating pattern across all platform-specific modules. Linux support fits into this pattern with **no architectural changes** to the existing structure. Every platform-specific function already has a `#[cfg(not(any(target_os = "macos", target_os = "windows")))]` stub that returns `None` or an empty value. Linux work replaces these stubs with real implementations.
+
+Smart terminal context (scrollback + truncation) is a **new cross-platform module** that sits between context gathering and AI prompt building. It processes the output of the existing detection pipeline before it reaches the AI command in `commands/ai.rs`.
+
+### High-Level Component Map
 
 ```
-Hotkey fires (hotkey.rs)
-  |-- Captures HWND + PID of foreground window BEFORE overlay steals focus
-  |
-  v
-detect_full_with_hwnd(pid, pre_captured_text, hwnd)  [mod.rs:108]
-  |-- Spawns background thread with 750ms timeout
-  |
-  v
-detect_app_context_windows(pid, pre_captured_text)  [mod.rs:453]
-  |-- get_exe_name_for_pid(pid) -> e.g. "Code.exe"
-  |-- is_known_terminal_exe() / is_ide_with_terminal_exe()
-  |-- process::get_foreground_info(pid)
-  |     |-- find_shell_pid(pid, None)
-  |     |     |-- find_shell_recursive(pid, 3)  -- fast path, depth-3 child walk
-  |     |     |-- find_shell_by_ancestry(pid, None)  -- broad path
-  |     |           |-- CreateToolhelp32Snapshot -> build parent_map + shell_candidates
-  |     |           |-- Walk ancestry of each shell candidate to app_pid
-  |     |           |-- IDE mode: filter out cmd.exe, prefer non-cmd shells
-  |     |           |-- ConPTY fallback: find shells parented by OpenConsole.exe
-  |     |           |-- Pick highest PID among candidates  <-- PROBLEM
-  |     |-- get_process_cwd(shell_pid) via PEB ReadProcessMemory
-  |     |-- detect_wsl_in_ancestry(shell_pid)
-  |
-  v  (back in detect_full_with_hwnd)
-Window title WSL detection: "[WSL: Ubuntu]"  [mod.rs:126]
-UIA text reading: read_terminal_text_windows(hwnd)  [mod.rs:143]
-UIA-based WSL detection: detect_wsl_from_text()  [mod.rs:152]
-UIA-based shell inference: infer_shell_from_text()  [mod.rs:165]
-CWD-based WSL detection: detect_wsl_from_cwd()  [mod.rs:181]
+                    +------------------+
+                    |   Frontend (React)|
+                    |   Zustand Store   |
+                    +--------+---------+
+                             |  IPC (invoke)
+                    +--------+---------+
+                    |   Tauri Commands  |
+                    |  commands/*.rs    |
+                    +--------+---------+
+                             |
+          +------------------+------------------+
+          |                  |                  |
+   +------+------+   +------+------+   +------+------+
+   |  macOS Path  |   | Windows Path|   | Linux Path  |  <-- NEW
+   | NSPanel      |   | HWND/Win32  |   | X11/Wayland |
+   | AX API       |   | UIA         |   | /proc fs    |
+   | libproc FFI  |   | Toolhelp32  |   | xdotool/    |
+   | AppleScript  |   | SendInput   |   | wl-clipboard|
+   | CGEventPost  |   | arboard     |   | arboard     |
+   +--------------+   +-------------+   +-------------+
+                             |
+                    +--------+---------+
+                    | Smart Context     |  <-- NEW (cross-platform)
+                    | terminal/context.rs|
+                    | Truncation logic  |
+                    +-------------------+
 ```
 
----
+### Component Boundaries
 
-## Problem Analysis: Three Distinct Failure Modes
+| Component | Responsibility | Communicates With | Status |
+|-----------|---------------|-------------------|--------|
+| `terminal/detect_linux.rs` | App identification via `/proc`, `xdotool`, `xprop` | `terminal/mod.rs` | **NEW** |
+| `terminal/process.rs` (Linux cfg) | `/proc` filesystem: CWD, process name, child PIDs, process tree | `terminal/mod.rs` | **MODIFY** (replace stubs) |
+| `terminal/linux_reader.rs` | Terminal text reading via AT-SPI2/DBus | `terminal/mod.rs` | **NEW** |
+| `commands/paste.rs` (Linux cfg) | Clipboard write via arboard + synthetic paste via xdotool/wtype | `commands/paste.rs` | **MODIFY** (replace stubs) |
+| `commands/hotkey.rs` (Linux cfg) | Frontmost PID capture via xdotool/xprop | `commands/hotkey.rs` | **MODIFY** (replace stubs) |
+| `commands/window.rs` (Linux cfg) | Overlay show/hide, always-on-top, focus management | `commands/window.rs` | **MODIFY** (minor -- already uses generic Tauri path) |
+| `commands/ai.rs` (Linux cfg) | Linux-specific system prompt template | `commands/ai.rs` | **MODIFY** (replace generic stub) |
+| `terminal/context.rs` | Smart truncation: scrollback capture, token-aware trimming | `commands/ai.rs`, `terminal/mod.rs` | **NEW** (cross-platform) |
+| `lib.rs` | Linux-specific setup (always-on-top, skip-taskbar, no vibrancy) | All | **MODIFY** (add Linux setup block) |
+| `Cargo.toml` | Linux dependencies (arboard with wayland-data-control) | Build | **MODIFY** |
+| `.github/workflows/release.yml` | AppImage build job | CI/CD | **MODIFY** |
+| `tauri.conf.json` | AppImage bundle config, updater linux platform entries | Build | **MODIFY** |
 
-### Problem 1: "Highest PID = Active" Heuristic Fails
+### Data Flow
 
-**Current code (process.rs:886):**
-```rust
-// Pick the most recently spawned (highest PID) shell
-descendant_shells.iter()
-    .max_by_key(|(pid, _)| *pid)
-    .map(|(pid, _)| *pid as i32)
+**Existing flow (unchanged):**
+```
+Hotkey pressed
+  -> capture frontmost PID (platform-specific)
+  -> store in AppState.previous_app_pid
+  -> toggle_overlay()
+  -> frontend receives "overlay-shown" event
+  -> frontend calls get_app_context()
+  -> Rust: detect_app_context() runs platform-specific detection
+  -> returns AppContext { app_name, terminal: TerminalContext { shell, cwd, visible_output, ... } }
+  -> frontend sends to stream_ai_response with context JSON
+  -> ai.rs builds system prompt + user message from context
+  -> streams response back
 ```
 
-**Why it breaks:** VS Code spawns shells for each terminal tab. User opens Tab A (powershell, PID 5000), then Tab B (powershell, PID 5500), then switches BACK to Tab A. Highest PID picks Tab B (PID 5500), but Tab A (PID 5000) is focused. On macOS, this is solved by AX-based focused CWD matching (process.rs:656-678). On Windows, `_focused_cwd` is always `None` -- the CWD matching path is never taken.
+**New Linux additions in this flow:**
 
-**Impact:** Wrong terminal context in multi-tab VS Code/Cursor. Wrong CWD, wrong history, wrong command suggestions.
+1. **PID capture** (hotkey.rs): `get_frontmost_pid()` Linux impl uses `xdotool getactivewindow getwindowpid` (X11) or compositor-specific DBus query (Wayland)
+2. **Detection** (terminal/mod.rs): `detect_app_context()` calls new Linux-specific functions via `#[cfg(target_os = "linux")]`
+3. **Process info** (process.rs): reads `/proc/PID/cwd` symlink, `/proc/PID/exe` for process name, `/proc/PID/task/*/children` or `/proc/*/stat` for child PIDs
+4. **Terminal text** (linux_reader.rs): AT-SPI2/DBus for accessible terminals (gnome-terminal, xfce4-terminal), returns None for GPU terminals
+5. **Paste** (paste.rs): arboard for clipboard + xdotool (X11) or wtype (Wayland) for synthetic Ctrl+Shift+V
+6. **Focus restore** (hotkey.rs): `xdotool windowactivate` (X11) to return focus to terminal after paste
 
-### Problem 2: Internal IDE Processes Pollute Shell Candidates
-
-**VS Code process tree on Windows (observed):**
+**New smart context flow (cross-platform):**
 ```
-Code.exe (main)
-  +-- Code.exe (GPU process)
-  +-- Code.exe (extension host)
-  |     +-- cmd.exe (git operations)        <-- INTERNAL, not user shell
-  |     +-- cmd.exe (task runner)            <-- INTERNAL, not user shell
-  |     +-- wsl.exe (remote extension)      <-- INTERNAL, not user shell
-  |     +-- node.exe (language server)
-  +-- Code.exe (pty-host)
-  |     +-- conhost.exe
-  |     |     +-- powershell.exe (Tab 1)    <-- USER SHELL
-  |     +-- conhost.exe
-  |     |     +-- bash.exe (Tab 2, WSL)     <-- USER SHELL
-  |     +-- conhost.exe
-  |           +-- cmd.exe (Tab 3)           <-- USER SHELL
-  +-- cmd.exe (file watcher)                <-- INTERNAL
-  +-- wsl.exe (remote server bootstrap)     <-- INTERNAL
+detect_app_context() returns TerminalContext.visible_output (raw text)
+  -> terminal/context.rs: truncate_for_ai(visible_output, max_chars)
+  -> Strips ANSI escapes, collapses blanks, deduplicates repeated lines
+  -> Keeps last N lines fitting within token budget
+  -> ai.rs uses truncated output in user message (replaces current .lines().rev().take(25))
 ```
 
-**Current mitigation (process.rs:871-889):** Only filters `cmd.exe` when other non-cmd shells exist. This is insufficient:
-- If the user's only terminal tab IS cmd.exe, filtering removes the correct result
-- Internal `wsl.exe` processes are not filtered at all (5-16+ of them)
-- No distinction between `cmd.exe` spawned by pty-host vs extension host
+## New Components (Detailed)
 
-### Problem 3: WSL Detection Unreliable in IDE Terminals
+### 1. `terminal/detect_linux.rs` -- Linux App Identification
 
-**Failure chain:**
-1. `detect_wsl_in_ancestry()` walks the parent chain of the detected shell PID. But if the wrong shell is selected (Problem 1), ancestry check runs on wrong process.
-2. WSL 2 shells run in Hyper-V VM -- `bash.exe` inside WSL is invisible to Win32 process tree. Only `wsl.exe` launcher is visible.
-3. UIA text for VS Code captures entire window content (sidebar, editor, terminal panel) via `try_walk_children()`. Linux paths like `/home/` in editor text trigger false WSL positives.
-4. `get_wsl_cwd()` spawns `wsl.exe -e sh -c "pwd"` -- returns the HOME directory of the default distro, not the CWD of the active terminal session.
+**Purpose:** Equivalent of `detect.rs` (macOS bundle IDs) and `detect_windows.rs` (exe names) for Linux.
 
----
-
-## Recommended Architecture: Three-Layer Fix
-
-### Layer 1: ConPTY-Aware Shell Discovery (New: `process_windows.rs`)
-
-**Principle:** On Windows, user-interactive terminal shells are ALWAYS spawned through ConPTY. The ConPTY host process (conhost.exe or OpenConsole.exe) is the reliable marker. Shells spawned by IDE extensions, git operations, and task runners do NOT go through ConPTY -- they use direct `CreateProcess`.
-
-**ConPTY process model (verified):**
-```
-Hosting App (WindowsTerminal.exe / Code.exe pty-host)
-  calls CreatePseudoConsole() -> spawns conhost.exe
-    conhost.exe manages the pseudoconsole session
-      shell process (powershell.exe, bash.exe, etc.) is child of conhost.exe
-```
-
-**Key insight:** In VS Code, the `pty-host` helper process (a Code.exe child) is the one that creates ConPTY sessions. Its children are conhost.exe instances, each hosting one terminal tab's shell. Extension-spawned cmd.exe/wsl.exe are children of the extension host process, NOT children of pty-host.
-
-**New detection strategy:**
+**Approach:** Use `/proc/PID/exe` symlink to identify the running application binary. This is the Linux analog of macOS bundle IDs and Windows exe names.
 
 ```rust
-// terminal/process_windows.rs (NEW FILE)
+// Key functions needed:
+pub fn get_app_identifier(pid: i32) -> Option<String>     // reads /proc/PID/exe -> basename
+pub fn get_app_display_name(pid: i32) -> Option<String>   // reads /proc/PID/comm or /proc/PID/cmdline
+pub fn is_known_terminal(app_id: &str) -> bool            // matches against known terminal exe names
+pub fn is_ide_with_terminal(app_id: &str) -> bool         // code, cursor, etc.
+pub fn is_known_browser(app_id: &str) -> bool             // chrome, firefox, etc.
+pub fn clean_app_name(raw: &str) -> String                // strip paths, suffixes
+```
 
-/// Identify user-interactive shells by finding those hosted by ConPTY.
-///
-/// Strategy:
-/// 1. Take process snapshot
-/// 2. Find all conhost.exe instances that are descendants of app_pid
-/// 3. For each conhost.exe, find its shell child
-/// 4. These are the user's terminal tab shells
-/// 5. Non-conhost-parented shells are internal IDE processes
-///
-/// This replaces the "all descendant shells, pick highest PID" approach.
-pub fn find_conpty_shells(app_pid: u32) -> Vec<ConPtyShell> {
-    // Single CreateToolhelp32Snapshot call
-    // Build: parent_map, exe_map
-    // Find conhost.exe/OpenConsole.exe PIDs that are descendants of app_pid
-    // For each conhost/openconsole:
-    //   Find shell child (direct child matching KNOWN_SHELL_EXES or wsl.exe)
-    //   Record: shell_pid, shell_exe, conhost_pid
-    // Return list of ConPtyShell structs
+**Known terminal identifiers (exe basenames):**
+- `gnome-terminal-server`, `konsole`, `xfce4-terminal`, `mate-terminal` (GTK/Qt native)
+- `alacritty`, `kitty`, `wezterm-gui`, `foot` (GPU-rendered)
+- `xterm`, `rxvt-unicode`, `urxvt` (legacy X11)
+- `tilix`, `terminator`, `guake`, `yakuake` (tiling/dropdown)
+
+**Known IDE identifiers:**
+- `code`, `code-insiders` (VS Code)
+- `cursor` (Cursor)
+
+**GPU terminal identifiers (returns None for visible_output):**
+- `alacritty`, `kitty`, `wezterm-gui`, `foot`
+
+### 2. `terminal/process.rs` -- Linux `/proc` Implementations
+
+**Purpose:** Replace the `None`-returning stubs with real `/proc` filesystem reads.
+
+**Functions to implement:**
+
+```rust
+#[cfg(target_os = "linux")]
+fn get_process_cwd(pid: i32) -> Option<String> {
+    std::fs::read_link(format!("/proc/{}/cwd", pid))
+        .ok()
+        .map(|p| p.to_string_lossy().into_owned())
+    // Permission: works for same-user processes, fails for root-owned (returns None)
 }
 
-pub struct ConPtyShell {
-    pub shell_pid: u32,
-    pub shell_exe: String,
-    pub conhost_pid: u32,
-    /// True if shell_exe is "wsl.exe" (WSL session)
-    pub is_wsl: bool,
+#[cfg(target_os = "linux")]
+fn get_process_name(pid: i32) -> Option<String> {
+    // Primary: /proc/PID/exe symlink -> extract basename
+    std::fs::read_link(format!("/proc/{}/exe", pid))
+        .ok()
+        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+    // Fallback: /proc/PID/comm (first 15 chars of process name)
+}
+
+#[cfg(target_os = "linux")]
+fn get_child_pids(pid: i32) -> Vec<i32> {
+    // Primary: /proc/PID/task/PID/children (Linux 3.5+, fast, space-separated PIDs)
+    // Fallback: scan /proc/*/stat, parse ppid (4th field) to find children
 }
 ```
 
-**Why this works:**
-- IDE-internal cmd.exe (git, tasks): spawned by extension host, NOT through ConPTY, NOT under a conhost.exe child of pty-host. Automatically excluded.
-- IDE-internal wsl.exe (remote server): spawned by extension host, NOT through ConPTY. Automatically excluded.
-- User terminal tabs: ALL go through ConPTY -> conhost.exe -> shell. Correctly included.
-- Windows Terminal: Same ConPTY architecture. Each tab has its own conhost.exe -> shell chain.
+**Key difference from macOS/Windows:** Linux `/proc` is a filesystem, not an API. It is synchronous, fast (<1ms per read), and does not require FFI or special permissions for same-user processes. Pure Rust `std::fs` operations -- no new crate dependencies.
 
-**Integration point -- `find_shell_by_ancestry()` refactor (process.rs:767):**
+**Process tree walking** reuses the existing `find_shell_recursive()` function which is already cross-platform (not cfg-gated). Only the leaf functions (`get_process_cwd`, `get_process_name`, `get_child_pids`) need Linux implementations.
+
+**`find_shell_pid` and `find_shell_by_ancestry` signature:**
+
+The existing function signatures differ between macOS (3 args) and Windows (4 args with ProcessSnapshot). Linux should follow the macOS signature pattern (no snapshot needed since `/proc` reads are stateless).
 
 ```rust
-#[cfg(target_os = "windows")]
-fn find_shell_by_ancestry(app_pid: i32, _focused_cwd: Option<&str>) -> Option<i32> {
-    let conpty_shells = process_windows::find_conpty_shells(app_pid as u32);
+#[cfg(target_os = "linux")]
+pub fn find_shell_pid(app_pid: i32, focused_cwd: Option<&str>, _unused: Option<()>) -> Option<i32> {
+    // Same logic as macOS: find_shell_recursive then find_shell_by_ancestry
+}
 
-    if conpty_shells.is_empty() {
-        // Fallback: legacy approach for non-ConPTY terminals (mintty, etc.)
-        return find_shell_by_ancestry_legacy(app_pid);
+#[cfg(target_os = "linux")]
+fn find_shell_by_ancestry(app_pid: i32, focused_cwd: Option<&str>) -> Option<i32> {
+    // Scan /proc for shell processes, walk parent chain to app_pid
+    // Can reuse existing macOS pattern since both use pgrep-style scanning
+}
+```
+
+### 3. `commands/hotkey.rs` -- Linux Frontmost PID
+
+**Purpose:** Implement `get_frontmost_pid()` for Linux.
+
+**X11 approach (primary, covers ~95% of Linux desktop users including XWayland):**
+```rust
+#[cfg(target_os = "linux")]
+fn get_frontmost_pid() -> Option<i32> {
+    let output = std::process::Command::new("xdotool")
+        .args(["getactivewindow", "getwindowpid"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
     }
-
-    eprintln!("[process] found {} ConPTY shells", conpty_shells.len());
-    for s in &conpty_shells {
-        eprintln!("[process]   pid={} exe={} conhost={} is_wsl={}",
-            s.shell_pid, s.shell_exe, s.conhost_pid, s.is_wsl);
-    }
-
-    // If only one ConPTY shell, return it (common case: single tab)
-    if conpty_shells.len() == 1 {
-        return Some(conpty_shells[0].shell_pid as i32);
-    }
-
-    // Multiple ConPTY shells: use Layer 2 (active tab identification)
-    // For now, fall through to CWD matching or highest-PID
-    // Layer 2 integration point goes here
-
-    conpty_shells.iter()
-        .max_by_key(|s| s.shell_pid)
-        .map(|s| s.shell_pid as i32)
+    String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .parse::<i32>()
+        .ok()
 }
 ```
 
-### Layer 2: Active Tab Identification via Window Title (New: `detect_windows.rs` extension)
+**Wayland fallback:** Most Wayland compositors run XWayland, so xdotool works in practice. For pure Wayland without XWayland:
+- GNOME: `gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --method org.gnome.Shell.Eval "global.display.focus_window.get_pid()"`
+- KDE: DBus call to `org.kde.KWin`
+- wlroots: `wlr-foreign-toplevel-management` protocol
 
-**Principle:** VS Code/Cursor and Windows Terminal both encode the active terminal tab's information in the window title. This is the cheapest and most reliable signal for which tab is focused.
+**Recommendation:** Start with xdotool. If it fails, try GNOME DBus. Other compositors return None (graceful degradation). This matches the app's philosophy of returning `Option<i32>` for all detection steps.
 
-**Window title patterns:**
-
-| Host | Window Title Format | Active Terminal Info |
-|------|---------------------|---------------------|
-| Windows Terminal | `PowerShell` or `Ubuntu` (tab name) | Profile name of active tab |
-| VS Code | `file.rs - project - Visual Studio Code` | No terminal info by default |
-| VS Code (terminal focused) | Changes to show terminal name when panel focused | Shell name visible |
-| VS Code Remote-WSL | `file.rs - project [WSL: Ubuntu] - Visual Studio Code` | `[WSL: distro]` |
-
-**Window title + UIA focused element approach:**
-
+**Focus restoration:**
 ```rust
-// In detect_windows.rs, add:
-
-/// Extract active terminal profile name from Windows Terminal title.
-/// Windows Terminal sets the window title to the active tab's profile name.
-pub fn extract_wt_active_profile(title: &str) -> Option<String> {
-    // Windows Terminal title format varies but often is just the profile name
-    // e.g., "PowerShell", "Ubuntu", "Command Prompt"
-    // When running a command: "command - ProfileName"
-    Some(title.trim().to_string())
-}
-
-/// Match a ConPTY shell to the active tab using CWD comparison.
-/// Reads CWD of each candidate shell via PEB and compares to
-/// any CWD signal we can extract.
-pub fn match_shell_to_active_tab(
-    shells: &[ConPtyShell],
-    window_title: &str,
-    host_exe: &str,
-) -> Option<u32> {
-    // Strategy depends on host:
-    // 1. Windows Terminal: title contains profile name -> match shell exe
-    // 2. VS Code/Cursor: use CWD comparison (read each shell's CWD via PEB)
-    // 3. Fallback: use UIA to find focused terminal element's text
-    None // Placeholder for implementation
+#[cfg(target_os = "linux")]
+pub fn restore_focus(window_id: isize) -> bool {
+    // X11: xdotool windowactivate <window_id>
+    std::process::Command::new("xdotool")
+        .args(["windowactivate", &window_id.to_string()])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
 }
 ```
 
-**CWD-based disambiguation for VS Code (enabling the unused macOS path):**
+**Note:** Linux needs a `previous_window_id` field in AppState (equivalent to `previous_hwnd` on Windows). This is the X11 window ID, captured via `xdotool getactivewindow` before showing the overlay.
 
-The macOS codebase has CWD-based disambiguation (process.rs:656-678) that is already proven to work. The Windows path never supplies `focused_cwd`. The fix:
+### 4. `commands/paste.rs` -- Linux Paste Mechanism
 
+**Clipboard write:**
 ```rust
-// In detect_app_context_windows, BEFORE calling get_foreground_info:
-// Read the window title to get CWD context
+#[cfg(target_os = "linux")]
+fn write_to_clipboard(command: &str) {
+    // Use arboard crate (same as Windows, with wayland-data-control feature)
+    match arboard::Clipboard::new() {
+        Ok(mut clipboard) => {
+            match clipboard.set_text(command) {
+                Ok(()) => eprintln!("[paste] clipboard written via arboard"),
+                Err(e) => eprintln!("[paste] arboard set_text failed: {}", e),
+            }
+        }
+        Err(e) => eprintln!("[paste] arboard Clipboard::new failed: {}", e),
+    }
+}
+```
 
-let focused_cwd = if is_ide {
-    // For IDE terminals, try to extract focused tab CWD from UIA
-    // The terminal panel's focused tab may expose CWD in its title/text
-    previous_hwnd.and_then(|hwnd| {
-        extract_focused_terminal_cwd_via_uia(hwnd)
-    })
-} else {
+**Paste to terminal:**
+```rust
+#[cfg(target_os = "linux")]
+fn paste_to_terminal_linux(app: &AppHandle, command: &str) -> Result<(), String> {
+    let state = app.try_state::<AppState>()
+        .ok_or("AppState not found")?;
+
+    // 1. Get captured window ID
+    let prev_wid = state.previous_window_id.lock()
+        .map_err(|_| "mutex poisoned")?
+        .ok_or("no previous window ID")?;
+
+    // 2. Write to clipboard
+    write_to_clipboard(command);
+
+    // 3. Restore focus to terminal
+    let _ = std::process::Command::new("xdotool")
+        .args(["windowactivate", "--sync", &prev_wid.to_string()])
+        .status();
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    // 4. Send Ctrl+Shift+V (Linux terminal paste shortcut)
+    // CRITICAL: Linux terminals use Ctrl+SHIFT+V, not Ctrl+V
+    // Ctrl+V sends a literal control character in terminals
+    std::process::Command::new("xdotool")
+        .args(["key", "--clearmodifiers", "ctrl+shift+v"])
+        .status()
+        .map_err(|e| format!("xdotool key failed: {}", e))?;
+
+    Ok(())
+}
+```
+
+**Wayland paste:** Use `wtype` instead of `xdotool`:
+```rust
+// Wayland fallback
+std::process::Command::new("wtype")
+    .args(["-M", "ctrl", "-M", "shift", "-P", "v", "-p", "v", "-m", "shift", "-m", "ctrl"])
+    .status()
+```
+
+**Confirm (send Enter):**
+```rust
+#[cfg(target_os = "linux")]
+fn confirm_command_linux(app: &AppHandle) -> Result<(), String> {
+    // Restore focus + xdotool key Return
+    // Same pattern as paste but with "Return" instead of "ctrl+shift+v"
+}
+```
+
+### 5. `terminal/linux_reader.rs` -- Terminal Text Reading
+
+**Purpose:** Read visible terminal output on Linux. Equivalent of AX reader (macOS) and UIA reader (Windows).
+
+**Approach:** AT-SPI2 (Assistive Technology Service Provider Interface) is the Linux accessibility framework, equivalent to macOS AX API. GTK-based terminals expose text through it.
+
+**Terminals that support AT-SPI2 text reading:**
+- gnome-terminal (GTK, VTE-based)
+- xfce4-terminal (GTK, VTE-based)
+- mate-terminal (GTK, VTE-based)
+- tilix (GTK, VTE-based)
+- terminator (GTK, VTE-based)
+
+**Terminals that return None (GPU-rendered, no accessibility text):**
+- Alacritty, kitty, WezTerm, foot
+
+**Implementation approach:** Use `atspi` DBus interface via subprocess:
+```rust
+#[cfg(target_os = "linux")]
+pub fn read_terminal_text_linux(pid: i32) -> Option<String> {
+    // AT-SPI2 via gdbus or atspi python bindings is complex.
+    // Simpler approach for V1: use `xdotool getactivewindow` to get window ID,
+    // then `xdg-terminal-exec` or direct AT-SPI2 DBus calls.
+    //
+    // For MVP, return None (same as GPU terminals on macOS/Windows).
+    // Add AT-SPI2 reading in a follow-up phase.
     None
-};
-
-let proc_info = process::get_foreground_info_with_cwd(previous_app_pid, focused_cwd.as_deref());
+}
 ```
 
-### Layer 3: UIA Text Scoping (Modified: `uia_reader.rs`)
+**Recommendation for initial release:** Return None for all Linux terminals. This matches the behavior of GPU terminals on macOS/Windows -- the app works without visible_output (CWD and shell type are the critical context). AT-SPI2 reading can be added later as an enhancement.
 
-**Principle:** Instead of walking ALL descendants of the VS Code window (which captures sidebar, editor, status bar, etc.), scope the UIA walk to the terminal panel element only.
+### 6. `terminal/context.rs` -- Smart Terminal Context (Cross-Platform)
 
-**Current problem with `try_walk_children()`:**
+**Purpose:** Intelligent truncation of terminal output to fit AI context windows.
+
+**Current behavior:** `build_user_message()` in `ai.rs` takes the last 25 lines of visible_output. This is naive.
+
+**New module design:**
+
 ```rust
-// uia_reader.rs:132 -- walks ALL descendants
-if let Ok(children) = element.find_all(TreeScope::Descendants, &true_condition) {
-    for child in children {
-        // Captures EVERYTHING: editor text, sidebar items, terminal text
-        if let Ok(name) = child.get_name() {
-            text_parts.push(name);
+/// Configuration for smart truncation.
+pub struct ContextConfig {
+    /// Maximum characters to include (rough token estimate: chars/4)
+    pub max_chars: usize,
+}
+
+impl Default for ContextConfig {
+    fn default() -> Self {
+        Self {
+            max_chars: 8000,  // ~2000 tokens, leaving room for prompt + response
         }
     }
 }
+
+/// Strip ANSI escape sequences from terminal output.
+fn strip_ansi(text: &str) -> String {
+    // Regex: \x1b\[[0-9;]*[a-zA-Z] and \x1b\].*?\x07
+    // Use once_cell::Lazy<Regex> for compiled pattern (existing project pattern)
+}
+
+/// Collapse runs of 3+ blank lines to a single blank line.
+fn collapse_blanks(text: &str) -> String { ... }
+
+/// Deduplicate consecutive identical lines (e.g., progress bars, spinner frames).
+fn dedup_lines(text: &str) -> String { ... }
+
+/// Truncate terminal output intelligently for AI context.
+///
+/// Processing pipeline:
+/// 1. Strip ANSI escape sequences
+/// 2. Collapse blank line runs
+/// 3. Deduplicate consecutive identical lines
+/// 4. Take from bottom up until max_chars
+/// 5. Prepend "[... earlier output truncated ...]" if truncated
+pub fn truncate_for_ai(raw_output: &str, config: &ContextConfig) -> String { ... }
 ```
 
-This causes:
-- Linux paths in editor files trigger false WSL detection
-- Shell prompts in editor text trigger wrong shell inference
-- Huge text buffers (64KB of mixed UI chrome + terminal content)
+**Integration point:** Called in `ai.rs` `build_user_message()` before including `visible_output` in the prompt. Replaces the current hardcoded `.lines().rev().take(25)` logic.
 
-**Fix -- scoped UIA terminal element search:**
+### 7. `lib.rs` -- Linux Setup Block
+
+**Current state:** macOS creates NSPanel with vibrancy. Windows applies Acrylic + WS_EX_TOOLWINDOW. No Linux block exists.
 
 ```rust
-// uia_reader.rs -- new function
+#[cfg(target_os = "linux")]
+{
+    // 1. Always-on-top (works on X11, best-effort on Wayland)
+    window.set_always_on_top(true)
+        .unwrap_or_else(|e| eprintln!("[setup] always_on_top failed: {}", e));
 
-/// For IDE windows (VS Code, Cursor), find and read only the terminal panel's text.
-/// Uses UIA control type and automation ID to scope the search.
-///
-/// VS Code terminal panel UIA structure:
-///   Window "VS Code"
-///     +-- ... (many UI elements)
-///     +-- Group "Terminal" or TabItem with terminal content
-///           +-- Document or Text elements with actual terminal output
-#[cfg(target_os = "windows")]
-pub fn read_ide_terminal_text(hwnd: isize) -> Option<String> {
-    let automation = UIAutomation::new().ok()?;
-    let element = automation.element_from_handle(Handle::from(hwnd)).ok()?;
+    // 2. Skip taskbar (Tauri supports via GTK)
+    window.set_skip_taskbar(true)
+        .unwrap_or_else(|e| eprintln!("[setup] skip_taskbar failed: {}", e));
 
-    // Strategy 1: Find element with ClassName containing "terminal"
-    // Strategy 2: Find element with AutomationId containing "terminal"
-    // Strategy 3: Find the focused element and walk up to find terminal container
+    // 3. No vibrancy -- window-vibrancy crate does NOT support Linux
+    //    CSS handles dark semi-transparent look via rgba() background
+    //    transparent: true in tauri.conf.json is already set
+}
+```
 
-    // Try finding the focused element first -- if user just pressed hotkey
-    // from terminal panel, the focused element IS in the terminal
-    if let Ok(focused) = automation.get_focused_element() {
-        // Walk up from focused element to find terminal container
-        // Then read text only from that subtree
-        if let Some(terminal_text) = extract_terminal_subtree_text(&automation, &focused) {
-            return Some(terminal_text);
-        }
+**Vibrancy limitation:** The `window-vibrancy` crate explicitly does not support Linux. Behind-window blur depends on the compositor (KDE supports it via KWin rules, GNOME does not). The CSS-only approach (dark semi-transparent background) is the correct solution. Accept the visual difference from macOS/Windows.
+
+### 8. `Cargo.toml` -- Linux Dependencies
+
+```toml
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", features = ["linux-native"] }          # Already present
+arboard = { version = "3", features = ["wayland-data-control"] }  # Clipboard (X11 + Wayland)
+```
+
+**Why arboard with wayland-data-control:** arboard's default Linux backend is X11 only. The `wayland-data-control` feature adds Wayland support via `wl-clipboard-rs`. When enabled, Wayland is prioritized but falls back to X11 automatically if Wayland init fails. This covers both display server protocols.
+
+No other new crate dependencies needed. `/proc` access uses `std::fs`. External tools (`xdotool`, `xprop`, `wtype`) use `std::process::Command` -- same pattern as macOS's `osascript`.
+
+### 9. `tauri.conf.json` -- Linux Bundle Configuration
+
+The existing config has `"targets": "all"` which includes AppImage on Linux. Specific Linux configuration needed:
+
+```json
+{
+  "bundle": {
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": true
+      }
     }
-
-    // Fallback: full tree walk (existing behavior)
-    None
+  }
 }
 ```
 
-**Why focused element scoping works:** When the user presses the CMD+K hotkey, their cursor/focus is in the terminal panel. The UIA focused element will be within the terminal's element subtree. Walking up from there to find the terminal container, then reading only that subtree's text, eliminates editor/sidebar noise.
+### 10. CI/CD -- AppImage Build Job
 
----
+Add a `build-linux` job to `release.yml` parallel to existing `build-macos` and `build-windows`:
 
-## Integration Map: New vs Modified Components
-
-### New Files
-
-| File | Purpose | LOC Estimate | Dependencies |
-|------|---------|-------------|--------------|
-| `terminal/process_windows.rs` | ConPTY-aware shell discovery | ~150 | windows-sys (existing) |
-
-### Modified Files
-
-| File | Change | Risk |
-|------|--------|------|
-| `terminal/mod.rs` | Wire ConPTY discovery into `detect_app_context_windows()`, pass focused_cwd | LOW -- additive, existing paths still work as fallback |
-| `terminal/process.rs` | Refactor `find_shell_by_ancestry()` Windows impl to use ConPTY discovery first | MEDIUM -- core detection logic change, needs thorough testing |
-| `terminal/detect_windows.rs` | Add window title parsing helpers, add `wsl.exe` handling | LOW -- additive functions |
-| `terminal/uia_reader.rs` | Add `read_ide_terminal_text()` scoped reading, keep `read_terminal_text_windows()` as fallback | LOW -- new function, doesn't change existing |
-
-### Unchanged Files
-
-| File | Why No Change |
-|------|---------------|
-| `terminal/detect.rs` | macOS-only bundle ID logic |
-| `terminal/ax_reader.rs` | macOS-only AX text reading |
-| `terminal/filter.rs` | Filtering logic applies equally to scoped/unscoped text |
-| `terminal/browser.rs` | Browser detection unrelated |
-| `commands/ai.rs` | System prompt WSL handling already exists |
-| `commands/paste.rs` | Paste logic unaffected by detection fixes |
-
----
-
-## Data Flow: Fixed Detection Pipeline
-
+```yaml
+build-linux:
+  runs-on: ubuntu-22.04
+  steps:
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libwebkit2gtk-4.1-dev \
+          libgtk-3-dev \
+          libappindicator3-dev \
+          librsvg2-dev \
+          patchelf
+    # Standard Rust + pnpm + Node setup (same as other jobs)
+    - name: Build Tauri app
+      env:
+        TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      run: pnpm tauri build
+    # Artifacts: src-tauri/target/release/bundle/appimage/*.AppImage
 ```
-Hotkey fires -> capture HWND + PID
-  |
-  v
-detect_full_with_hwnd(pid, text, hwnd)
-  |
-  v
-detect_app_context_windows(pid, text)
-  |
-  +-- get_exe_name_for_pid(pid) -> "Code.exe"
-  |
-  +-- is_ide_with_terminal_exe("Code.exe") -> true
-  |
-  +-- [NEW] find_conpty_shells(pid)
-  |     Returns: [{pid:5000, exe:"powershell.exe", conhost:4998},
-  |               {pid:5500, exe:"powershell.exe", conhost:5498},
-  |               {pid:6000, exe:"wsl.exe",        conhost:5998}]
-  |     NOTE: Internal cmd.exe/wsl.exe NOT in list (not ConPTY-hosted)
-  |
-  +-- [NEW] If multiple ConPTY shells:
-  |     Try CWD-based matching (read each shell's PEB CWD)
-  |     OR window title matching
-  |     Fallback: highest PID among ConPTY shells only
-  |
-  +-- get_process_cwd(matched_shell_pid) -> "C:\Users\laksh\project"
-  |
-  +-- detect_wsl_in_ancestry(matched_shell_pid)
-  |     OR: ConPtyShell.is_wsl flag already set
-  |
-  v
-detect_full_with_hwnd continues:
-  |
-  +-- Window title: get_window_title(hwnd)
-  |     "[WSL: Ubuntu]" -> terminal.is_wsl = true
-  |
-  +-- [MODIFIED] UIA text reading:
-  |     if is_ide -> read_ide_terminal_text(hwnd)  [scoped to terminal panel]
-  |     else -> read_terminal_text_windows(hwnd)   [existing full-window read]
-  |
-  +-- detect_wsl_from_text() -- now on scoped text, fewer false positives
-  |
-  +-- infer_shell_from_text() -- now on scoped text, more accurate
-  |
-  v
-Return TerminalContext {
-    shell_type: "powershell" (from ConPTY shell exe name)
-    cwd: "C:\Users\laksh\project" (from PEB of correct shell)
-    visible_output: "PS C:\Users\laksh\project> ..." (scoped terminal text)
-    is_wsl: false
+
+Update `latest.json` assembly to include `linux-x86_64` platform entry for auto-updater.
+
+Update release `needs:` to include `build-linux` alongside `build-macos` and `build-windows`.
+
+### 11. `commands/ai.rs` -- Linux System Prompt
+
+Replace the current generic fallback with a Linux-specific template:
+
+```rust
+#[cfg(target_os = "linux")]
+const TERMINAL_SYSTEM_PROMPT_TEMPLATE: &str =
+    "You are a terminal command generator for Linux. Given the user's task description and terminal \
+     context, output ONLY the exact command(s) to run. No explanations, no markdown, no code fences. \
+     Just the raw command(s). If multiple commands are needed, separate them with && or use pipes. \
+     Prefer common POSIX tools (grep, find, sed, awk) over modern alternatives (rg, fd, jq). \
+     The user is on Linux with {shell_type} shell.";
+
+#[cfg(target_os = "linux")]
+const ASSISTANT_SYSTEM_PROMPT: &str =
+    "You are a concise assistant accessed via a Linux overlay. Answer in 2-3 sentences maximum. \
+     Be direct and helpful. No markdown formatting, no code fences unless the user explicitly asks for code.";
+```
+
+### 12. `commands/permissions.rs` -- Linux Accessibility
+
+Linux does not require macOS-style Accessibility permissions. No dialog needed. The stub should indicate permissions are granted:
+
+```rust
+#[cfg(target_os = "linux")]
+pub fn check_accessibility_permission() -> bool {
+    true  // Linux doesn't require accessibility permission for xdotool/AT-SPI2
 }
 ```
 
----
+### 13. `state.rs` -- Linux Window ID Field
+
+Add a field for the X11 window ID (equivalent to `previous_hwnd` on Windows):
+
+```rust
+/// X11 Window ID of the foreground window captured BEFORE showing overlay (Linux only).
+/// Used by focus restoration and paste. u64 on X11 (Window type is unsigned long).
+pub previous_xid: Mutex<Option<u64>>,
+```
+
+Alternatively, reuse `previous_hwnd` (both are integer window identifiers). The `isize` type works for X11 window IDs which are typically u32.
 
 ## Patterns to Follow
 
-### Pattern 1: ConPTY Parentage as Shell Classification
+### Pattern 1: Platform cfg-gating (Existing)
+**What:** Every platform-specific function has exactly one impl per platform, gated by `#[cfg(target_os = "...")]`.
+**When:** Any new platform-specific code.
+**Rule:** The `#[cfg(not(any(target_os = "macos", target_os = "windows")))]` stubs become `#[cfg(target_os = "linux")]` implementations.
 
-**What:** Use process parentage through conhost.exe/OpenConsole.exe to distinguish user terminal shells from internal IDE processes.
+### Pattern 2: Subprocess Command Invocation (Existing)
+**What:** Use `std::process::Command` for external tool calls.
+**When:** xdotool, xprop, wtype calls on Linux.
+**Example:** macOS uses `osascript` this way in paste.rs. Linux uses `xdotool` the same way.
 
-**When:** Always on Windows when detecting shells in IDEs (VS Code, Cursor) or Windows Terminal.
+### Pattern 3: Timeout-wrapped Detection (Existing)
+**What:** All detection runs in a background thread with `mpsc::channel` + `recv_timeout`.
+**When:** Linux detection pipeline.
+**Key:** The outer `detect()` and `detect_full()` wrappers already apply timeouts. Linux detection code just needs to implement `detect_inner()` and `detect_app_context()` -- the timeout wrapper is unchanged.
 
-**Example:**
-```rust
-fn is_conpty_hosted_shell(shell_pid: u32, parent_map: &HashMap<u32, u32>, exe_map: &HashMap<u32, String>) -> bool {
-    if let Some(&parent_pid) = parent_map.get(&shell_pid) {
-        if let Some(parent_exe) = exe_map.get(&parent_pid) {
-            let lower = parent_exe.to_lowercase();
-            return lower == "conhost.exe" || lower == "openconsole.exe";
-        }
-    }
-    false
-}
-```
-
-### Pattern 2: Signal Hierarchy with Fallback Chain
-
-**What:** Order detection signals from most reliable to least reliable. Each signal validates or overrides the previous. Never rely on a single signal.
-
-**When:** All detection decisions (shell type, WSL status, CWD).
-
-**Signal hierarchy for shell type:**
-1. ConPTY shell exe name (most reliable -- directly identifies the process)
-2. Window title patterns (fast, < 1ms, good for Windows Terminal profile names)
-3. Scoped UIA terminal text prompt patterns (good when ConPTY ambiguous)
-4. Unscoped UIA text prompt patterns (least reliable -- noise from editor/sidebar)
-
-**Signal hierarchy for WSL detection:**
-1. Window title `[WSL: distro]` (definitive for Remote-WSL mode)
-2. ConPTY shell exe is `wsl.exe` (definitive for WSL terminal tabs)
-3. `detect_wsl_in_ancestry()` (reliable for WSL 1, fails for WSL 2 Hyper-V)
-4. Scoped UIA text Linux path patterns (good but fragile)
-5. CWD path style `\\wsl$\...` or starts with `/` (fallback)
-
-### Pattern 3: Single Snapshot, Multiple Queries
-
-**What:** Take one `CreateToolhelp32Snapshot` and build maps (parent_map, exe_map) that serve all queries: ConPTY shell finding, WSL ancestry detection, sub-shell filtering.
-
-**When:** Any function that needs multiple process tree queries.
-
-**Why:** Each snapshot is ~1ms. The old code takes 3+ snapshots per detection cycle (one in `find_shell_by_ancestry`, one in `detect_wsl_in_ancestry`, one in `scan_wsl_processes_diagnostic`). Sharing a single snapshot struct eliminates redundant work.
-
-```rust
-/// Shared process snapshot. Built once, queried many times.
-pub struct ProcessSnapshot {
-    parent_map: HashMap<u32, u32>,
-    exe_map: HashMap<u32, String>,
-    conhost_pids: Vec<u32>,
-    shell_pids: Vec<(u32, String)>,  // (pid, exe_name)
-    wsl_pids: Vec<u32>,
-}
-
-impl ProcessSnapshot {
-    pub fn capture() -> Option<Self> { /* single CreateToolhelp32Snapshot call */ }
-    pub fn find_conpty_shells(&self, app_pid: u32) -> Vec<ConPtyShell> { /* ... */ }
-    pub fn is_descendant_of(&self, pid: u32, ancestor: u32) -> bool { /* ... */ }
-    pub fn has_wsl_in_ancestry(&self, pid: u32) -> bool { /* ... */ }
-}
-```
-
----
+### Pattern 4: Graceful Degradation (Existing)
+**What:** Every detection step returns `Option`. Missing data produces `None`, not errors.
+**When:** Linux tools may not be installed (xdotool absent on pure Wayland, AT-SPI2 not running).
+**Example:** GPU terminals already return `None` for visible_output. Linux text reading follows the same pattern.
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Filtering by Shell Exe Name
+### Anti-Pattern 1: Adding a heavyweight `/proc` crate
+**What:** Using `procfs` or `sysinfo` crate for simple `/proc` reads.
+**Why bad:** Adds a dependency for what is 5-10 lines of `std::fs::read_link` and `std::fs::read_to_string`. The macOS path uses raw FFI for the same reason (avoiding dependency conflicts).
+**Instead:** Use `std::fs` directly. `/proc` is a stable Linux ABI.
 
-**What:** Hardcoding "exclude cmd.exe in IDEs" as the primary IDE process filter.
-**Why bad:** Users legitimately run cmd.exe terminal tabs. The filter removes correct results. Also doesn't handle internal wsl.exe processes.
-**Instead:** Filter by process parentage (ConPTY-hosted vs extension-hosted).
+### Anti-Pattern 2: Fighting Wayland always-on-top limitations
+**What:** Extensive compositor-specific hacks to force always-on-top on every Wayland compositor.
+**Why bad:** Wayland's security model explicitly prevents clients from controlling their own stacking order. Fighting this is fragile and compositor-dependent.
+**Instead:** Set `always_on_top: true` via Tauri API (works on X11, best-effort on Wayland via GTK hints). Accept that some Wayland compositors may not honor it -- the overlay still functions, it just might not float above other windows.
 
-### Anti-Pattern 2: Unscoped UIA Tree Walk for IDEs
+### Anti-Pattern 3: Duplicating detection orchestration
+**What:** Writing a completely separate `detect_app_context_linux()` orchestrator that duplicates the macOS pattern.
+**Why bad:** Creates maintenance burden. The macOS and Linux patterns are structurally identical (get app identifier, check if terminal, walk process tree, read text).
+**Instead:** Use a shared detection path where possible. The `#[cfg(target_os = "linux")]` blocks should be minimal -- just the leaf functions that differ.
 
-**What:** Using `find_all(TreeScope::Descendants, &true_condition)` on the entire VS Code window.
-**Why bad:** Captures 50+ UI elements including editor text, sidebar labels, status bar. Creates false positives for WSL detection and shell inference. Produces huge text buffers.
-**Instead:** Scope UIA to the terminal panel element via focused element ancestry or control type filtering.
+### Anti-Pattern 4: Blocking on external tools without timeout
+**What:** Calling `xdotool` or `xprop` without timeout protection.
+**Why bad:** If X11 is unresponsive, the hotkey handler blocks indefinitely.
+**Instead:** The existing `mpsc` timeout wrapper handles this. Additionally, xdotool calls are in `get_frontmost_pid()` which is called within the timeout-protected detection pipeline.
 
-### Anti-Pattern 3: Multiple Process Snapshots
+### Anti-Pattern 5: Attempting AT-SPI2 terminal text reading in initial release
+**What:** Building complex DBus/AT-SPI2 integration for terminal text reading before the core Linux features work.
+**Why bad:** AT-SPI2 is complex, compositor-dependent, and not universally available. It blocks the entire Linux release for a feature that is optional (CWD + shell type are the critical context).
+**Instead:** Return None for visible_output in the initial release. Add AT-SPI2 reading as a follow-up enhancement.
 
-**What:** Calling `CreateToolhelp32Snapshot` separately in `find_shell_by_ancestry()`, `detect_wsl_in_ancestry()`, and `scan_wsl_processes_diagnostic()`.
-**Why bad:** Each snapshot is a full system process enumeration. Three snapshots = 3x the work. Process state can change between snapshots leading to inconsistencies.
-**Instead:** Single `ProcessSnapshot::capture()` shared across all queries.
+## Integration Points Summary
 
-### Anti-Pattern 4: `wsl.exe -e pwd` for Active Session CWD
+### Already Works on Linux (No Changes Needed)
+- Frontend React/TypeScript -- fully cross-platform
+- AI provider abstraction (3 streaming adapters) -- no platform code
+- Settings/store persistence (tauri-plugin-store) -- cross-platform
+- Hotkey registration (tauri-plugin-global-shortcut) -- cross-platform
+- Destructive command detection (safety.rs) -- already has Linux patterns (SAFE-02)
+- Auto-updater (tauri-plugin-updater) -- cross-platform (needs AppImage artifacts)
+- Tray icon -- cross-platform via Tauri tray API
+- History/state management -- pure Rust HashMap, no platform code
+- Token tracking and usage stats -- no platform code
 
-**What:** Spawning `wsl.exe -e sh -c "pwd"` to get the terminal's CWD.
-**Why bad:** This spawns a NEW WSL session. It returns the HOME directory of the default user, not the CWD of the active terminal session. If user has multiple WSL distros, it queries the default one which may not be the one in the active tab.
-**Instead:** Infer CWD from scoped UIA terminal text (prompt patterns like `user@host:/path$`). Fall back to `wsl.exe` subprocess only when UIA text has no CWD signal.
+### Needs Linux Implementations (Replace Stubs)
 
----
+| Stub Location | Current Return | Linux Implementation | Complexity |
+|---------------|---------------|---------------------|-----------|
+| `hotkey.rs:get_frontmost_pid()` | `None` | xdotool getactivewindow getwindowpid | Low |
+| `process.rs:get_process_cwd()` | `None` | `/proc/PID/cwd` symlink | Low |
+| `process.rs:get_process_name()` | `None` | `/proc/PID/exe` symlink basename | Low |
+| `process.rs:get_child_pids()` | `Vec::new()` | `/proc/PID/task/PID/children` | Low |
+| `process.rs:find_shell_by_ancestry()` | `None` | `/proc` scan + parent chain walk | Medium |
+| `detect.rs:get_bundle_id()` | `None` | `/proc/PID/exe` basename | Low |
+| `detect.rs:get_app_display_name()` | `None` | `/proc/PID/comm` | Low |
+| `paste.rs:write_to_clipboard()` | no-op | arboard with wayland-data-control | Low |
+| `paste.rs:paste_to_terminal()` | `Err(not implemented)` | xdotool key ctrl+shift+v | Medium |
+| `paste.rs:confirm_terminal_command()` | `Err(not implemented)` | xdotool key Return | Low |
+| `mod.rs:detect_app_context()` | `None` | Linux orchestrator using above | Medium |
 
-## Build Order (Dependency-Driven)
+### New Modules Needed
 
-### Phase 1: Process Snapshot Consolidation
+| Module | Purpose | Complexity | Priority |
+|--------|---------|-----------|----------|
+| `terminal/detect_linux.rs` | App identification, terminal lists, GPU check | Low | P0 (blocks detection) |
+| `terminal/context.rs` | Smart truncation (cross-platform) | Medium | P1 (enhances all platforms) |
+| `terminal/linux_reader.rs` | AT-SPI2 terminal text | High | P2 (defer to post-release) |
 
-**Goal:** Single snapshot infrastructure, ConPTY shell discovery.
+## Build Order (Dependency-Aware)
 
-1. Create `terminal/process_windows.rs` with `ProcessSnapshot` struct
-2. Implement `ProcessSnapshot::capture()` -- single `CreateToolhelp32Snapshot`
-3. Implement `ProcessSnapshot::find_conpty_shells(app_pid)` -- conhost-parented shell discovery
-4. Implement `ProcessSnapshot::is_descendant_of()` and `has_wsl_in_ancestry()`
-5. Refactor `find_shell_by_ancestry()` in process.rs to use `ProcessSnapshot`
-6. Remove redundant snapshots in `detect_wsl_in_ancestry()` and `scan_wsl_processes_diagnostic()`
+**Phase 1: Foundation** (no dependencies on other new code)
+1. Linux `/proc` process functions in process.rs -- get_process_cwd, get_process_name, get_child_pids
+2. Linux app identification in detect_linux.rs -- is_known_terminal, clean_app_name
+3. Linux system prompt + assistant prompt in ai.rs
 
-**Validation:** Log output showing ConPTY shells found, internal processes excluded. Test with VS Code having 3+ terminal tabs and active extensions.
+**Phase 2: Detection Pipeline** (depends on Phase 1)
+4. Linux frontmost PID capture in hotkey.rs -- xdotool getactivewindow getwindowpid
+5. Linux window ID capture + focus restore -- xdotool windowactivate
+6. Linux detect_app_context in mod.rs -- wire Phase 1 components into detection pipeline
+7. Linux window key computation in hotkey.rs -- needs detect_linux + process
 
-**Risk:** MEDIUM -- changes core detection logic. Mitigate by keeping legacy `find_shell_by_ancestry` as fallback when ConPTY discovery returns empty (handles mintty and other non-ConPTY terminals).
+**Phase 3: Overlay + Actions** (depends on Phase 2)
+8. Linux overlay setup in lib.rs -- always-on-top, skip-taskbar
+9. Linux clipboard + paste in paste.rs -- arboard + xdotool key ctrl+shift+v
+10. Linux confirm (Enter) in paste.rs -- xdotool key Return
 
-### Phase 2: UIA Terminal Scoping
+**Phase 4: Smart Context** (independent, cross-platform)
+11. Smart context truncation module context.rs -- ANSI stripping, dedup, char-budget truncation
+12. Integration with ai.rs build_user_message -- replace hardcoded 25-line limit
 
-**Goal:** Eliminate false positives from IDE chrome in UIA text.
+**Phase 5: Distribution**
+13. AppImage CI/CD job in release.yml -- parallel to macOS/Windows builds
+14. Updater config -- linux-x86_64 platform entry in latest.json assembly
+15. Linux permissions stub in permissions.rs -- always returns true
 
-1. Add `read_ide_terminal_text(hwnd)` to `uia_reader.rs` -- focused element scoping
-2. Modify `detect_full_with_hwnd()` in mod.rs to use scoped reader for IDEs
-3. Keep `read_terminal_text_windows()` as fallback for non-IDE terminals
-
-**Validation:** UIA text from VS Code contains only terminal panel content, not editor/sidebar text. WSL detection false positives eliminated.
-
-**Risk:** LOW -- additive function, existing path unchanged for non-IDE windows.
-
-**Dependency:** Independent of Phase 1. Can be developed in parallel.
-
-### Phase 3: Active Tab Matching
-
-**Goal:** Correctly identify the focused terminal tab's shell PID.
-
-1. Add window title parsing helpers to `detect_windows.rs`
-2. Enable CWD-based disambiguation in `find_shell_by_ancestry()` -- wire up `focused_cwd` parameter that currently goes unused on Windows
-3. Implement CWD extraction from scoped UIA terminal text (for IDE focused tab CWD)
-4. Integrate with Phase 1's ConPTY shell list: match CWD or title against candidates
-
-**Validation:** With 3 terminal tabs in VS Code, switching between tabs and pressing hotkey returns correct shell PID and CWD each time.
-
-**Risk:** MEDIUM -- CWD-via-UIA may not always work (terminals with non-standard prompts). Fallback to highest PID among ConPTY shells is still better than current behavior.
-
-**Dependency:** Depends on Phase 1 (ConPTY shell list to match against). Benefits from Phase 2 (scoped UIA for CWD extraction).
-
-### Phase 4: WSL Detection Hardening
-
-**Goal:** Reliable WSL detection without false positives.
-
-1. Use ConPTY shell's exe name (`wsl.exe`) as primary WSL signal
-2. Window title `[WSL: distro]` as secondary signal
-3. Scoped UIA text as tertiary signal (with fewer false positives from Phase 2)
-4. Fix `get_wsl_cwd()` to use UIA-inferred CWD when available, subprocess as last resort
-5. Extract WSL distro name from window title for multi-distro environments
-
-**Validation:** WSL correctly detected in: Windows Terminal WSL tab, VS Code WSL terminal tab, VS Code Remote-WSL mode, standalone wsl.exe. NOT falsely detected when editor has Linux paths.
-
-**Risk:** LOW -- mostly benefits from Phases 1-3 improvements.
-
-**Dependency:** Depends on Phase 1 (ConPTY shell list). Benefits from Phase 2 (scoped UIA).
-
-### Dependency Graph
-
+**Dependency graph:**
 ```
-Phase 1 (ConPTY Discovery)
+Phase 1 (proc + detect_linux + ai prompts)
     |
-    +---> Phase 3 (Active Tab Matching -- needs ConPTY shell list)
-    |         |
-    |         +---> Phase 4 (WSL Hardening -- benefits from both)
+    v
+Phase 2 (PID capture + detect pipeline + window key)
     |
-Phase 2 (UIA Scoping -- independent)
+    v
+Phase 3 (overlay setup + paste + confirm)
+
+Phase 4 (smart context) -- independent, can start any time
     |
-    +---> Phase 3 (benefits from scoped UIA for CWD)
-    +---> Phase 4 (benefits from scoped text for WSL detection)
+    v
+Phase 5 (CI/CD + updater) -- needs working Linux build from Phases 1-3
 ```
-
-**Recommended sequence:** Phase 1 -> Phase 2 (parallel if possible) -> Phase 3 -> Phase 4.
-
-Each phase delivers standalone value:
-- After Phase 1: Internal IDE processes no longer pollute results
-- After Phase 2: UIA text is clean terminal content, no IDE chrome noise
-- After Phase 3: Multi-tab scenarios return correct tab's context
-- After Phase 4: WSL detection is reliable without false positives
-
----
 
 ## Scalability Considerations
 
-| Concern | Current State | After Fix |
-|---------|--------------|-----------|
-| Process snapshot cost | 3+ snapshots per detection (~3ms) | 1 snapshot (~1ms) |
-| UIA tree walk for VS Code | Full window walk (~50-200ms, 50+ elements) | Scoped terminal walk (~20-50ms, 5-10 elements) |
-| Detection budget (750ms timeout) | Tight with 3 snapshots + full UIA walk | Comfortable with consolidated approach |
-| Multi-tab accuracy | Wrong for 2+ tabs (highest PID guess) | Correct via CWD matching |
-| False positive rate (WSL) | High in IDEs (editor text triggers) | Low with scoped UIA + ConPTY signal |
+| Concern | macOS | Windows | Linux |
+|---------|-------|---------|-------|
+| Process info read | libproc FFI ~1ms | PEB ReadProcessMemory ~2ms | `/proc` fs read <1ms |
+| Process tree scan | sysctl fallback ~5ms | Toolhelp32Snapshot ~1ms | `/proc/*/stat` scan ~3ms |
+| PID capture | NSWorkspace ObjC ~1ms | GetForegroundWindow ~0.1ms | xdotool subprocess ~10ms |
+| Clipboard write | pbcopy subprocess ~5ms | arboard ~1ms | arboard ~1ms |
+| Paste simulation | CGEventPost ~1ms | SendInput ~1ms | xdotool subprocess ~10ms |
+| Text reading | AX API ~50-200ms | UIA ~20-200ms | None (V1), AT-SPI2 ~50ms (V2) |
+| CI build time | ~8min (signed+notarized) | ~6min (NSIS) | ~6min (AppImage, no signing) |
+| Detection budget | 500/750ms timeout | 750ms timeout | 500/750ms timeout (same) |
 
----
+**Key insight:** Linux detection is faster than macOS/Windows for process info (direct filesystem reads vs API calls) but slightly slower for PID capture and paste (subprocess invocation vs in-process API). All operations comfortably fit within the existing 500/750ms timeout budget.
 
 ## Sources
 
-- Codebase: `terminal/process.rs:767-896` -- current Windows `find_shell_by_ancestry()` with ConPTY fallback and IDE cmd.exe filter
-- Codebase: `terminal/process.rs:964-1017` -- `scan_wsl_processes_diagnostic()` showing 10-16+ wsl.exe processes in VS Code
-- Codebase: `terminal/mod.rs:108-200` -- `detect_full_with_hwnd()` detection pipeline with UIA + WSL signals
-- Codebase: `terminal/uia_reader.rs:120-153` -- `try_walk_children()` full descendant walk
-- Codebase: `terminal/detect_windows.rs:187-204` -- window title WSL detection
-- [ConPTY architecture blog post](https://devblogs.microsoft.com/commandline/windows-command-line-introducing-the-windows-pseudo-console-conpty/) -- ConPTY process model (HIGH confidence)
-- [OpenConsole.exe vs conhost.exe discussion](https://github.com/microsoft/terminal/discussions/12115) -- process tree structure (HIGH confidence)
-- [Windows Console Ecosystem Roadmap](https://learn.microsoft.com/en-us/windows/console/ecosystem-roadmap) -- ConPTY as standard pty mechanism (HIGH confidence)
-- [VS Code Terminal Advanced docs](https://code.visualstudio.com/docs/terminal/advanced) -- ConPTY integration, node-pty (MEDIUM confidence)
-- [microsoft/node-pty](https://github.com/microsoft/node-pty) -- VS Code pty backend, ConPTY-only since 2026 (MEDIUM confidence)
-- [VS Code Terminal Shell Integration](https://code.visualstudio.com/docs/terminal/shell-integration) -- terminal tab process identification (MEDIUM confidence)
+- [Tauri v2 Window API](https://docs.rs/tauri/latest/tauri/window/struct.Window.html) -- Window management, always_on_top, skip_taskbar
+- [Tauri always-on-top Wayland issue #3117](https://github.com/tauri-apps/tauri/issues/3117) -- Wayland limitation confirmed
+- [tao always-on-top Wayland issue #1134](https://github.com/tauri-apps/tao/issues/1134) -- Upstream windowing limitation
+- [window-vibrancy crate](https://github.com/tauri-apps/window-vibrancy) -- No Linux support confirmed
+- [arboard crate](https://github.com/1Password/arboard) -- Linux X11 + Wayland clipboard via wayland-data-control feature
+- [Linux /proc filesystem documentation](https://www.kernel.org/doc/html/latest/filesystems/proc.html) -- proc_pid_cwd, cmdline, stat, children
+- [proc_pid_cwd(5)](https://man7.org/linux/man-pages/man5/proc_pid_cwd.5.html) -- CWD symlink specification
+- [xdotool man page](https://manpages.ubuntu.com/manpages/trusty/man1/xdotool.1.html) -- getactivewindow, getwindowpid, key, windowactivate
+- [xdotool getwindowpid issue #428](https://github.com/jordansissel/xdotool/issues/428) -- Known PID accuracy limitations
+- [Tauri AppImage distribution](https://v2.tauri.app/distribute/appimage/) -- AppImage bundling guide
+- [Tauri GitHub Actions pipeline](https://v2.tauri.app/distribute/pipelines/github/) -- CI/CD reference
+- [wl-clipboard](https://github.com/bugaevc/wl-clipboard) -- Wayland clipboard reference
+- [GNOME DBus window management](https://gist.github.com/rbreaves/257c3edfa301786e66e964d7ac036269) -- Wayland focused window via DBus
+- [KDE KWin window metadata](https://community.kde.org/KWin/Window_Metadata) -- KDE Wayland window PID via DBus
+- [Arch Wiki Clipboard](https://wiki.archlinux.org/title/Clipboard) -- X11 vs Wayland clipboard ecosystem
+- [sick.codes xdotool paste](https://sick.codes/paste-clipboard-linux-xdotool-ctrl-v-terminal-type/) -- xdotool paste patterns
+- [Tauri AppImage CI issue #14796](https://github.com/tauri-apps/tauri/issues/14796) -- Known AppImage CI issues

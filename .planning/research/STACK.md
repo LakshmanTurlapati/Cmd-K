@@ -1,235 +1,313 @@
-# Technology Stack: Windows Terminal Detection Fix (v0.2.8)
+# Technology Stack: Linux Support & Smart Terminal Context
 
-**Project:** CMD+K -- Windows IDE Terminal Detection Fix
-**Researched:** 2026-03-11
-**Overall confidence:** HIGH
+**Project:** CMD+K v0.3.9
+**Researched:** 2026-03-13
+**Overall confidence:** HIGH (X11), MEDIUM (Wayland -- known protocol gaps)
 
-> This document supersedes the v0.2.6 STACK.md for the v0.2.8 milestone. The validated stack (Tauri v2, windows-sys 0.59, uiautomation 0.24, CreateToolhelp32Snapshot, NtQueryInformationProcess, UIA for text reading) is not re-researched. Focus is strictly on what API additions, crate changes, and new techniques are needed to fix IDE terminal detection on Windows.
+> This document supersedes the v0.2.8 STACK.md. The validated stack (Tauri v2, React, TypeScript, macOS NSPanel + Accessibility API, Windows Win32 + UIA, 5 AI providers, Ed25519 updater) is not re-researched. Focus is strictly on NEW libraries and changes needed for Linux platform support and smart terminal context truncation.
 
 ---
 
-## Problem Analysis
+## Executive Summary
 
-Three problems exist in the current Windows terminal detection code:
+Linux support requires solving five problems that macOS and Windows handle via platform-specific APIs (NSPanel, Accessibility API, UIA, AppleScript, CGEvent, SendInput). Linux splits across X11 and Wayland with compositor-specific behaviors. The core strategy is: **ship X11-first with graceful Wayland degradation**.
 
-### Problem 1: Cannot identify active terminal tab in VS Code/Cursor
-The current `find_shell_by_ancestry()` finds ALL shell processes descending from Code.exe, then picks the highest PID. This is wrong when multiple terminal tabs exist -- the user may have the first tab focused while the code picks the newest-spawned shell.
-
-### Problem 2: UIA tree walk for Electron apps is noisy
-`try_walk_children()` in `uia_reader.rs` walks ALL descendants with `TreeScope::Descendants` and concatenates every element's Name property. For VS Code, this captures the entire UI -- sidebar, editor, menus -- not just terminal content. The `is_window_chrome()` filter is too simple.
-
-### Problem 3: cmd.exe false positives from internal IDE processes
-VS Code spawns many internal cmd.exe processes for git operations, task runners, and extensions. The current heuristic filters cmd.exe only when `descendant_shells.len() > 1`, but this is fragile. A single cmd.exe terminal tab with internal cmd.exe processes creates ambiguity.
+Key stack additions: 3 new Rust crates (`x11rb`, `arboard` with Wayland feature, `atspi`), direct `/proc` filesystem reads (no crate), and `xdotool` as a runtime subprocess dependency. No frontend changes needed -- the overlay UI, AI streaming, and provider system are platform-independent.
 
 ---
 
 ## Recommended Stack Additions
 
-### Core: Process Command Line Reading via PEB
+### 1. Process Inspection: CWD, Shell Type, Process Tree
 
 | Technology | Version | Purpose | Why |
 |------------|---------|---------|-----|
-| windows-sys (new feature) | 0.59 (existing) | Add `Win32_System_Console` feature | Enables `GetConsoleProcessList` and `AttachConsole` for console-based process identification |
+| `/proc` filesystem (direct) | N/A (kernel) | Read CWD, exe path, child PIDs | Zero dependencies. `std::fs::read_link("/proc/PID/cwd")` for CWD, `std::fs::read_link("/proc/PID/exe")` for binary path, `std::fs::read_to_string("/proc/PID/task/PID/children")` for child PIDs. ~50 lines of safe Rust. Mirrors the macOS `libproc` FFI approach. |
 
-**What this enables:**
+**Confidence:** HIGH -- `/proc` is standard on all Linux distros, documented at `man 5 proc`.
 
-Reading process command line arguments from the PEB is the key to distinguishing internal cmd.exe from user-interactive shells. The codebase already has `read_cwd_from_peb()` that reads `RTL_USER_PROCESS_PARAMETERS.CurrentDirectory` from a remote process via `NtQueryInformationProcess` + `ReadProcessMemory`. The **exact same technique** reads `RTL_USER_PROCESS_PARAMETERS.CommandLine` from the same struct -- it is at a different offset in the same memory region already being read.
+**Why not the `procfs` crate (v0.17)?** Adds 15+ transitive dependencies for functionality achievable in ~50 lines. The codebase pattern is direct platform API calls (macOS `libproc` FFI, Windows `NtQueryInformationProcess`), not wrapper crates. Consistency matters.
 
-**Why this matters:** VS Code internal cmd.exe processes have command lines like:
-- `cmd.exe /D /C "...git..."` (git operations)
-- `cmd.exe /C "...node..."` (extension host, tasks)
-- `cmd.exe /c echo %PROMPT%` (shell detection probes)
+**Integration point:** Add `#[cfg(target_os = "linux")]` block in `src/terminal/process.rs`. Same `ProcessInfo` return struct, same function signatures. The existing `get_foreground_info()` dispatches by platform -- add the Linux arm.
 
-User-interactive shells have command lines like:
-- `cmd.exe` (no args, or just `/K`)
-- `powershell.exe -NoLogo`
-- `pwsh.exe`
-- `bash.exe --login`
-- `wsl.exe` or `wsl.exe -d Ubuntu`
+**Implementation sketch:**
+```rust
+#[cfg(target_os = "linux")]
+fn get_cwd(pid: i32) -> Option<String> {
+    std::fs::read_link(format!("/proc/{}/cwd", pid))
+        .ok()
+        .map(|p| p.to_string_lossy().into_owned())
+}
 
-**Confidence:** HIGH -- the PEB reading code already exists in `process.rs` (lines 273-362). Adding CommandLine reading is a 20-line change to the existing `read_cwd_from_peb()` function. The `RTL_USER_PROCESS_PARAMETERS` struct layout is documented by Microsoft and stable across Windows versions.
+#[cfg(target_os = "linux")]
+fn get_process_name(pid: i32) -> Option<String> {
+    std::fs::read_link(format!("/proc/{}/exe", pid))
+        .ok()
+        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+}
 
-### Core: Process Creation Time via GetProcessTimes
+#[cfg(target_os = "linux")]
+fn get_child_pids(ppid: i32) -> Vec<i32> {
+    std::fs::read_to_string(format!("/proc/{}/task/{}/children", ppid, ppid))
+        .unwrap_or_default()
+        .split_whitespace()
+        .filter_map(|s| s.parse().ok())
+        .collect()
+}
+```
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| windows-sys (existing feature) | 0.59 | `GetProcessTimes` from `Win32_System_Threading` | Already available, just not used. Enables sorting shell candidates by creation time instead of PID. |
-
-**What this enables:**
-
-The current code uses `max_by_key(|(pid, _)| *pid)` to pick the "most recently spawned" shell. PID is a poor proxy for recency -- Windows PIDs recycle. `GetProcessTimes` returns `lpCreationTime` as a `FILETIME`, which is the actual creation timestamp. This is already available through the existing `Win32_System_Threading` feature.
-
-**Confidence:** HIGH -- `GetProcessTimes` is in the already-enabled `Win32_System_Threading` feature set. No new features needed.
-
-### Supporting: sysinfo crate (DO NOT ADD)
-
-Considered `sysinfo` (v0.38.4) which exposes `cmd()`, `start_time()`, and `parent()` per process. However, it pulls in a large dependency for something achievable with 40 lines of direct Win32 calls that the codebase already makes. The codebase's pattern is raw Win32 FFI via `windows-sys`, and sysinfo would be an architectural mismatch.
+**Permissions note:** `/proc/PID/cwd` and `/proc/PID/exe` require the reader to have the same UID as the target process OR have `CAP_SYS_PTRACE`. For CMD+K reading its own user's terminal processes, this always works. No elevated permissions needed.
 
 ---
 
-## No New Crates Needed
+### 2. Terminal Text Reading: Visible Output via AT-SPI2
 
-The entire fix uses APIs already available through the existing `windows-sys 0.59` dependency, with one minor Cargo.toml feature addition.
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| `atspi` | 0.22+ | Read terminal text via AT-SPI2 D-Bus protocol | Pure Rust AT-SPI2 client from the Odilia screen reader project. Linux equivalent of macOS Accessibility API and Windows UIA. Uses `zbus` for D-Bus (async, tokio-compatible -- tokio already in deps). Provides typed `Text::get_text()` interface for reading accessible text from terminal emulators. |
 
-### Cargo.toml Change
+**Confidence:** MEDIUM -- AT-SPI2 text reading works for GTK-based terminals (GNOME Terminal, Tilix, xfce4-terminal) and Qt-based terminals (Konsole). GPU-rendered terminals (Alacritty, kitty, WezTerm) do NOT expose AT-SPI2 text. This is the same limitation as macOS AX API and Windows UIA -- already documented and accepted in the codebase.
+
+**Integration point:** New file `src/terminal/atspi_reader.rs` gated with `#[cfg(target_os = "linux")]`. Follows the pattern of `ax_reader.rs` (macOS) and `uia_reader.rs` (Windows). Returns `Option<String>` of filtered visible text.
+
+**AT-SPI2 reading approach:**
+1. Connect to AT-SPI2 bus via `atspi::AccessibilityBus`
+2. Find the accessible object for the terminal application by PID
+3. Navigate to the terminal widget (role: `Terminal` or `Text`)
+4. Call `Text::get_text(0, -1)` to read all visible text
+5. Filter through existing `filter::filter_sensitive()`
+
+**Why not read the PTY via `/proc/PID/fd`?** The PTY master FD belongs to the terminal emulator process, not the shell. Reading it requires `ptrace` or root privilege, and captures raw byte streams without ANSI escape resolution. Not viable.
+
+---
+
+### 3. Clipboard Write & Paste Action
+
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| `arboard` | 3 | Clipboard write (X11 + Wayland) | Already used on Windows. Add to Linux deps with `wayland-data-control` feature for Wayland support. Falls back to X11 automatically when Wayland data-control is unavailable. |
+| `xdotool` (subprocess) | System package | Paste keystroke on X11 | Posts `Ctrl+Shift+V` to focused window. Single subprocess call (~5ms), same pattern as macOS `osascript`. Installed on most X11 desktops or available via `apt install xdotool`. |
+| `wtype` (subprocess) | System package | Paste keystroke on Wayland | Wayland equivalent of xdotool. Posts `Ctrl+Shift+V` to focused window via Wayland protocols. Available via `apt install wtype`. |
+
+**Confidence:** HIGH (clipboard via arboard), HIGH (paste via xdotool on X11), MEDIUM (paste via wtype on Wayland -- compositor-dependent)
+
+**Why Ctrl+Shift+V, not Ctrl+V?** Linux terminals universally use Ctrl+Shift+V for paste. Ctrl+V is captured by the shell as "literal next character" (verbatim insert). This is different from Windows (Ctrl+V) and macOS (Cmd+V).
+
+**Integration point:** `src/commands/paste.rs` -- add `#[cfg(target_os = "linux")]` block:
+```rust
+#[cfg(target_os = "linux")]
+fn paste_to_terminal_linux(command: &str) -> Result<(), String> {
+    // 1. Write to clipboard via arboard
+    write_to_clipboard(command);
+
+    // 2. Wait for focus restoration
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    // 3. Send paste keystroke
+    let session_type = std::env::var("XDG_SESSION_TYPE").unwrap_or_default();
+    if session_type == "wayland" {
+        // wtype for Wayland
+        std::process::Command::new("wtype")
+            .args(["-M", "ctrl", "-M", "shift", "-k", "v"])
+            .output()
+            .map_err(|e| format!("wtype failed: {}. Install with: sudo apt install wtype", e))?;
+    } else {
+        // xdotool for X11
+        std::process::Command::new("xdotool")
+            .args(["key", "ctrl+shift+v"])
+            .output()
+            .map_err(|e| format!("xdotool failed: {}. Install with: sudo apt install xdotool", e))?;
+    }
+    Ok(())
+}
+```
+
+**Arboard Linux clipboard note:** X11 and Wayland clipboard semantics require the source app to remain alive to serve paste requests. Since CMD+K is a long-running background daemon, this works naturally. The `arboard` crate handles the clipboard ownership protocol.
+
+---
+
+### 4. Focused Window Detection (Pre-Overlay PID Capture)
+
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| `x11rb` | 0.13+ | X11 protocol for active window + PID query | Pure Rust X11 client. Query `_NET_ACTIVE_WINDOW` on root window for active window ID, then `_NET_WM_PID` on that window for the owning PID. Direct protocol call (~2ms) vs `xdotool getactivewindow getwindowpid` subprocess (~50ms). Critical for the capture-before-show pattern. |
+
+**Confidence:** HIGH for X11 -- `_NET_ACTIVE_WINDOW` and `_NET_WM_PID` are EWMH standard, supported by all X11 window managers.
+
+**Wayland focused-window detection:** No universal protocol exists. Each compositor has different mechanisms:
+- GNOME: `gdbus call -e -d org.gnome.Shell -o /org/gnome/Shell -m org.gnome.Shell.Eval "global.display.focus_window.get_pid()"`
+- KDE: `qdbus org.kde.KWin /KWin org.kde.KWin.activeWindow`
+- Sway: `swaymsg -t get_tree | jq '.. | select(.focused?) | .pid'`
+- Hyprland: `hyprctl activewindow -j | jq '.pid'`
+
+**Recommendation for v0.3.9:** X11-only for active window PID. On Wayland, degrade gracefully:
+- Skip PID capture (set `previous_app_pid` to None)
+- No per-window history (use global history)
+- No terminal-specific context detection
+- Document as known Wayland limitation
+
+The `XDG_SESSION_TYPE` env var reliably distinguishes X11 from Wayland at runtime.
+
+**Integration point:** `src/commands/hotkey.rs` -- add `#[cfg(target_os = "linux")]` `get_frontmost_pid()`:
+```rust
+#[cfg(target_os = "linux")]
+fn get_frontmost_pid() -> Option<i32> {
+    let session = std::env::var("XDG_SESSION_TYPE").unwrap_or_default();
+    if session == "x11" {
+        get_frontmost_pid_x11()
+    } else {
+        None // Wayland: no universal active window PID protocol
+    }
+}
+```
+
+---
+
+### 5. Overlay Window
+
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| Tauri built-in | 2.x | Transparent, undecorated window | Already handles `transparent: true`, `decorations: false`, `skipTaskbar: true` on Linux via GTK/tao. No additional crate. |
+
+**Confidence:** HIGH (window creation), HIGH (X11 always-on-top), NOT SUPPORTED (Wayland always-on-top)
+
+**X11 always-on-top:** Tauri's `set_always_on_top(true)` works via `_NET_WM_STATE_ABOVE` EWMH hint. Window managers treat this as a suggestion but all mainstream WMs (GNOME/Mutter, KDE/KWin, i3, Sway-XWayland) honor it.
+
+**Wayland always-on-top:** No Wayland protocol for always-on-top exists. Tauri's `tao` explicitly documents this as unsupported. The workaround is running under XWayland (set `GDK_BACKEND=x11` environment variable).
+
+**No vibrancy on Linux:** The `window-vibrancy` crate does not support Linux. Blur/vibrancy is compositor-controlled. Use CSS semi-transparent background instead (`background: rgba(30, 30, 30, 0.92)`). This is the standard approach for Linux overlay apps.
+
+---
+
+### 6. Global Hotkey
+
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| `tauri-plugin-global-shortcut` | 2 (existing) | System-wide Ctrl+K hotkey | Already in deps. Works on X11 via X11 RECORD extension. |
+
+**Confidence:** HIGH (X11), NOT SUPPORTED (Wayland)
+
+**Wayland global hotkey status:** Tauri's `global-hotkey` crate explicitly disables hotkeys on Wayland to prevent libX11 segfaults. The `xdg-desktop-portal` GlobalShortcuts portal spec exists but:
+- GNOME: NOT implemented (feature request open, no timeline)
+- KDE: Implemented
+- Hyprland: Implemented via `xdg-desktop-portal-hyprland`
+- Sway: NOT implemented
+
+A Wayland support PR (#162) was opened in `tauri-apps/global-hotkey` in Sep 2025 but merge status is unknown.
+
+**Recommendation:** Ship as X11-first. Wayland users should run with `GDK_BACKEND=x11` to force XWayland. This is the same approach taken by OBS Studio, Discord, Slack, and other apps needing global hotkeys on Linux.
+
+---
+
+### 7. AppImage Distribution & Auto-Update
+
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| Tauri built-in | 2.x | AppImage bundle + updater | Tauri v2 natively builds AppImage, generates `.tar.gz` + `.sig` for updater. Same Ed25519 signing already configured. |
+
+**Confidence:** HIGH -- explicitly documented in Tauri v2 docs.
+
+**tauri.conf.json addition:**
+```json
+{
+  "bundle": {
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    }
+  }
+}
+```
+
+**CI/CD addition:** Third job in `release.yml`:
+```yaml
+build-linux:
+  runs-on: ubuntu-22.04
+  steps:
+    - uses: actions/checkout@v4
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libwebkit2gtk-4.1-dev \
+          libayatana-appindicator3-dev \
+          librsvg2-dev \
+          libatk-bridge2.0-dev \
+          libatspi2.0-dev \
+          libgtk-3-dev \
+          libglib2.0-dev \
+          libx11-dev \
+          libxdo-dev
+    - name: Build AppImage
+      run: cargo tauri build --bundles appimage
+```
+
+**Updater:** The existing `latest.json` endpoint structure supports multi-platform. Tauri uses `{{target}}` and `{{arch}}` variables. The updater auto-selects the Linux AppImage `.tar.gz` bundle.
+
+---
+
+### 8. Smart Terminal Context Truncation
+
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| No new crate | N/A | Intelligent truncation of terminal output for AI context | Pure Rust logic. Character-based truncation (4 chars ~ 1 token) is sufficient. Keep most recent output (bottom), discard oldest (top). |
+
+**Confidence:** HIGH -- application logic, not platform-specific.
+
+**Why not `tiktoken-rs`?** Adds ~5MB of BPE vocabulary data and a C dependency. Character-based approximation is adequate for truncation decisions. The AI providers handle actual tokenization.
+
+**Integration point:** New `src/terminal/truncate.rs` or function in `src/terminal/filter.rs`:
+```rust
+/// Truncate terminal output to fit within AI context budget.
+/// Keeps the LAST (most recent) lines, discards older output from the top.
+pub fn truncate_for_context(text: &str, max_chars: usize) -> String {
+    if text.len() <= max_chars {
+        return text.to_string();
+    }
+    let lines: Vec<&str> = text.lines().collect();
+    let mut result = Vec::new();
+    let mut total = 0;
+    for line in lines.iter().rev() {
+        if total + line.len() + 1 > max_chars {
+            break;
+        }
+        result.push(*line);
+        total += line.len() + 1;
+    }
+    result.reverse();
+    let truncated_count = lines.len() - result.len();
+    if truncated_count > 0 {
+        format!("[... {} lines truncated ...]\n{}", truncated_count, result.join("\n"))
+    } else {
+        result.join("\n")
+    }
+}
+```
+
+**Context budget:** Default to ~4000 chars (~1000 tokens). Configurable via settings. Applied in `src/commands/terminal.rs` before sending to AI. Applies to ALL platforms, not just Linux.
+
+---
+
+## Full Dependency Changes
+
+### Cargo.toml
 
 ```toml
-[target.'cfg(target_os = "windows")'.dependencies]
-windows-sys = { version = "0.59", features = [
-    "Win32_UI_WindowsAndMessaging",
-    "Win32_Foundation",
-    "Win32_System_Threading",
-    "Win32_System_Diagnostics_ToolHelp",
-    "Win32_System_Diagnostics_Debug",
-    "Win32_Security",
-    "Win32_UI_Input_KeyboardAndMouse",
-    "Wdk_System_Threading",
-    "Win32_System_Console",           # NEW: for GetConsoleProcessList
-] }
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", features = ["linux-native"] }   # EXISTING
+arboard = { version = "3", features = ["wayland-data-control"] }  # NEW
+x11rb = { version = "0.13", features = ["randr"] }               # NEW
+atspi = { version = "0.22", features = ["tokio"] }                # NEW
 ```
 
-**Note on windows-sys version:** The latest is 0.61.2 (October 2025). Upgrading from 0.59 is possible but unnecessary for this milestone -- 0.59 has all needed APIs. Upgrading windows-sys can cause cascading dependency updates and should be a separate chore.
+### No changes needed for:
+- `tauri`, `tauri-plugin-global-shortcut`, `tauri-plugin-updater`, `tauri-plugin-store`, `tauri-plugin-positioner` -- already support Linux
+- `window-vibrancy` -- keep as-is, no Linux calls (CSS fallback instead)
+- `serde`, `serde_json`, `tokio`, `regex`, `once_cell`, `eventsource-stream`, `futures-util` -- platform-independent
+- `tauri-plugin-http` -- platform-independent
 
----
-
-## Three Fix Strategies
-
-### Strategy 1: Command Line Filtering for Shell Disambiguation
-
-**API:** `NtQueryInformationProcess` + `ReadProcessMemory` (existing code path)
-
-Read the `CommandLine` field from `RTL_USER_PROCESS_PARAMETERS` for each shell candidate process. Filter out cmd.exe processes whose command line contains `/D /C`, `/c "`, or other batch-execution flags. These are non-interactive background processes.
-
-**Implementation approach:**
-
-Extend the existing `read_cwd_from_peb()` function (or create a parallel `read_cmdline_from_peb()`) that reads the `CommandLine` UNICODE_STRING from the same `RTL_USER_PROCESS_PARAMETERS` struct the CWD reader already accesses.
-
-In `RTL_USER_PROCESS_PARAMETERS`:
-- `CurrentDirectory` is at offset 0x38 (the DosPath within CURDIR)
-- `CommandLine` is at offset 0x70 (a UNICODE_STRING: Length u16, MaxLength u16, Buffer ptr)
-
-The code already reads `CurrentDirectory` by navigating PEB -> ProcessParameters -> reading memory at calculated offsets. `CommandLine` is at a known fixed offset in the same struct.
-
-**Classification rules for cmd.exe:**
-- `/C` or `/c` flag = non-interactive (batch execution, exits after command)
-- `/K` or `/k` flag = interactive (keeps running after command)
-- No flags or just `/Q`, `/A`, `/U` = interactive
-- `/D /C` specifically = VS Code internal (git ops, tasks)
-
-**Confidence:** HIGH -- this is the approach VS Code itself uses internally (via `@vscode/windows-process-tree` which reads command lines). The PEB layout is documented and the code pattern already exists in the codebase.
-
-### Strategy 2: UIA Scoping for Terminal Panel Text
-
-**API:** `uiautomation` 0.24 (existing crate)
-
-The current `try_walk_children()` walks ALL descendants of the VS Code window, capturing sidebar, editor, and menu text alongside terminal text. This needs scoping.
-
-**Approach: Walk the UIA tree with name/class filtering**
-
-Instead of `find_all(TreeScope::Descendants, &true_condition)`, build a condition that targets terminal-related UIA elements:
-
-1. **ControlType filtering:** Terminal panes in VS Code expose as `ControlType::Pane` or `ControlType::Custom` elements. Filter out `ControlType::MenuItem`, `ControlType::TreeItem`, `ControlType::Tab`, `ControlType::Button`.
-
-2. **ClassName filtering:** VS Code's terminal area uses Chromium-rendered elements. The xterm.js terminal canvas elements have specific class names that can be targeted.
-
-3. **AutomationId filtering:** VS Code terminal panels sometimes expose automation IDs containing "terminal" or "xterm".
-
-4. **Fallback: TextPattern priority.** If any descendant element supports `UITextPattern`, prefer that over name-concatenation. Terminal controls in Windows Terminal expose TextPattern; VS Code's xterm.js may not, but this is a good first filter.
-
-**What NOT to do:** Do not rely on VS Code's screen reader mode (`"terminal.integrated.accessibleViewPreserveFocus"`). This requires the user to enable accessibility settings in VS Code, violating the "zero setup" constraint. The UIA approach must work with VS Code's default settings.
-
-**Confidence:** MEDIUM -- UIA element structure in Electron apps (VS Code, Cursor) varies across versions. The filtering approach is sound but specific class names/automation IDs need empirical verification on a real Windows machine. Flag for deeper research during implementation.
-
-### Strategy 3: Focused Tab Detection via Window Title Parsing
-
-**API:** `GetWindowTextW` (existing, in `detect_windows.rs`)
-
-VS Code and Cursor window titles follow a predictable format:
-```
-filename.ext - workspace [optional decorators] - Visual Studio Code
-filename.ext - workspace [WSL: Ubuntu] - Visual Studio Code
-```
-
-When a terminal tab is focused, the title changes to include the terminal shell info:
-```
-powershell - workspace - Visual Studio Code
-bash - workspace - Visual Studio Code
-cmd - workspace - Visual Studio Code
-```
-
-This is controlled by VS Code's `terminal.integrated.tabs.title` setting which defaults to `${process}` -- the shell process name.
-
-**Approach:** Parse the window title to extract the terminal name when a terminal tab is active. If the title's first segment (before the first ` - `) matches a known shell name, the terminal is focused and the title tells us which shell type.
-
-**Limitations:**
-- Only works when a terminal tab is focused (not when the editor is focused)
-- User can customize `terminal.integrated.tabs.title`, changing the format
-- Does not identify the specific PID of the focused terminal
-
-**Use as supplementary signal, not primary detection.** Combine with process tree walking: if the window title suggests "powershell", prefer powershell.exe candidates from the process tree.
-
-**Confidence:** HIGH for the default title format. LOW for handling all custom title formats. Recommended as a heuristic boost, not sole detection method.
-
----
-
-## Combined Detection Algorithm
-
-The fix combines all three strategies in priority order:
-
-```
-1. Get HWND and exe name (existing: GetWindowThreadProcessId + QueryFullProcessImageNameW)
-2. Get window title (existing: GetWindowTextW)
-3. Parse title for terminal hint (Strategy 3)
-4. Snapshot process tree (existing: CreateToolhelp32Snapshot)
-5. Find shell candidates descending from app PID (existing)
-6. For each candidate:
-   a. Read command line from PEB (Strategy 1) -- filter out non-interactive
-   b. Read creation time via GetProcessTimes -- for recency sorting
-7. If title hint matches a candidate shell type, prefer that candidate
-8. Otherwise pick most recently created interactive shell
-9. For WSL: check process ancestry for wsl.exe (existing)
-10. Read terminal text via UIA with scoped filtering (Strategy 2)
-```
-
----
-
-## windows-sys Feature: Win32_System_Console
-
-### What it provides
-
-| Function | Purpose | Use Case |
-|----------|---------|----------|
-| `GetConsoleProcessList` | List PIDs attached to a console | Could identify which shell owns a specific console session |
-| `AttachConsole` | Attach to another process's console | Potential for reading console state (use cautiously) |
-| `FreeConsole` | Detach from current console | Cleanup after AttachConsole |
-
-### Why add it
-
-`GetConsoleProcessList` can be called after `AttachConsole(pid)` to get the list of processes sharing a console session. For standalone terminals (cmd.exe, PowerShell), this directly identifies which shell owns the console. For ConPTY-based terminals (Windows Terminal, VS Code), each tab's shell gets its own pseudo-console, and the process list helps disambiguate.
-
-**Caveat:** `AttachConsole` detaches from the current console first. The calling process (CMD+K) doesn't have a console (it's a GUI app), so this is safe. But it must be called carefully -- only one console attachment at a time.
-
-**Confidence:** MEDIUM -- this is a viable supplementary signal but the process tree + command line approach (Strategy 1) may be sufficient alone. Add the feature flag now; use if needed during implementation.
-
----
-
-## UIA Crate: No Version Change Needed
-
-The `uiautomation` crate at version 0.24 provides everything needed:
-
-| Capability | Available | API |
-|------------|-----------|-----|
-| Element from HWND | Yes | `automation.element_from_handle()` |
-| ControlType filtering | Yes | `element.get_control_type()`, condition builders |
-| ClassName reading | Yes | `element.get_classname()` |
-| AutomationId reading | Yes | `element.get_automation_id()` |
-| TextPattern | Yes | `element.get_pattern::<UITextPattern>()` |
-| Tree walker | Yes | `automation.create_tree_walker()` |
-| Condition AND/OR/NOT | Yes | `automation.create_and_condition()`, etc. |
-
-All the filtering capabilities needed for Strategy 2 are already in the current crate version. The fix is in how we use the API, not what version we use.
-
-**Confidence:** HIGH -- verified against current codebase usage in `uia_reader.rs`.
+### No new npm/pnpm packages. No frontend changes.
 
 ---
 
@@ -237,90 +315,98 @@ All the filtering capabilities needed for Strategy 2 are already in the current 
 
 | Category | Recommended | Alternative | Why Not |
 |----------|-------------|-------------|---------|
-| Shell disambiguation | PEB command line reading | `sysinfo` crate `cmd()` method | Adds 5MB+ dependency for 40 lines of Win32 code. Architectural mismatch with raw FFI pattern. |
-| Shell disambiguation | PEB command line reading | WMI queries (`Win32_Process.CommandLine`) | WMI is slow (100ms+), requires COM initialization, and adds dependency complexity. PEB reading is <1ms. |
-| Shell disambiguation | PEB command line reading | `wmic process get CommandLine` subprocess | Spawning a process is slow and unreliable. `wmic` is deprecated on modern Windows. |
-| Process creation time | `GetProcessTimes` via windows-sys | `sysinfo` crate `start_time()` | Same reason -- unnecessary dependency for one API call. |
-| Active tab detection | Window title parsing | VS Code extension API | Violates "no extension" architectural decision. Would require separate VS Code extension. |
-| Active tab detection | Window title parsing | Named pipe / IPC with terminal | Would require terminal-side setup, violating "zero setup" constraint. |
-| Terminal text reading | Scoped UIA tree walk | VS Code screen reader mode | Requires user to enable `terminal.integrated.accessibleViewPreserveFocus`. Violates zero-setup. |
-| Terminal text reading | Scoped UIA tree walk | Electron `--force-renderer-accessibility` | Would require modifying VS Code's launch flags. Not our process to control. |
-| Terminal text reading | Scoped UIA tree walk | Clipboard-based text capture | Destructive (overwrites clipboard), unreliable, poor UX. |
-| Console identification | `Win32_System_Console` feature | No console APIs | Limits detection options; the feature flag is cheap to add. |
-| windows-sys version | Stay on 0.59 | Upgrade to 0.61.2 | Risk of cascading dependency changes. 0.59 has all needed APIs. Defer upgrade to separate chore. |
+| Process info | Direct `/proc` reads | `procfs` crate v0.17 | 15+ transitive deps for ~50 lines of `std::fs` calls. Consistency with raw FFI pattern. |
+| Process info | Direct `/proc` reads | `sysinfo` crate | Massive dependency. We need 3 simple reads. |
+| Terminal text | `atspi` crate | Raw `dbus`/`zbus` + manual AT-SPI2 | `atspi` provides typed interfaces (Text, Accessible). Raw D-Bus requires manual message construction. |
+| Terminal text | `atspi` crate | PTY read via `/proc/PID/fd` | Requires `ptrace`/root. Raw bytes without ANSI rendering. Not viable. |
+| Clipboard | `arboard` | `xclip`/`wl-copy` subprocess | `arboard` is already a dep. Feature flag is cleaner than subprocess. |
+| Paste keystroke | `xdotool`/`wtype` subprocess | `enigo` crate | `enigo` has Wayland issues and adds compile-time complexity. Subprocess is reliable and follows the macOS `osascript` pattern. |
+| Active window | `x11rb` direct protocol | `xdotool` subprocess | `x11rb` is faster (~2ms vs ~50ms). Critical for hotkey handler latency. |
+| Active window | X11-only | All compositor-specific Wayland APIs | Fragmented (GNOME/KDE/Sway/Hyprland each different). Not feasible for v1. |
+| Global hotkey | Tauri plugin (X11) | `evdev` kernel input | Requires `input` group membership. Not appropriate for user-facing app. |
+| Vibrancy | CSS semi-transparent | KDE blur hint / GNOME extension | Compositor-specific, unreliable. Solid translucent background is standard on Linux. |
+| Truncation | Character-based | `tiktoken-rs` token counting | ~5MB BPE data + C dep. 4 chars/token approximation is sufficient for truncation. |
 
 ---
 
-## What NOT to Add
+## What Tauri Already Handles (DO NOT add libraries)
 
-| Temptation | Why Not |
-|------------|---------|
-| `sysinfo` crate | Massive dependency (pulls in `libc`, `once_cell`, `rayon` on some configs) for 2-3 Win32 calls the codebase already makes directly. |
-| `windows` crate (high-level) | The codebase uses `windows-sys` (zero-overhead FFI bindings). Mixing both creates confusion and larger binaries. |
-| VS Code extension for terminal detection | Architectural decision already made: no extensions. The overlay is standalone. |
-| WMI/COM queries for process info | Slow (100ms+), complex COM initialization, unreliable compared to direct NT API calls. |
-| `ntapi` crate | Provides Rust bindings for NT native API, but the codebase already calls `NtQueryInformationProcess` directly via `windows-sys::Wdk`. Adding another crate for the same function is redundant. |
-| Screen reader mode dependency | Requiring users to enable accessibility in VS Code violates the zero-setup constraint. Detection must work with default VS Code settings. |
-| `AttachConsole` for text reading | `AttachConsole` + `ReadConsoleOutput` could theoretically read terminal buffer, but it's fragile, interferes with the target process, and UIA is already the established approach. |
-| Upgrading `uiautomation` crate | 0.24 has all needed APIs. No newer version exists that would change the approach. |
-
----
-
-## Implementation Priority
-
-| Priority | Change | Effort | Impact |
-|----------|--------|--------|--------|
-| P0 | Add `read_cmdline_from_peb()` for command line reading | Low (20 lines, extends existing code) | HIGH -- fixes cmd.exe false positives |
-| P0 | Filter non-interactive cmd.exe by `/C` and `/D /C` flags | Low (10 lines, classification logic) | HIGH -- eliminates VS Code internal processes |
-| P1 | Replace PID-based shell selection with `GetProcessTimes` creation time | Low (15 lines) | MEDIUM -- more reliable "most recent" detection |
-| P1 | Add window title parsing for terminal tab hint | Low (20 lines, regex on title) | MEDIUM -- helps identify focused terminal type |
-| P2 | Scope UIA tree walk with ControlType/ClassName filtering | Medium (30-50 lines, needs empirical testing) | MEDIUM -- reduces noise in terminal text capture |
-| P3 | Add `Win32_System_Console` feature and `GetConsoleProcessList` | Low (Cargo.toml + 20 lines) | LOW -- supplementary signal, may not be needed |
+| Capability | Tauri Component | Notes |
+|------------|----------------|-------|
+| Window creation (X11+Wayland) | `tao` | Transparent, undecorated, skip-taskbar all work |
+| Tray icon | `tauri` tray-icon feature | Uses `libayatana-appindicator` on Linux |
+| HTTP streaming | `tauri-plugin-http` | Platform-independent |
+| Config persistence | `tauri-plugin-store` | Filesystem-based, works everywhere |
+| Auto-update | `tauri-plugin-updater` | Supports AppImage `.tar.gz` bundles |
+| Keyring | `keyring` linux-native | Uses `secret-service` D-Bus (GNOME Keyring / KWallet) |
+| Global shortcuts (X11) | `tauri-plugin-global-shortcut` | X11 RECORD extension |
+| AppImage bundling | `tauri` CLI | Built-in bundle target |
 
 ---
 
-## Installation / Changes
+## Platform Support Matrix
 
-### Cargo.toml
+| Feature | macOS | Windows | Linux X11 | Linux Wayland |
+|---------|-------|---------|-----------|---------------|
+| Overlay always-on-top | NSPanel Floating | Win32 TOPMOST | EWMH `_ABOVE` | NO (use XWayland) |
+| Global hotkey | Tauri plugin | Tauri plugin | Tauri plugin | NO (use XWayland) |
+| Terminal text | AX API | UIA | AT-SPI2 | AT-SPI2 |
+| CWD detection | `libproc` FFI | PEB read | `/proc/PID/cwd` | `/proc/PID/cwd` |
+| Process tree | `libproc` FFI | Toolhelp32Snapshot | `/proc/PID/children` | `/proc/PID/children` |
+| Clipboard write | `pbcopy` | `arboard` | `arboard` (X11) | `arboard` (wayland-data-control) |
+| Paste action | AppleScript/CGEvent | SendInput Ctrl+V | `xdotool` Ctrl+Shift+V | `wtype` Ctrl+Shift+V |
+| Active window PID | NSWorkspace FFI | GetForegroundWindow | `x11rb` EWMH | Degraded (no PID) |
+| Vibrancy/blur | `window-vibrancy` | `window-vibrancy` | CSS fallback | CSS fallback |
+| Distribution | DMG | NSIS | AppImage | AppImage |
+| Auto-update | Tauri updater | Tauri updater | Tauri updater | Tauri updater |
+| Smart truncation | Yes | Yes | Yes | Yes |
 
-```toml
-# ONE feature addition to existing windows-sys entry:
-[target.'cfg(target_os = "windows")'.dependencies]
-windows-sys = { version = "0.59", features = [
-    "Win32_UI_WindowsAndMessaging",
-    "Win32_Foundation",
-    "Win32_System_Threading",
-    "Win32_System_Diagnostics_ToolHelp",
-    "Win32_System_Diagnostics_Debug",
-    "Win32_Security",
-    "Win32_UI_Input_KeyboardAndMouse",
-    "Wdk_System_Threading",
-    "Win32_System_Console",           # NEW
-] }
+---
+
+## System Dependencies
+
+### Build-time (CI: ubuntu-22.04)
+```bash
+sudo apt-get install -y \
+  libwebkit2gtk-4.1-dev \
+  libayatana-appindicator3-dev \
+  librsvg2-dev \
+  libatk-bridge2.0-dev \
+  libatspi2.0-dev \
+  libgtk-3-dev \
+  libglib2.0-dev \
+  libx11-dev \
+  libxdo-dev
 ```
 
-### No new crates. No npm changes. No frontend changes.
-
-The entire fix is Rust-side process detection logic improvements using existing APIs.
+### Runtime (user system)
+| Dependency | Purpose | Default installed? | Install command |
+|------------|---------|-------------------|-----------------|
+| `at-spi2-core` | Terminal text reading | Yes (GNOME/KDE/XFCE) | `sudo apt install at-spi2-core` |
+| `xdotool` | Paste on X11 | Usually yes on X11 | `sudo apt install xdotool` |
+| `wtype` | Paste on Wayland | No | `sudo apt install wtype` |
+| `libayatana-appindicator3` | Tray icon | Yes (most DEs) | `sudo apt install libayatana-appindicator3-1` |
 
 ---
 
 ## Sources
 
-- Current codebase analysis: `detect_windows.rs`, `process.rs`, `uia_reader.rs`, `Cargo.toml` -- HIGH confidence
-- [RTL_USER_PROCESS_PARAMETERS (Microsoft Learn)](https://learn.microsoft.com/en-us/windows/win32/api/winternl/ns-winternl-rtl_user_process_parameters) -- HIGH confidence, stable struct layout
-- [GetProcessTimes (Microsoft Learn)](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getprocesstimes) -- HIGH confidence
-- [GetConsoleProcessList (Microsoft Learn)](https://learn.microsoft.com/en-us/windows/console/getconsoleprocesslist) -- HIGH confidence
-- [NtQueryInformationProcess (Microsoft Learn)](https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntqueryinformationprocess) -- HIGH confidence
-- [Windows Console APIs in windows-sys](https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/Console/index.html) -- HIGH confidence
-- [VS Code Terminal Advanced docs](https://code.visualstudio.com/docs/terminal/advanced) -- HIGH confidence for ConPTY architecture
-- [VS Code Terminal Appearance docs](https://code.visualstudio.com/docs/terminal/appearance) -- HIGH confidence for title format
-- [@vscode/windows-process-tree (GitHub)](https://github.com/microsoft/vscode-windows-process-tree) -- MEDIUM confidence for understanding VS Code's own process tree approach
-- [Windows Terminal ConPTY issue #5694](https://github.com/microsoft/terminal/issues/5694) -- MEDIUM confidence, confirms no tab-level PID API from Windows Terminal
-- [windows-sys crate (crates.io)](https://crates.io/crates/windows-sys) -- latest is 0.61.2, staying on 0.59
-- [sysinfo crate (docs.rs)](https://docs.rs/sysinfo/latest/sysinfo/struct.Process.html) -- v0.38.4, evaluated and rejected
-- [uiautomation crate (crates.io)](https://crates.io/crates/uiautomation) -- v0.24.1, current version sufficient
+- [Tauri v2 AppImage distribution](https://v2.tauri.app/distribute/appimage/) -- HIGH confidence
+- [Tauri v2 Global Shortcut plugin](https://v2.tauri.app/plugin/global-shortcut/) -- HIGH confidence
+- [Tauri v2 Updater plugin](https://v2.tauri.app/plugin/updater/) -- HIGH confidence
+- [Tauri tao Wayland always-on-top issue](https://github.com/tauri-apps/tao/issues/1134) -- HIGH confidence
+- [Tauri global-hotkey Wayland issue](https://github.com/tauri-apps/global-hotkey/issues/28) -- HIGH confidence
+- [window-vibrancy Linux status](https://github.com/tauri-apps/window-vibrancy) -- HIGH confidence
+- [arboard Linux/Wayland support](https://github.com/1Password/arboard) -- HIGH confidence
+- [atspi Rust crate](https://crates.io/crates/atspi) -- MEDIUM confidence (crate verified, terminal text reading needs empirical testing)
+- [AT-SPI2 architecture](https://gnome.pages.gitlab.gnome.org/at-spi2-core/devel-docs/architecture.html) -- HIGH confidence
+- [proc_pid_cwd man page](https://man7.org/linux/man-pages/man5/proc_pid_cwd.5.html) -- HIGH confidence
+- [GNOME GlobalShortcuts portal request](https://discourse.gnome.org/t/feature-request-globalshortcuts-portal/15343) -- MEDIUM confidence (not implemented)
+- [Wayland xdotool fragmentation](https://www.semicomplete.com/blog/xdotool-and-exploring-wayland-fragmentation/) -- HIGH confidence
+- [xdg-activation protocol](https://wayland.app/protocols/xdg-activation-v1) -- HIGH confidence
+- [x11rb crate](https://github.com/psychon/x11rb) -- HIGH confidence
+- Existing codebase: `terminal/process.rs`, `terminal/mod.rs`, `commands/paste.rs`, `commands/hotkey.rs`, `Cargo.toml` -- HIGH confidence
 
 ---
-*Stack research for: CMD+K v0.2.8 Windows Terminal Detection Fix*
-*Researched: 2026-03-11*
+*Stack research for: CMD+K v0.3.9 Linux Support & Smart Terminal Context*
+*Researched: 2026-03-13*
