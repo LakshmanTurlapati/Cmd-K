@@ -427,10 +427,20 @@ unsafe fn read_process_memory(handle: windows_sys::Win32::Foundation::HANDLE, ad
     ok != 0 && bytes_read == size
 }
 
-/// Non-macOS, non-Windows stub.
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
-fn get_process_cwd(_pid: i32) -> Option<String> {
-    None
+/// Linux: read /proc/PID/cwd symlink to get the process working directory.
+#[cfg(target_os = "linux")]
+fn get_process_cwd(pid: i32) -> Option<String> {
+    let path = format!("/proc/{}/cwd", pid);
+    match std::fs::read_link(&path) {
+        Ok(p) => {
+            let s = p.to_string_lossy().into_owned();
+            if s.is_empty() { None } else { Some(s) }
+        }
+        Err(e) => {
+            eprintln!("[process] /proc/{}/cwd read_link failed: {}", pid, e);
+            None
+        }
+    }
 }
 
 /// Get the binary name of a process by extracting the filename from its full path.
@@ -461,10 +471,19 @@ fn get_process_name(pid: i32) -> Option<String> {
         .map(|exe| exe.trim_end_matches(".exe").trim_end_matches(".EXE").to_string())
 }
 
-/// Non-macOS, non-Windows stub.
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
-fn get_process_name(_pid: i32) -> Option<String> {
-    None
+/// Linux: read /proc/PID/exe symlink to get the process binary name.
+/// Handles the " (deleted)" suffix that the kernel appends when a binary is replaced.
+#[cfg(target_os = "linux")]
+fn get_process_name(pid: i32) -> Option<String> {
+    let path = format!("/proc/{}/exe", pid);
+    let target = std::fs::read_link(&path).ok()?;
+    let target_str = target.to_string_lossy();
+    // Handle " (deleted)" suffix from upgraded binaries
+    let clean = target_str.trim_end_matches(" (deleted)");
+    std::path::Path::new(clean)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(|s| s.to_string())
 }
 
 /// Get the child PIDs of a process.
@@ -582,10 +601,41 @@ fn get_child_pids_windows(ppid: u32) -> Vec<u32> {
     }
 }
 
-/// Non-macOS, non-Windows stub.
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
-fn get_child_pids(_pid: i32) -> Vec<i32> {
-    Vec::new()
+/// Linux: get child PIDs by reading /proc/PID/task/PID/children.
+/// Falls back to scanning /proc/*/stat for parent PID matches.
+#[cfg(target_os = "linux")]
+fn get_child_pids(pid: i32) -> Vec<i32> {
+    // Fast path: /proc/PID/task/PID/children
+    let path = format!("/proc/{}/task/{}/children", pid, pid);
+    if let Ok(content) = std::fs::read_to_string(&path) {
+        let pids: Vec<i32> = content
+            .split_whitespace()
+            .filter_map(|s| s.parse::<i32>().ok())
+            .filter(|&p| p > 0)
+            .collect();
+        if !pids.is_empty() {
+            return pids;
+        }
+    }
+
+    // Fallback: scan /proc for processes whose ppid matches pid
+    let mut children = Vec::new();
+    if let Ok(entries) = std::fs::read_dir("/proc") {
+        for entry in entries.flatten() {
+            if let Some(name) = entry.file_name().to_str() {
+                if let Ok(child_pid) = name.parse::<i32>() {
+                    if child_pid > 0 {
+                        if let Some(ppid) = get_parent_pid(child_pid) {
+                            if ppid == pid {
+                                children.push(child_pid);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    children
 }
 
 /// Find the foreground shell PID for a given app.
@@ -841,10 +891,16 @@ fn is_sub_shell_of_any(pid: i32, ancestor_pids: &[i32], parent_map: &std::collec
     false
 }
 
-/// Non-macOS, non-Windows stub for get_parent_pid.
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
-fn get_parent_pid(_pid: i32) -> Option<i32> {
-    None
+/// Linux: get parent PID by parsing /proc/PID/stat.
+/// Handles comm fields containing spaces and parentheses by finding the last ')'.
+#[cfg(target_os = "linux")]
+fn get_parent_pid(pid: i32) -> Option<i32> {
+    let content = std::fs::read_to_string(format!("/proc/{}/stat", pid)).ok()?;
+    // comm field is in parens and can contain spaces/parens, so find last ')'
+    let after_comm = content.rfind(')')? + 1;
+    let fields: Vec<&str> = content[after_comm..].split_whitespace().collect();
+    // fields[0] = state char, fields[1] = ppid
+    fields.get(1)?.parse::<i32>().ok()
 }
 
 /// Get the creation time of a process using GetProcessTimes.
