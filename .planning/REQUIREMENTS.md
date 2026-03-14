@@ -1,0 +1,107 @@
+# Requirements: CMD+K
+
+**Defined:** 2026-03-14
+**Core Value:** The overlay must appear on top of the active application and feel instant
+
+## v0.3.9 Requirements
+
+Requirements for Linux Support & Smart Terminal Context milestone. Each maps to roadmap phases.
+
+### Linux Process Detection
+
+- [ ] **LPROC-01**: CWD detected via `/proc/PID/cwd` readlink for the active terminal's shell process
+- [ ] **LPROC-02**: Shell type detected via `/proc/PID/exe` readlink (bash, zsh, fish, etc.)
+- [ ] **LPROC-03**: Process tree walking via `/proc/PID/children` to find shell process from terminal emulator PID
+
+### Linux Overlay & Hotkey
+
+- [ ] **LOVRL-01**: System-wide Ctrl+K hotkey registers and triggers overlay on X11
+- [ ] **LOVRL-02**: Overlay appears as floating window above active application on X11
+- [ ] **LOVRL-03**: Wayland users can run with `GDK_BACKEND=x11` (XWayland) for full overlay functionality
+- [ ] **LOVRL-04**: Active window PID captured before overlay shows (capture-before-show pattern)
+- [ ] **LOVRL-05**: CSS-only frosted glass fallback (no window-vibrancy on Linux)
+
+### Linux Paste
+
+- [ ] **LPST-01**: Auto-paste into active terminal via xdotool keystroke simulation on X11
+- [ ] **LPST-02**: Wayland graceful fallback — copies to clipboard with "press Ctrl+Shift+V" hint
+- [ ] **LPST-03**: Destructive command detection works with Linux-specific patterns (already built)
+
+### Linux Terminal Text Reading
+
+- [ ] **LTXT-01**: AT-SPI2 D-Bus integration reads terminal text from VTE-based terminals (GNOME Terminal, Tilix, Terminator)
+- [ ] **LTXT-02**: kitty remote control (`kitty @ get-text`) reads terminal text from kitty
+- [ ] **LTXT-03**: WezTerm CLI (`wezterm cli get-text`) reads terminal text from WezTerm
+- [ ] **LTXT-04**: Graceful None return for terminals without text reading support (Alacritty, st)
+
+### Smart Terminal Context
+
+- [ ] **SCTX-01**: ANSI escape sequence stripping from terminal output before sending to AI
+- [ ] **SCTX-02**: Token budget allocation — terminal context uses ~10-15% of model's context window
+- [ ] **SCTX-03**: Command-output pairing — truncation removes oldest complete command+output segments, not arbitrary lines
+- [ ] **SCTX-04**: Cross-platform module — smart truncation applies to macOS, Windows, and Linux equally
+
+### AppImage Distribution
+
+- [ ] **APKG-01**: AppImage built via Tauri bundler with ubuntu-22.04 CI base for glibc compatibility
+- [ ] **APKG-02**: Third CI job in release.yml builds Linux AppImage alongside macOS DMG and Windows NSIS
+- [ ] **APKG-03**: Auto-updater supports Linux AppImage (Ed25519 signed, latest.json manifest)
+- [ ] **APKG-04**: GitHub Release includes Linux AppImage artifact with SHA256 checksum
+
+## Future Requirements
+
+### Deferred
+
+- **Wayland native overlay** — Wayland protocol lacks always-on-top and global hotkey support; revisit when protocols mature
+- **Wayland native paste** — wtype/ydotool have significant limitations; revisit when tooling stabilizes
+- **Terminal scrollback access** — Direct PTY scrollback reading for terminals that don't expose text via API
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Native Wayland always-on-top | Protocol-level gap, no solution exists |
+| Native Wayland global hotkey | Protocol-level gap, XWayland is industry standard fallback |
+| .deb/.rpm packages | AppImage covers all distros with single binary |
+| Snap/Flatpak packaging | Sandboxing conflicts with /proc access and xdotool |
+| Terminal multiplexer integration (tmux/screen) | Complex, different UX model, defer to future |
+| Linux window-vibrancy effect | window-vibrancy crate doesn't support Linux |
+
+## Traceability
+
+Which phases cover which requirements. Updated during roadmap creation.
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| LPROC-01 | - | Pending |
+| LPROC-02 | - | Pending |
+| LPROC-03 | - | Pending |
+| LOVRL-01 | - | Pending |
+| LOVRL-02 | - | Pending |
+| LOVRL-03 | - | Pending |
+| LOVRL-04 | - | Pending |
+| LOVRL-05 | - | Pending |
+| LPST-01 | - | Pending |
+| LPST-02 | - | Pending |
+| LPST-03 | - | Pending |
+| LTXT-01 | - | Pending |
+| LTXT-02 | - | Pending |
+| LTXT-03 | - | Pending |
+| LTXT-04 | - | Pending |
+| SCTX-01 | - | Pending |
+| SCTX-02 | - | Pending |
+| SCTX-03 | - | Pending |
+| SCTX-04 | - | Pending |
+| APKG-01 | - | Pending |
+| APKG-02 | - | Pending |
+| APKG-03 | - | Pending |
+| APKG-04 | - | Pending |
+
+**Coverage:**
+- v0.3.9 requirements: 23 total
+- Mapped to phases: 0
+- Unmapped: 23 ⚠️
+
+---
+*Requirements defined: 2026-03-14*
+*Last updated: 2026-03-14 after initial definition*
