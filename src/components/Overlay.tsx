@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { ShieldAlert } from "lucide-react";
 import { useOverlayStore, resolveBadge } from "@/store";
-import { isWindows } from "@/utils/platform";
+import { isWindows, isLinux } from "@/utils/platform";
 import { CommandInput } from "./CommandInput";
 import { ResultsArea } from "./ResultsArea";
 import { HotkeyConfig } from "./HotkeyConfig";
@@ -80,9 +80,11 @@ export function Overlay({ onSubmit }: OverlayProps) {
     <div
       className={[
         panelWidth,
-        isWindows() ? "rounded-md" : "rounded-xl",
+        isLinux() ? "rounded-lg" : isWindows() ? "rounded-md" : "rounded-xl",
         "shadow-2xl",
-        "bg-black/60",
+        isLinux()
+          ? "bg-[#1a1a1c]/90 backdrop-blur-xl border border-white/10"
+          : "bg-black/60",
         "p-4",
         "flex flex-col gap-2",
         animClass,
