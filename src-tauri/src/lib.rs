@@ -202,6 +202,16 @@ pub fn run() {
                 }
             }
 
+            // Linux: always-on-top overlay, no vibrancy (CSS-only frosted glass via WebKitGTK backdrop-filter)
+            // Wayland users should run with GDK_BACKEND=x11 for full XWayland support.
+            #[cfg(target_os = "linux")]
+            {
+                window
+                    .set_always_on_top(true)
+                    .expect("Failed to set always-on-top");
+                eprintln!("[setup] Linux: always-on-top set, CSS-only frosted glass");
+            }
+
             // Migrate v0.2.4 users: set default provider if xAI key exists
             migrate_v024_api_key(app);
 
