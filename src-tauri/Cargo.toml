@@ -57,3 +57,4 @@ uiautomation = "0.24"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 keyring = { version = "3", features = ["linux-native"] }
+x11rb = { version = "0.13", features = ["allow-unsafe-code"] }

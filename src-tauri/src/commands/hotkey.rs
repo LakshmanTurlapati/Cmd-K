@@ -9,6 +9,9 @@ use crate::terminal;
 #[cfg(target_os = "macos")]
 use crate::terminal::ax_reader;
 
+#[cfg(target_os = "linux")]
+use crate::terminal::detect_linux;
+
 /// Capture the PID of the frontmost application using NSWorkspace via ObjC FFI.
 ///
 /// This MUST be called BEFORE show_and_make_key() because after the panel is shown,
@@ -77,6 +80,115 @@ fn get_foreground_hwnd() -> Option<isize> {
 #[allow(dead_code)]
 fn get_foreground_hwnd() -> Option<isize> {
     None
+}
+
+/// Capture the PID of the active X11 window using EWMH properties.
+///
+/// This MUST be called BEFORE showing the overlay because after the overlay
+/// appears, the active window changes to our own overlay.
+/// Fails gracefully on pure Wayland (no DISPLAY set) -- users should set
+/// GDK_BACKEND=x11 for XWayland support.
+#[cfg(target_os = "linux")]
+fn get_active_window_pid() -> Option<i32> {
+    use x11rb::connection::Connection;
+    use x11rb::protocol::xproto::*;
+
+    // Check DISPLAY is set (fails gracefully on pure Wayland without XWayland)
+    if std::env::var("DISPLAY").is_err() {
+        eprintln!("[hotkey] DISPLAY not set, cannot capture X11 active window PID");
+        return None;
+    }
+
+    let (conn, screen_num) = match x11rb::connect(None) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("[hotkey] X11 connect failed: {}", e);
+            return None;
+        }
+    };
+
+    let screen = &conn.setup().roots[screen_num];
+    let root = screen.root;
+
+    // Intern atoms for EWMH properties
+    let net_active_window = conn
+        .intern_atom(false, b"_NET_ACTIVE_WINDOW")
+        .ok()?
+        .reply()
+        .ok()?;
+    let net_wm_pid = conn
+        .intern_atom(false, b"_NET_WM_PID")
+        .ok()?
+        .reply()
+        .ok()?;
+
+    // Query root window for _NET_ACTIVE_WINDOW
+    let active_reply = conn
+        .get_property(false, root, net_active_window.atom, AtomEnum::WINDOW, 0, 1)
+        .ok()?
+        .reply()
+        .ok()?;
+
+    let window_id = active_reply.value32()?.next()?;
+    if window_id == 0 || window_id == root {
+        eprintln!("[hotkey] Active window is root or none");
+        return None;
+    }
+
+    // Query active window for _NET_WM_PID
+    let pid_reply = conn
+        .get_property(
+            false,
+            window_id,
+            net_wm_pid.atom,
+            AtomEnum::CARDINAL,
+            0,
+            1,
+        )
+        .ok()?
+        .reply()
+        .ok()?;
+
+    let pid = pid_reply.value32()?.next()?;
+    eprintln!(
+        "[hotkey] Linux active window 0x{:x} -> PID {}",
+        window_id, pid
+    );
+    if pid > 0 {
+        Some(pid as i32)
+    } else {
+        None
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+#[allow(dead_code)]
+fn get_active_window_pid() -> Option<i32> {
+    None
+}
+
+/// Linux-specific window key computation from X11 active window PID.
+///
+/// Derives exe name from PID via /proc, then resolves shell child PID for
+/// terminals and IDEs. Key format: "exe_name:shell_pid" or "exe_name:pid" fallback.
+#[cfg(target_os = "linux")]
+fn compute_window_key_linux(pid: i32) -> String {
+    let exe_name = detect_linux::get_exe_name_for_pid(pid);
+    let exe_str = exe_name.as_deref().unwrap_or("unknown");
+    let is_terminal = detect_linux::is_known_terminal_exe(exe_str);
+    let is_ide = detect_linux::is_ide_with_terminal_exe(exe_str);
+
+    let key = if is_terminal || is_ide {
+        match terminal::process::find_shell_pid(pid, None, None) {
+            Some(shell_pid) => format!("{}:{}", exe_str, shell_pid),
+            None => format!("{}:{}", exe_str, pid),
+        }
+    } else {
+        format!("{}:{}", exe_str, pid)
+    };
+
+    eprintln!("[hotkey] computed Linux window_key: {}", &key);
+    key
 }
 
 /// Restore focus to the previously captured HWND using the
@@ -367,6 +479,29 @@ pub fn register_hotkey(app: AppHandle, shortcut_str: String) -> Result<(), Strin
 
                             // Compute window key from bundle_id + shell_pid
                             let window_key = compute_window_key(pid, focused_cwd);
+                            if let Some(state) = app_handle.try_state::<AppState>() {
+                                if let Ok(mut wk) = state.current_window_key.lock() {
+                                    *wk = Some(window_key);
+                                }
+                            }
+                        }
+                    }
+
+                    // Linux: capture active window PID via X11, compute window key.
+                    #[cfg(target_os = "linux")]
+                    {
+                        let pid = get_active_window_pid();
+                        eprintln!(
+                            "[hotkey] Linux: capturing active window PID: {:?}",
+                            pid
+                        );
+                        if let Some(pid) = pid {
+                            if let Some(state) = app_handle.try_state::<AppState>() {
+                                if let Ok(mut prev) = state.previous_app_pid.lock() {
+                                    *prev = Some(pid);
+                                }
+                            }
+                            let window_key = compute_window_key_linux(pid);
                             if let Some(state) = app_handle.try_state::<AppState>() {
                                 if let Ok(mut wk) = state.current_window_key.lock() {
                                     *wk = Some(window_key);
