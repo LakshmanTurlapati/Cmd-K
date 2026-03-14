@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: executing
-stopped_at: Completed 31-02-PLAN.md
-last_updated: "2026-03-14T23:04:30.000Z"
+stopped_at: Completed 31-01-PLAN.md
+last_updated: "2026-03-14T23:05:04.977Z"
 last_activity: 2026-03-14 — Completed 31-02 Linux overlay frosted glass CSS
 progress:
   total_phases: 6
@@ -60,6 +60,8 @@ Recent decisions affecting current work:
 - [Phase 30]: process::get_process_name made pub(crate) on Linux for detect_linux cross-module access
 - [Phase 31]: CSS backdrop-blur-xl for Linux frosted glass (no native vibrancy support)
 - [Phase 31]: Three-tier border radius: macOS rounded-xl, Linux rounded-lg, Windows rounded-md
+- [Phase Phase 31]: x11rb for direct EWMH property queries (already transitive dep, no subprocess)
+- [Phase Phase 31]: Fresh X11 connection per hotkey press (1ms overhead acceptable with 200ms debounce)
 
 ### Pending Todos
 
@@ -73,6 +75,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-14T23:04:30.000Z
-Stopped at: Completed 31-02-PLAN.md
+Last session: 2026-03-14T23:05:04.959Z
+Stopped at: Completed 31-01-PLAN.md
 Next action: Execute next phase (32)

@@ -15,10 +15,10 @@ Requirements for Linux Support & Smart Terminal Context milestone. Each maps to 
 
 ### Linux Overlay & Hotkey
 
-- [ ] **LOVRL-01**: System-wide Ctrl+K hotkey registers and triggers overlay on X11
-- [ ] **LOVRL-02**: Overlay appears as floating window above active application on X11
-- [ ] **LOVRL-03**: Wayland users can run with `GDK_BACKEND=x11` (XWayland) for full overlay functionality
-- [ ] **LOVRL-04**: Active window PID captured before overlay shows (capture-before-show pattern)
+- [x] **LOVRL-01**: System-wide Ctrl+K hotkey registers and triggers overlay on X11
+- [x] **LOVRL-02**: Overlay appears as floating window above active application on X11
+- [x] **LOVRL-03**: Wayland users can run with `GDK_BACKEND=x11` (XWayland) for full overlay functionality
+- [x] **LOVRL-04**: Active window PID captured before overlay shows (capture-before-show pattern)
 - [x] **LOVRL-05**: CSS-only frosted glass fallback (no window-vibrancy on Linux)
 
 ### Linux Paste
@@ -76,10 +76,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LPROC-01 | Phase 30 | Complete |
 | LPROC-02 | Phase 30 | Complete |
 | LPROC-03 | Phase 30 | Complete |
-| LOVRL-01 | Phase 31 | Pending |
-| LOVRL-02 | Phase 31 | Pending |
-| LOVRL-03 | Phase 31 | Pending |
-| LOVRL-04 | Phase 31 | Pending |
+| LOVRL-01 | Phase 31 | Complete |
+| LOVRL-02 | Phase 31 | Complete |
+| LOVRL-03 | Phase 31 | Complete |
+| LOVRL-04 | Phase 31 | Complete |
 | LOVRL-05 | Phase 31 | Complete |
 | LPST-01 | Phase 32 | Pending |
 | LPST-02 | Phase 32 | Pending |
