@@ -5,9 +5,9 @@ milestone_name: Linux Support & Smart Terminal Context
 status: in-progress
 stopped_at: null
 last_updated: "2026-03-14"
-last_activity: 2026-03-14 -- Milestone v0.3.9 started
+last_activity: 2026-03-14 -- Roadmap created for v0.3.9 (6 phases, 23 requirements)
 progress:
-  total_phases: 0
+  total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-14)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Defining requirements for v0.3.9
+**Current focus:** Phase 30 - Linux Process Detection
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-14 — Milestone v0.3.9 started
+Phase: 30 (1 of 6 in v0.3.9) — Linux Process Detection
+Plan: 0 of ? in current phase
+Status: Ready to plan
+Last activity: 2026-03-14 — Roadmap created for v0.3.9
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -48,7 +48,13 @@ Progress: [░░░░░░░░░░] 0%
 
 ### Decisions
 
-All decisions archived in PROJECT.md Key Decisions table.
+Recent decisions affecting current work:
+
+- [v0.3.9]: X11-first with XWayland fallback for Wayland (industry standard)
+- [v0.3.9]: /proc filesystem for process detection (zero deps, simpler than macOS/Windows)
+- [v0.3.9]: find_shell_pid must maintain 3-arg arity for cross-platform compat
+- [v0.3.9]: AppImage on Ubuntu 22.04 for glibc floor
+- [v0.3.9]: Terminal text reading deferred to enhancement phase (AT-SPI2 complexity)
 
 ### Pending Todos
 
@@ -56,11 +62,12 @@ None.
 
 ### Blockers/Concerns
 
-- Cursor IDE assumed same as VS Code fork -- needs testing
-- Windows 10 vs 11 ConPTY differences may exist (conhost.exe vs OpenConsole.exe)
+- Wayland has no global hotkey protocol -- Tauri global-shortcut silently fails on pure Wayland
+- AT-SPI2 terminal text reliability untested across terminal emulators
+- x11rb vs xdotool for PID capture needs decision during Phase 31 planning
 
 ## Session Continuity
 
 Last session: 2026-03-14
-Stopped at: Milestone v0.3.9 started
-Next action: Define requirements
+Stopped at: Roadmap created for v0.3.9 milestone
+Next action: Plan Phase 30

@@ -73,35 +73,35 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LPROC-01 | - | Pending |
-| LPROC-02 | - | Pending |
-| LPROC-03 | - | Pending |
-| LOVRL-01 | - | Pending |
-| LOVRL-02 | - | Pending |
-| LOVRL-03 | - | Pending |
-| LOVRL-04 | - | Pending |
-| LOVRL-05 | - | Pending |
-| LPST-01 | - | Pending |
-| LPST-02 | - | Pending |
-| LPST-03 | - | Pending |
-| LTXT-01 | - | Pending |
-| LTXT-02 | - | Pending |
-| LTXT-03 | - | Pending |
-| LTXT-04 | - | Pending |
-| SCTX-01 | - | Pending |
-| SCTX-02 | - | Pending |
-| SCTX-03 | - | Pending |
-| SCTX-04 | - | Pending |
-| APKG-01 | - | Pending |
-| APKG-02 | - | Pending |
-| APKG-03 | - | Pending |
-| APKG-04 | - | Pending |
+| LPROC-01 | Phase 30 | Pending |
+| LPROC-02 | Phase 30 | Pending |
+| LPROC-03 | Phase 30 | Pending |
+| LOVRL-01 | Phase 31 | Pending |
+| LOVRL-02 | Phase 31 | Pending |
+| LOVRL-03 | Phase 31 | Pending |
+| LOVRL-04 | Phase 31 | Pending |
+| LOVRL-05 | Phase 31 | Pending |
+| LPST-01 | Phase 32 | Pending |
+| LPST-02 | Phase 32 | Pending |
+| LPST-03 | Phase 32 | Pending |
+| SCTX-01 | Phase 33 | Pending |
+| SCTX-02 | Phase 33 | Pending |
+| SCTX-03 | Phase 33 | Pending |
+| SCTX-04 | Phase 33 | Pending |
+| LTXT-01 | Phase 34 | Pending |
+| LTXT-02 | Phase 34 | Pending |
+| LTXT-03 | Phase 34 | Pending |
+| LTXT-04 | Phase 34 | Pending |
+| APKG-01 | Phase 35 | Pending |
+| APKG-02 | Phase 35 | Pending |
+| APKG-03 | Phase 35 | Pending |
+| APKG-04 | Phase 35 | Pending |
 
 **Coverage:**
 - v0.3.9 requirements: 23 total
-- Mapped to phases: 0
-- Unmapped: 23 ⚠️
+- Mapped to phases: 23
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-14*
-*Last updated: 2026-03-14 after initial definition*
+*Last updated: 2026-03-14 after roadmap creation*
