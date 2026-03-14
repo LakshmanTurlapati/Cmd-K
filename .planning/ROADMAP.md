@@ -122,7 +122,10 @@ Plans:
   3. Overlay has CSS-only frosted glass styling that looks reasonable without window-vibrancy
   4. Wayland users running with GDK_BACKEND=x11 get full overlay functionality via XWayland
   5. Overlay can be dismissed with Escape, repositioned by dragging (existing functionality carries over)
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 31-01-PLAN.md -- x11rb PID capture, hotkey handler Linux block, always-on-top setup
+- [ ] 31-02-PLAN.md -- CSS frosted glass fallback and isLinux() platform helper
 
 ### Phase 32: Linux Paste
 **Goal**: User completes the full Ctrl+K workflow on Linux -- query to AI response pasted into terminal
@@ -178,7 +181,7 @@ Plans:
 | 25-26 | v0.2.7 | 3/3 | Complete | 2026-03-10 |
 | 27-29 | v0.2.8 | 6/6 | Complete | 2026-03-14 |
 | 30. Linux Process Detection | 2/2 | Complete    | 2026-03-14 | - |
-| 31. Linux Overlay & Hotkey | v0.3.9 | 0/? | Not started | - |
+| 31. Linux Overlay & Hotkey | v0.3.9 | 0/2 | Planning complete | - |
 | 32. Linux Paste | v0.3.9 | 0/? | Not started | - |
 | 33. Smart Terminal Context | v0.3.9 | 0/? | Not started | - |
 | 34. Linux Terminal Text Reading | v0.3.9 | 0/? | Not started | - |
