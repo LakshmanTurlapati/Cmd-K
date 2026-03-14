@@ -841,6 +841,12 @@ fn is_sub_shell_of_any(pid: i32, ancestor_pids: &[i32], parent_map: &std::collec
     false
 }
 
+/// Non-macOS, non-Windows stub for get_parent_pid.
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn get_parent_pid(_pid: i32) -> Option<i32> {
+    None
+}
+
 /// Get the creation time of a process using GetProcessTimes.
 /// Returns the creation time as a u64 (FILETIME as single value) for comparison.
 #[cfg(target_os = "windows")]
@@ -1593,5 +1599,92 @@ mod tests {
     #[test]
     fn test_cmd_batch_flag_full_path_no_flags() {
         assert!(!has_batch_flag_in_cmdline("C:\\Windows\\system32\\cmd.exe"));
+    }
+
+    // -- Linux /proc leaf function tests --
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_get_process_cwd_self() {
+        let pid = std::process::id() as i32;
+        let cwd = get_process_cwd(pid);
+        assert!(cwd.is_some(), "get_process_cwd should return Some for current process");
+        let cwd_str = cwd.unwrap();
+        assert!(!cwd_str.is_empty(), "CWD should not be empty");
+        assert!(cwd_str.starts_with('/'), "CWD should be an absolute path");
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_get_process_cwd_invalid_pid() {
+        let cwd = get_process_cwd(999_999_999);
+        assert!(cwd.is_none(), "get_process_cwd should return None for invalid PID");
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_get_process_name_self() {
+        let pid = std::process::id() as i32;
+        let name = get_process_name(pid);
+        assert!(name.is_some(), "get_process_name should return Some for current process");
+        let name_str = name.unwrap();
+        assert!(!name_str.is_empty(), "Process name should not be empty");
+        // The test runner binary name should not contain path separators
+        assert!(!name_str.contains('/'), "Process name should be just the filename, not a path");
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_get_process_name_invalid_pid() {
+        let name = get_process_name(999_999_999);
+        assert!(name.is_none(), "get_process_name should return None for invalid PID");
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_get_parent_pid_self() {
+        let pid = std::process::id() as i32;
+        let ppid = get_parent_pid(pid);
+        assert!(ppid.is_some(), "get_parent_pid should return Some for current process");
+        let ppid_val = ppid.unwrap();
+        assert!(ppid_val > 0, "Parent PID should be positive");
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_get_parent_pid_invalid_pid() {
+        let ppid = get_parent_pid(999_999_999);
+        assert!(ppid.is_none(), "get_parent_pid should return None for invalid PID");
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_get_child_pids_spawned_child() {
+        use std::process::{Command, Stdio};
+        // Spawn a child process that sleeps briefly
+        let child = Command::new("sleep")
+            .arg("10")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
+        assert!(child.is_ok(), "Should be able to spawn sleep process");
+        let mut child = child.unwrap();
+        let child_pid = child.id() as i32;
+
+        let pid = std::process::id() as i32;
+        let children = get_child_pids(pid);
+        assert!(children.contains(&child_pid),
+            "get_child_pids should find spawned child pid {} in {:?}", child_pid, children);
+
+        // Clean up
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_get_child_pids_invalid_pid() {
+        let children = get_child_pids(999_999_999);
+        assert!(children.is_empty(), "get_child_pids should return empty vec for invalid PID");
     }
 }
