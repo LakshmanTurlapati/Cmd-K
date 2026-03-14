@@ -1743,4 +1743,42 @@ mod tests {
         let children = get_child_pids(999_999_999);
         assert!(children.is_empty(), "get_child_pids should return empty vec for invalid PID");
     }
+
+    // -- Linux ancestry function tests --
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_build_parent_map_includes_self() {
+        let map = build_parent_map();
+        let pid = std::process::id() as i32;
+        assert!(map.contains_key(&pid),
+            "build_parent_map should include current process pid {}", pid);
+        let ppid = map[&pid];
+        assert!(ppid > 0, "Parent PID in map should be positive");
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_is_descendant_of_to_init() {
+        // Current process should be a descendant of PID 1 (init/systemd)
+        let pid = std::process::id() as i32;
+        assert!(is_descendant_of(pid, 1),
+            "Current process should be a descendant of init (PID 1)");
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_is_descendant_of_self_not_ancestor() {
+        let pid = std::process::id() as i32;
+        // A process is not a descendant of itself
+        assert!(!is_descendant_of(pid, pid),
+            "A process should not be a descendant of itself");
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_is_descendant_of_invalid() {
+        assert!(!is_descendant_of(999_999_999, 1),
+            "Invalid PID should not be a descendant of anything");
+    }
 }
