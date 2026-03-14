@@ -9,9 +9,9 @@ Requirements for Linux Support & Smart Terminal Context milestone. Each maps to 
 
 ### Linux Process Detection
 
-- [ ] **LPROC-01**: CWD detected via `/proc/PID/cwd` readlink for the active terminal's shell process
-- [ ] **LPROC-02**: Shell type detected via `/proc/PID/exe` readlink (bash, zsh, fish, etc.)
-- [ ] **LPROC-03**: Process tree walking via `/proc/PID/children` to find shell process from terminal emulator PID
+- [x] **LPROC-01**: CWD detected via `/proc/PID/cwd` readlink for the active terminal's shell process
+- [x] **LPROC-02**: Shell type detected via `/proc/PID/exe` readlink (bash, zsh, fish, etc.)
+- [x] **LPROC-03**: Process tree walking via `/proc/PID/children` to find shell process from terminal emulator PID
 
 ### Linux Overlay & Hotkey
 
@@ -73,9 +73,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LPROC-01 | Phase 30 | Pending |
-| LPROC-02 | Phase 30 | Pending |
-| LPROC-03 | Phase 30 | Pending |
+| LPROC-01 | Phase 30 | Complete |
+| LPROC-02 | Phase 30 | Complete |
+| LPROC-03 | Phase 30 | Complete |
 | LOVRL-01 | Phase 31 | Pending |
 | LOVRL-02 | Phase 31 | Pending |
 | LOVRL-03 | Phase 31 | Pending |
