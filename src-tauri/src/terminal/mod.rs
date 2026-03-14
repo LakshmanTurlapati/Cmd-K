@@ -282,11 +282,47 @@ fn detect_inner(previous_app_pid: i32) -> Option<TerminalContext> {
         detect_inner_windows(previous_app_pid)
     }
 
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    #[cfg(target_os = "linux")]
+    {
+        detect_inner_linux(previous_app_pid)
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
     {
         let _ = previous_app_pid;
         None
     }
+}
+
+/// Linux-specific inner detection.
+#[cfg(target_os = "linux")]
+fn detect_inner_linux(previous_app_pid: i32) -> Option<TerminalContext> {
+    let exe_name = detect_linux::get_exe_name_for_pid(previous_app_pid);
+    let exe_str = exe_name.as_deref().unwrap_or("unknown");
+    let is_terminal = detect_linux::is_known_terminal_exe(exe_str);
+    let is_ide = detect_linux::is_ide_with_terminal_exe(exe_str);
+
+    eprintln!("[detect_inner_linux] exe={} is_terminal={} is_ide={}", exe_str, is_terminal, is_ide);
+
+    if !is_terminal && !is_ide {
+        eprintln!("[detect_inner_linux] {} is not a terminal or IDE, trying generic shell detection", exe_str);
+    }
+
+    // Walk process tree to find shell (reuses Plan 01 /proc implementation)
+    let proc_info = process::get_foreground_info(previous_app_pid);
+
+    if proc_info.shell_type.is_none() && proc_info.cwd.is_none() {
+        eprintln!("[detect_inner_linux] no shell found in process tree of {} ({})", previous_app_pid, exe_str);
+        return None;
+    }
+
+    Some(TerminalContext {
+        shell_type: proc_info.shell_type,
+        cwd: proc_info.cwd,
+        visible_output: None, // Terminal text reading is Phase 34
+        running_process: proc_info.running_process,
+        is_wsl: false,
+    })
 }
 
 /// Windows-specific inner detection.
@@ -372,11 +408,50 @@ fn detect_app_context(previous_app_pid: i32, pre_captured_text: Option<String>) 
         detect_app_context_windows(previous_app_pid, pre_captured_text, None)
     }
 
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    #[cfg(target_os = "linux")]
+    {
+        detect_app_context_linux(previous_app_pid, pre_captured_text)
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
     {
         let _ = (previous_app_pid, pre_captured_text);
         None
     }
+}
+
+/// Linux-specific full app context detection.
+#[cfg(target_os = "linux")]
+fn detect_app_context_linux(previous_app_pid: i32, _pre_captured_text: Option<String>) -> Option<AppContext> {
+    let exe_name = detect_linux::get_exe_name_for_pid(previous_app_pid);
+    let exe_str = exe_name.as_deref().unwrap_or("unknown");
+    let app_name = Some(detect_linux::clean_linux_app_name(exe_str));
+
+    eprintln!("[detect_app_context_linux] exe={} app_name={:?}", exe_str, &app_name);
+
+    // Walk process tree to find shell (reuses Plan 01 /proc implementation)
+    let proc_info = process::get_foreground_info(previous_app_pid);
+    let has_shell = proc_info.shell_type.is_some() || proc_info.cwd.is_some();
+
+    let terminal = if has_shell {
+        Some(TerminalContext {
+            shell_type: proc_info.shell_type,
+            cwd: proc_info.cwd,
+            visible_output: None, // Terminal text reading is Phase 34
+            running_process: proc_info.running_process,
+            is_wsl: false,
+        })
+    } else {
+        None
+    };
+
+    Some(AppContext {
+        app_name,
+        terminal,
+        console_detected: false,
+        console_last_line: None,
+        visible_text: None, // Generic text reading deferred to Phase 34
+    })
 }
 
 #[cfg(target_os = "macos")]
