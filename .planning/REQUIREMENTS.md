@@ -19,7 +19,7 @@ Requirements for Linux Support & Smart Terminal Context milestone. Each maps to 
 - [ ] **LOVRL-02**: Overlay appears as floating window above active application on X11
 - [ ] **LOVRL-03**: Wayland users can run with `GDK_BACKEND=x11` (XWayland) for full overlay functionality
 - [ ] **LOVRL-04**: Active window PID captured before overlay shows (capture-before-show pattern)
-- [ ] **LOVRL-05**: CSS-only frosted glass fallback (no window-vibrancy on Linux)
+- [x] **LOVRL-05**: CSS-only frosted glass fallback (no window-vibrancy on Linux)
 
 ### Linux Paste
 
@@ -80,7 +80,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LOVRL-02 | Phase 31 | Pending |
 | LOVRL-03 | Phase 31 | Pending |
 | LOVRL-04 | Phase 31 | Pending |
-| LOVRL-05 | Phase 31 | Pending |
+| LOVRL-05 | Phase 31 | Complete |
 | LPST-01 | Phase 32 | Pending |
 | LPST-02 | Phase 32 | Pending |
 | LPST-03 | Phase 32 | Pending |

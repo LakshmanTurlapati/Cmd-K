@@ -90,7 +90,7 @@
 ### v0.3.9 Linux Support & Smart Terminal Context (In Progress)
 
 - [x] **Phase 30: Linux Process Detection** - CWD, shell type, and process tree via /proc filesystem (completed 2026-03-14)
-- [ ] **Phase 31: Linux Overlay & Hotkey** - X11 system-wide hotkey, floating overlay, PID capture, CSS glass fallback
+- [x] **Phase 31: Linux Overlay & Hotkey** - X11 system-wide hotkey, floating overlay, PID capture, CSS glass fallback (completed 2026-03-14)
 - [ ] **Phase 32: Linux Paste** - xdotool paste on X11, clipboard fallback on Wayland, destructive pattern integration
 - [ ] **Phase 33: Smart Terminal Context** - Cross-platform ANSI stripping, token-budget truncation, command-output pairing
 - [ ] **Phase 34: Linux Terminal Text Reading** - AT-SPI2 for VTE terminals, kitty/WezTerm remote control APIs
@@ -124,8 +124,8 @@ Plans:
   5. Overlay can be dismissed with Escape, repositioned by dragging (existing functionality carries over)
 **Plans:** 2 plans
 Plans:
-- [ ] 31-01-PLAN.md -- x11rb PID capture, hotkey handler Linux block, always-on-top setup
-- [ ] 31-02-PLAN.md -- CSS frosted glass fallback and isLinux() platform helper
+- [x] 31-01-PLAN.md -- x11rb PID capture, hotkey handler Linux block, always-on-top setup
+- [x] 31-02-PLAN.md -- CSS frosted glass fallback and isLinux() platform helper
 
 ### Phase 32: Linux Paste
 **Goal**: User completes the full Ctrl+K workflow on Linux -- query to AI response pasted into terminal
@@ -181,7 +181,7 @@ Plans:
 | 25-26 | v0.2.7 | 3/3 | Complete | 2026-03-10 |
 | 27-29 | v0.2.8 | 6/6 | Complete | 2026-03-14 |
 | 30. Linux Process Detection | 2/2 | Complete    | 2026-03-14 | - |
-| 31. Linux Overlay & Hotkey | v0.3.9 | 0/2 | Planning complete | - |
+| 31. Linux Overlay & Hotkey | v0.3.9 | 2/2 | Complete | 2026-03-14 |
 | 32. Linux Paste | v0.3.9 | 0/? | Not started | - |
 | 33. Smart Terminal Context | v0.3.9 | 0/? | Not started | - |
 | 34. Linux Terminal Text Reading | v0.3.9 | 0/? | Not started | - |

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: executing
-stopped_at: Completed 30-02-PLAN.md
-last_updated: "2026-03-14T22:34:55.728Z"
-last_activity: 2026-03-14 — Completed 30-01 Linux /proc process detection
+stopped_at: Completed 31-02-PLAN.md
+last_updated: "2026-03-14T23:04:30.000Z"
+last_activity: 2026-03-14 — Completed 31-02 Linux overlay frosted glass CSS
 progress:
   total_phases: 6
-  completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
-  percent: 50
+  completed_phases: 2
+  total_plans: 4
+  completed_plans: 4
+  percent: 67
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-14)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Phase 30 - Linux Process Detection
+**Current focus:** Phase 31 - Linux Overlay & Hotkey
 
 ## Current Position
 
-Phase: 30 (1 of 6 in v0.3.9) — Linux Process Detection
-Plan: 1 of 2 in current phase
+Phase: 31 (2 of 6 in v0.3.9) — Linux Overlay & Hotkey
+Plan: 2 of 2 in current phase (phase complete)
 Status: Executing
-Last activity: 2026-03-14 — Completed 30-01 Linux /proc process detection
+Last activity: 2026-03-14 — Completed 31-02 Linux overlay frosted glass CSS
 
-Progress: [█████░░░░░] 50%
+Progress: [██████░░░░] 67%
 
 ## Performance Metrics
 
@@ -58,6 +58,8 @@ Recent decisions affecting current work:
 - [Phase 30]: Linux /proc leaf functions use target_os=linux cfg gates for explicit three-way split
 - [Phase 30]: Case-sensitive exe matching for Linux terminal/IDE classification
 - [Phase 30]: process::get_process_name made pub(crate) on Linux for detect_linux cross-module access
+- [Phase 31]: CSS backdrop-blur-xl for Linux frosted glass (no native vibrancy support)
+- [Phase 31]: Three-tier border radius: macOS rounded-xl, Linux rounded-lg, Windows rounded-md
 
 ### Pending Todos
 
@@ -71,6 +73,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-14T22:29:45.649Z
-Stopped at: Completed 30-02-PLAN.md
-Next action: Execute 30-02-PLAN.md
+Last session: 2026-03-14T23:04:30.000Z
+Stopped at: Completed 31-02-PLAN.md
+Next action: Execute next phase (32)
