@@ -69,12 +69,21 @@ The overlay must appear on top of the currently active application and feel inst
 
 ### Active
 
-(No active milestone — run `/gsd:new-milestone` to plan next)
+## Current Milestone: v0.3.9 Linux Support & Smart Terminal Context
+
+**Goal:** Add full Linux platform support (1:1 feature parity with macOS) and smart terminal context reading with scrollback + intelligent truncation.
+
+**Target features:**
+- Linux overlay (X11 + Wayland) with system-wide hotkey
+- Linux terminal context: CWD, shell type, terminal output reading, paste
+- Linux destructive command detection
+- AppImage universal distribution
+- Smart terminal context: full visible text + scrollback with intelligent truncation to fit AI context window
 
 ### Out of Scope
 
 - VS Code extension -- dropped in favor of standalone overlay app
-- Linux support -- Windows is v0.2.1 scope, Linux deferred to future
+- ~~Linux support~~ -- Now active in v0.3.9
 - Command favorites/bookmarks -- future feature (history is v0.1.1 scope)
 - Multi-step command workflows -- future feature
 - Command explanation mode -- future feature
@@ -82,7 +91,7 @@ The overlay must appear on top of the currently active application and feel inst
 - App Store distribution -- incompatible with Accessibility API requirement
 - Auto-execution without review -- safety risk, always paste, never execute directly
 - Windows OV/EV code signing -- purchase when distribution warrants it
-- Linux builds -- separate phase
+- ~~Linux builds~~ -- Now active in v0.3.9
 
 ## Context
 

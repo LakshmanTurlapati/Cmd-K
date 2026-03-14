@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.2.8
-milestone_name: Windows Terminal Detection Fix & Provider Icons
-status: milestone-complete
-stopped_at: Milestone v0.2.8 archived
+milestone: v0.3.9
+milestone_name: Linux Support & Smart Terminal Context
+status: in-progress
+stopped_at: null
 last_updated: "2026-03-14"
-last_activity: 2026-03-14 -- Milestone v0.2.8 completed and archived
+last_activity: 2026-03-14 -- Milestone v0.3.9 started
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,14 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-14)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Planning next milestone
+**Current focus:** Defining requirements for v0.3.9
 
 ## Current Position
 
-Milestone v0.2.8 complete. No active milestone.
-Next action: `/gsd:new-milestone` to start next milestone cycle.
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-14 — Milestone v0.3.9 started
 
-Progress: [██████████] 100%
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
@@ -60,5 +62,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-14
-Stopped at: Milestone v0.2.8 archived
-Next action: /gsd:new-milestone
+Stopped at: Milestone v0.3.9 started
+Next action: Define requirements
