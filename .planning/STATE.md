@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
-status: planning
-stopped_at: Completed 30-01-PLAN.md
-last_updated: "2026-03-14T22:21:38.232Z"
-last_activity: 2026-03-14 — Roadmap created for v0.3.9
+status: executing
+stopped_at: Completed 30-02-PLAN.md
+last_updated: "2026-03-14T22:29:45.673Z"
+last_activity: 2026-03-14 — Completed 30-01 Linux /proc process detection
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
-  percent: 0
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
@@ -56,6 +56,8 @@ Recent decisions affecting current work:
 - [v0.3.9]: AppImage on Ubuntu 22.04 for glibc floor
 - [v0.3.9]: Terminal text reading deferred to enhancement phase (AT-SPI2 complexity)
 - [Phase 30]: Linux /proc leaf functions use target_os=linux cfg gates for explicit three-way split
+- [Phase 30]: Case-sensitive exe matching for Linux terminal/IDE classification
+- [Phase 30]: process::get_process_name made pub(crate) on Linux for detect_linux cross-module access
 
 ### Pending Todos
 
@@ -69,6 +71,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-14T22:21:38.217Z
-Stopped at: Completed 30-01-PLAN.md
+Last session: 2026-03-14T22:29:45.649Z
+Stopped at: Completed 30-02-PLAN.md
 Next action: Execute 30-02-PLAN.md

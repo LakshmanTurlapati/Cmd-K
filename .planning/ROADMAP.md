@@ -89,7 +89,7 @@
 
 ### v0.3.9 Linux Support & Smart Terminal Context (In Progress)
 
-- [ ] **Phase 30: Linux Process Detection** - CWD, shell type, and process tree via /proc filesystem
+- [x] **Phase 30: Linux Process Detection** - CWD, shell type, and process tree via /proc filesystem (completed 2026-03-14)
 - [ ] **Phase 31: Linux Overlay & Hotkey** - X11 system-wide hotkey, floating overlay, PID capture, CSS glass fallback
 - [ ] **Phase 32: Linux Paste** - xdotool paste on X11, clipboard fallback on Wayland, destructive pattern integration
 - [ ] **Phase 33: Smart Terminal Context** - Cross-platform ANSI stripping, token-budget truncation, command-output pairing
@@ -107,7 +107,7 @@
   2. User's shell type (bash, zsh, fish) is correctly identified regardless of terminal emulator
   3. Process tree walking finds the shell process from any terminal emulator PID (GNOME Terminal, kitty, Alacritty, etc.)
   4. The project compiles on Linux with real /proc code paths replacing stubs
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 30-01-PLAN.md -- /proc leaf functions and ancestry search in process.rs
 - [ ] 30-02-PLAN.md -- Linux detection orchestration (detect_linux.rs + mod.rs wiring)
@@ -177,7 +177,7 @@ Plans:
 | 21-24 | v0.2.6 | 10/10 | Complete | 2026-03-09 |
 | 25-26 | v0.2.7 | 3/3 | Complete | 2026-03-10 |
 | 27-29 | v0.2.8 | 6/6 | Complete | 2026-03-14 |
-| 30. Linux Process Detection | 1/2 | In Progress|  | - |
+| 30. Linux Process Detection | 2/2 | Complete   | 2026-03-14 | - |
 | 31. Linux Overlay & Hotkey | v0.3.9 | 0/? | Not started | - |
 | 32. Linux Paste | v0.3.9 | 0/? | Not started | - |
 | 33. Smart Terminal Context | v0.3.9 | 0/? | Not started | - |
