@@ -474,7 +474,7 @@ fn get_process_name(pid: i32) -> Option<String> {
 /// Linux: read /proc/PID/exe symlink to get the process binary name.
 /// Handles the " (deleted)" suffix that the kernel appends when a binary is replaced.
 #[cfg(target_os = "linux")]
-fn get_process_name(pid: i32) -> Option<String> {
+pub(crate) fn get_process_name(pid: i32) -> Option<String> {
     let path = format!("/proc/{}/exe", pid);
     let target = std::fs::read_link(&path).ok()?;
     let target_str = target.to_string_lossy();

@@ -2,6 +2,8 @@ pub mod ax_reader;
 pub mod browser;
 pub mod detect;
 #[allow(dead_code)]
+pub mod detect_linux;
+#[allow(dead_code)]
 pub mod detect_windows;
 pub mod filter;
 pub mod process;
