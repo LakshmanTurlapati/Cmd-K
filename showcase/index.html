@@ -63,16 +63,17 @@
       </p>
 
       <div class="hero-buttons reveal reveal-delay-3">
-        <a href="#" data-download="macos" data-platform="macos" target="_blank" rel="noopener" class="btn btn-primary">
+        <!-- Primary: detected OS button (JS shows the right one) -->
+        <a href="#" data-download="macos" data-platform="macos" target="_blank" rel="noopener" class="btn btn-primary hero-download-btn">
           <svg class="btn-icon" viewBox="0 0 814 1000" fill="currentColor"><path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76.5 0-103.7 40.8-165.9 40.8s-105.6-57.8-155.5-127.4C46.7 771.7 0 620.4 0 477.9 0 306.1 96.3 214.5 191.2 214.5c62.8 0 114.9 42.1 154.2 42.1 37.3 0 95.8-44.7 167.6-44.7 27.1 0 124.5 1.9 188.1 76.1z M554.1 0c4.5 0 9 0 13.5 0 3.2 72.5-26.5 127.4-61 167.6-37.3 42.7-92.2 75.8-148.4 73.9-5.1-2.5-5.1-7.7-5.1-12.8C353.1 160.5 416.2 67.9 554.1 0z"/></svg>
           Download for macOS
         </a>
-        <a href="#" data-download="windows" data-platform="windows" target="_blank" rel="noopener" class="btn btn-primary">
+        <a href="#" data-download="windows" data-platform="windows" target="_blank" rel="noopener" class="btn btn-primary hero-download-btn">
           <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
           Download for Windows
         </a>
-        <div class="linux-download-wrapper">
-          <a href="#" data-platform="linux" class="btn btn-primary linux-download-btn">
+        <div class="linux-download-wrapper hero-download-btn" data-platform="linux">
+          <a href="#" class="btn btn-primary linux-download-btn">
             <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.323 1.396-1.743 2.817-1.659 1.717-3.203 4.093-3.203 5.795 0 2.153 1.222 3.705 2.996 4.627-.097.205-.158.413-.158.652 0 .921.738 1.79 2.243 1.79 1.262 0 2.088-.679 2.506-1.309.42.63 1.244 1.309 2.506 1.309 1.505 0 2.243-.869 2.243-1.79 0-.239-.061-.447-.158-.652C17.78 18.774 19 17.222 19 15.069c0-1.702-1.544-4.078-3.203-5.795-1.42-1.421-1.667-1.725-1.743-2.817-.065-1.491 1.056-5.965-3.17-6.298-.165-.013-.325-.021-.48-.021z"/></svg>
             Download for Linux
           </a>
@@ -91,6 +92,12 @@
           <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
           View Source
         </a>
+      </div>
+      <div class="hero-also-available reveal reveal-delay-3">
+        Also available for:
+        <a href="#" data-download="macos" data-platform-alt="macos" target="_blank" rel="noopener">macOS</a>
+        <a href="#" data-download="windows" data-platform-alt="windows" target="_blank" rel="noopener">Windows</a>
+        <a href="#" data-platform-alt="linux" class="linux-alt-link">Linux</a>
       </div>
 
       <div class="platform-badges reveal reveal-delay-3">

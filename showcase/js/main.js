@@ -198,13 +198,30 @@
 
     // ---- OS auto-detect ----
     var detectedOS = detectOS();
+    var alsoRow = document.querySelector('.hero-also-available');
     if (detectedOS) {
-      document.querySelectorAll('[data-platform="' + detectedOS + '"]').forEach(function(btn) {
-        btn.classList.add('platform-detected');
+      // Hide non-detected platform download buttons
+      document.querySelectorAll('.hero-download-btn').forEach(function(btn) {
+        var platform = btn.getAttribute('data-platform');
+        if (!platform) return;
+        if (platform !== detectedOS) {
+          btn.style.display = 'none';
+        }
       });
+      // In "also available" row, hide the detected OS link (show only others)
+      if (alsoRow) {
+        alsoRow.style.display = '';
+        alsoRow.querySelectorAll('[data-platform-alt="' + detectedOS + '"]').forEach(function(link) {
+          link.style.display = 'none';
+        });
+      }
+    } else {
+      // No OS detected — show all buttons, hide "also available" row
+      if (alsoRow) alsoRow.style.display = 'none';
     }
 
     // ---- Linux arch popup ----
+    var heroArchPopup = document.getElementById('hero-arch-popup');
     var linuxBtns = document.querySelectorAll('.linux-download-btn');
     linuxBtns.forEach(function(btn) {
       var popup = btn.parentElement.querySelector('.arch-popup');
@@ -212,6 +229,13 @@
       btn.addEventListener('click', function(e) {
         e.preventDefault();
         popup.classList.toggle('open');
+      });
+    });
+    // Also trigger arch popup from "also available" Linux link
+    document.querySelectorAll('.linux-alt-link').forEach(function(link) {
+      link.addEventListener('click', function(e) {
+        e.preventDefault();
+        if (heroArchPopup) heroArchPopup.classList.toggle('open');
       });
     });
 

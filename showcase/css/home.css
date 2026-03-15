@@ -1189,8 +1189,23 @@
   display: inline-flex;
 }
 
-.platform-detected {
-  box-shadow: 0 0 0 2px var(--accent);
+.hero-also-available {
+  display: none;
+  text-align: center;
+  margin-top: 12px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.hero-also-available a {
+  color: var(--accent);
+  text-decoration: none;
+  margin: 0 6px;
+  font-weight: 500;
+}
+
+.hero-also-available a:hover {
+  text-decoration: underline;
 }
 
 /* ---------- Arch Popup ---------- */
@@ -1201,12 +1216,14 @@
   left: 50%;
   transform: translateX(-50%);
   background: var(--bg-card);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 8px;
   min-width: 220px;
   box-shadow: var(--shadow-lg);
-  z-index: 10;
+  z-index: 9999;
 }
 
 .arch-popup.open {

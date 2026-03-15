@@ -14,7 +14,7 @@ Press a hotkey from anywhere on your desktop. Type what you want. Get a working 
 
 ![macOS](https://img.shields.io/badge/macOS-555555?style=for-the-badge&logo=apple&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-555555?style=for-the-badge&logo=windows&logoColor=white)
-![Linux](https://img.shields.io/badge/Linux-Coming_Soon-555555?style=for-the-badge&logo=linux&logoColor=white)
+![Linux](https://img.shields.io/badge/Linux-555555?style=for-the-badge&logo=linux&logoColor=white)
 [![Website](https://img.shields.io/badge/Website-cmd--k.site-555555?style=for-the-badge&logo=safari&logoColor=white)](https://www.cmd-k.site)
 
 [![Downloads](https://img.shields.io/github/downloads/LakshmanTurlapati/Cmd-K/total?style=for-the-badge&logo=github&logoColor=white&color=555555)](https://github.com/LakshmanTurlapati/Cmd-K/releases)
@@ -56,10 +56,10 @@ And when the generated command would `rm -rf` your home directory or `DROP` your
 | **System-Wide Overlay** | Floating overlay triggered by a global hotkey from any application. No dock icon, no window clutter -- just a translucent command bar that appears and disappears. |
 | **Natural Language Commands** | Describe what you want in plain English. AI models from OpenAI, Anthropic, Google Gemini, xAI, or OpenRouter stream a working terminal command back token-by-token. |
 | **Zero-Config Context Detection** | Reads your current working directory, shell type, and recent terminal output via platform accessibility APIs and process introspection. No shell plugins, no rc file edits. |
-| **Multi-Terminal Support** | Detects and reads context from Terminal.app, iTerm2, Alacritty, kitty, and WezTerm. Recognizes shells inside VS Code and Cursor. |
+| **Multi-Terminal Support** | Detects and reads context from Terminal.app, iTerm2, Alacritty, kitty, WezTerm, GNOME Terminal, Konsole, and Windows Terminal. Recognizes shells inside VS Code and Cursor. |
 | **Browser DevTools Support** | Detects open DevTools consoles in Chrome, Safari, Firefox, Arc, Edge, and Brave. Switches to a conversational assistant mode for web debugging. |
 | **Destructive Command Safety** | 50+ regex patterns flag dangerous commands (rm -rf, DROP TABLE, git push --force, etc.) with a red badge and an AI-generated plain-English explanation of the risk. |
-| **Secure API Key Storage** | Your API key lives in your system's secure credential store. It never touches a plaintext config file and never leaves the Rust backend. |
+| **Secure API Key Storage** | Your API key lives in your system's secure credential store (macOS Keychain, Windows Credential Manager, Linux libsecret). It never touches a plaintext config file and never leaves the Rust backend. |
 | **Smart Onboarding** | A 4-step wizard handles Accessibility permissions, API key validation, and model selection on first launch. No manual setup required. |
 | **Configurable Hotkey** | Change the trigger shortcut to any key combination. Preset suggestions and a custom key recorder are built in. |
 | **Lightweight Native App** | Built with Tauri 2 and Rust. Runs as a menu bar utility with minimal memory footprint. No Electron. No bundled Chromium. |
@@ -68,7 +68,7 @@ And when the generated command would `rm -rf` your home directory or `DROP` your
 
 ## How It Works
 
-1. **Press the hotkey** -- Cmd+K on macOS, Ctrl+K on Windows (default) from any application. The overlay appears centered on your active screen.
+1. **Press the hotkey** -- Cmd+K on macOS, Ctrl+K on Windows/Linux (default) from any application. The overlay appears centered on your active screen.
 2. **Type your intent** -- Describe what you want in natural language. "Find all PDFs modified this week" or "Kill whatever is hogging port 3000."
 3. **Context is gathered** -- CMD+K captures the foreground app's PID, resolves the active terminal's working directory, shell type, and recent visible output via platform accessibility APIs.
 4. **AI generates the command** -- Your query plus context is sent to your selected AI provider. The response streams token-by-token into the results area with shell syntax highlighting.
@@ -121,6 +121,14 @@ graph TB
         SI[SendInput / arboard Paste]
     end
 
+    subgraph Linux["Linux Platform"]
+        X11[X11 Overlay + CSS Glass]
+        ATSPI[AT-SPI2 / kitty / WezTerm Reader]
+        LPROC[/proc Filesystem]
+        LSECRET[libsecret Keyring]
+        XDO[xdotool Paste]
+    end
+
     subgraph External["AI Providers"]
         PROVIDERS["OpenAI · Anthropic · Gemini · xAI · OpenRouter"]
     end
@@ -137,14 +145,18 @@ graph TB
 
     CTX --> AX
     CTX --> UIA
+    CTX --> ATSPI
     CTX --> PROC
     CTX --> WPROC
+    CTX --> LPROC
     CRED --> KEYS
     CRED --> WCRED
+    CRED --> LSECRET
     AI --> CTX
     AI --> CRED
     PASTE --> AS
     PASTE --> SI
+    PASTE --> XDO
 
     TRAY --> SET
     TRAY --> ONB
@@ -182,7 +194,16 @@ graph TB
 
 ## Download
 
-Grab the latest release from the [Releases page](https://github.com/LakshmanTurlapati/Cmd-K/releases). All builds are compiled and signed automatically via GitHub Actions -- nothing touches a local machine. macOS binaries are notarized through Apple, so Gatekeeper won't complain. You can audit every step in the [workflow source](.github/workflows/).
+Grab the latest release from the [Releases page](https://github.com/LakshmanTurlapati/Cmd-K/releases).
+
+| Platform | Format | Notes |
+|---|---|---|
+| **macOS** (Universal) | `.dmg` | Signed + notarized. Gatekeeper-ready. |
+| **Windows** (x64) | `.exe` (NSIS) | Auto-installs per-user. |
+| **Linux** (x86_64) | `.AppImage` | `chmod +x` and run. |
+| **Linux** (aarch64) | `.AppImage` | ARM64 build for Raspberry Pi, etc. |
+
+All builds are compiled and signed automatically via GitHub Actions -- nothing touches a local machine. Auto-updates are built in on all platforms. You can audit every step in the [workflow source](.github/workflows/).
 
 ---
 
@@ -190,7 +211,7 @@ Grab the latest release from the [Releases page](https://github.com/LakshmanTurl
 
 ### Prerequisites
 
-- macOS 13+ (Ventura or later) or Windows 10+
+- macOS 13+ (Ventura or later), Windows 10+, or Linux (Ubuntu 22.04+, X11)
 - [Rust](https://rustup.rs/) (latest stable)
 - [Node.js](https://nodejs.org/) 18+
 - [pnpm](https://pnpm.io/)
@@ -224,7 +245,7 @@ On first launch, the onboarding wizard will walk you through:
 pnpm tauri build
 ```
 
-The installer will be in `src-tauri/target/release/bundle/` (`.dmg` on macOS, `.msi` on Windows).
+The installer will be in `src-tauri/target/release/bundle/` (`.dmg` on macOS, `.exe` on Windows, `.AppImage` on Linux).
 
 ---
 
@@ -265,8 +286,8 @@ cmd-k/
 │   │   │   ├── xai.rs            # API validation, model fetching
 │   │   │   ├── safety.rs         # 50+ destructive patterns, AI explanation
 │   │   │   ├── terminal.rs       # Context detection IPC bridge
-│   │   │   ├── paste.rs          # Platform paste (AppleScript / SendInput)
-│   │   │   ├── keychain.rs       # Credential storage (Keychain / WCM)
+│   │   │   ├── paste.rs          # Platform paste (AppleScript / SendInput / xdotool)
+│   │   │   ├── keychain.rs       # Credential storage (Keychain / WCM / libsecret)
 │   │   │   ├── hotkey.rs         # Global shortcut + focus capture
 │   │   │   ├── window.rs         # Overlay positioning, multi-monitor
 │   │   │   ├── tray.rs           # System tray icon and menu
@@ -275,9 +296,12 @@ cmd-k/
 │   │       ├── mod.rs            # Terminal detection orchestrator
 │   │       ├── detect.rs         # macOS: Bundle ID, app name cleaning
 │   │       ├── detect_windows.rs # Windows: foreground window detection
-│   │       ├── process.rs        # Process tree walking (libproc / Win32)
+│   │       ├── detect_linux.rs   # Linux: X11 active window detection
+│   │       ├── process.rs        # Process tree walking (libproc / Win32 / /proc)
 │   │       ├── ax_reader.rs      # macOS: Accessibility API text extraction
 │   │       ├── uia_reader.rs     # Windows: UI Automation text extraction
+│   │       ├── linux_reader.rs   # Linux: AT-SPI2 / kitty / WezTerm text reading
+│   │       ├── context.rs        # Cross-platform ANSI strip + smart truncation
 │   │       ├── browser.rs        # Browser DevTools console detection
 │   │       └── filter.rs         # Sensitive data scrubbing
 │   └── icons/                    # App icons
@@ -286,10 +310,13 @@ cmd-k/
 │   ├── build-dmg.sh              # macOS: signed + notarized DMG pipeline
 │   └── build-windows.sh          # Windows: NSIS installer build
 │
+├── .github/workflows/
+│   └── release.yml               # CI: macOS + Windows + Linux builds → GitHub Release
+│
 ├── showcase/                     # Project website (cmd-k.site)
 ├── K.png                         # Tray icon
 ├── LICENSE                       # MIT
-└── package.json                  # Frontend deps + build:mac / build:windows
+└── package.json                  # Frontend deps
 ```
 
 ---
@@ -316,6 +343,19 @@ cmd-k/
 | **Command Prompt** | Full (CWD, shell, output) | UI Automation | Auto-paste via SendInput |
 | **VS Code / Cursor** | Shell detected inside editor | Via UIA tree | Integrated terminal recognized as shell |
 
+### Linux
+
+| Terminal | Context Detection | Output Reading | Notes |
+|---|---|---|---|
+| **GNOME Terminal** | Full (CWD, shell, output) | AT-SPI2 D-Bus | Auto-paste via xdotool (X11) |
+| **Tilix** | Full (CWD, shell, output) | AT-SPI2 D-Bus | VTE-based; auto-paste via xdotool |
+| **Terminator** | Full (CWD, shell, output) | AT-SPI2 D-Bus | VTE-based; auto-paste via xdotool |
+| **Konsole** | Full (CWD, shell, output) | AT-SPI2 D-Bus | Qt-based; auto-paste via xdotool |
+| **kitty** | Full (CWD, shell, output) | Remote control API | `kitty @ get-text`; auto-paste via xdotool |
+| **WezTerm** | Full (CWD, shell, output) | CLI API | `wezterm cli get-text`; auto-paste via xdotool |
+| **Alacritty** | Partial (CWD, shell) | Not available | GPU-rendered; no text API |
+| **VS Code / Cursor** | Shell detected inside editor | AT-SPI2 | Integrated terminal recognized as shell |
+
 ### Cross-Platform
 
 | Target | Context Detection | Output Reading | Notes |
@@ -330,9 +370,9 @@ Type `/settings` into the overlay to configure these options.
 
 | Setting | Location | Description |
 |---|---|---|
-| **API Key** | System credential store (macOS Keychain / Windows Credential Manager) | API key for your selected provider. Never stored in plaintext. Never sent to the frontend. |
+| **API Key** | System credential store (macOS Keychain / Windows Credential Manager / Linux libsecret) | API key for your selected provider. Never stored in plaintext. Never sent to the frontend. |
 | **Model** | Tauri Store (`settings.json`) | AI provider and model selection. Default provider: xAI. |
-| **Hotkey** | Tauri Store (`settings.json`) | Global trigger shortcut. Default: `Cmd+K` (macOS) / `Ctrl+K` (Windows). Supports any modifier+key combination. |
+| **Hotkey** | Tauri Store (`settings.json`) | Global trigger shortcut. Default: `Cmd+K` (macOS) / `Ctrl+K` (Windows/Linux). Supports any modifier+key combination. |
 | **Destructive Detection** | Settings > Preferences | Toggle safety pattern scanning on/off. Default: enabled. |
 | **Auto-Paste** | Settings > Preferences | Auto-paste generated commands to active terminal. Default: enabled. |
 
