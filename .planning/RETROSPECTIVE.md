@@ -170,6 +170,53 @@
 
 ---
 
+## Milestone: v0.3.9 -- Linux Support & Smart Terminal Context
+
+**Shipped:** 2026-03-15
+**Phases:** 7 | **Plans:** 10
+
+### What Was Built
+- Linux /proc process detection — CWD, shell type, process tree walking with 18 terminal emulators and 9 IDEs classified
+- X11 overlay and hotkey — x11rb EWMH PID capture, CSS backdrop-blur-xl frosted glass, always-on-top floating window
+- Linux paste via xdotool on X11, Wayland clipboard fallback with inline amber hint
+- Smart terminal context pipeline — ANSI stripping, model-aware 12% token-budget truncation, command-output segmentation (cross-platform)
+- Linux terminal text reading — AT-SPI2 D-Bus for VTE, kitty remote control, WezTerm CLI
+- AppImage distribution with dual-arch CI (x86_64 + aarch64), auto-updater manifest, write-permission guard
+- Showcase website update with OS-detected downloads and privacy policy
+
+### What Worked
+- /proc filesystem provided a dramatically simpler process detection implementation than macOS (libproc FFI) or Windows (CreateToolhelp32Snapshot) — zero external dependencies
+- Three-way cfg gate pattern (target_os = "macos"/"windows"/"linux") kept platform boundaries crystal clear
+- Strategy dispatch by exe_name for terminal text reading was clean and extensible
+- Smart context pipeline was fully cross-platform (no cfg gates) — validated architecture choice
+- Entire milestone (7 phases, 10 plans) completed in 2 days despite being the largest feature addition since Windows support
+- Phase 36 (showcase website) was a good scope addition — ensures user-facing artifacts stay in sync with code
+
+### What Was Inefficient
+- zbus API documentation didn't match actual zbus 5 API — cost extra debugging time in Phase 34 (Connection::builder doesn't exist, blocking feature name wrong)
+- Phase plan checkboxes in ROADMAP.md inconsistent (some marked [x], others [ ]) for completed plans — cosmetic but confusing
+- Milestone version label (v0.3.9) was set during roadmap creation but the jump from v0.2.8 seems large — version numbering could be more systematic
+
+### Patterns Established
+- /proc reads return None/empty on error, never panic — safe default for race conditions (process exits between reads)
+- Return-value hint communication (Result<String, String>) for platform-specific paste fallback signaling
+- Model-aware token budgeting as replacement for hard-coded line limits
+- AT-SPI2 tree walk pattern: registry → app by PID → recursive child walk for role=Terminal → GetText
+- Native ARM runners for aarch64 builds instead of cross-compilation
+
+### Key Lessons
+1. /proc is the easiest platform to implement process detection for — consider Linux-first for future process-related features
+2. zbus documentation should be verified against actual crate version (v5 changed significantly from v4)
+3. Token-budget approach for context is strictly superior to line-count limits — adapts to model size automatically
+4. Showcase website should be updated as part of every user-facing milestone, not as an afterthought
+
+### Cost Observations
+- Model mix: primarily opus for execution
+- All 10 plans completed in rapid succession — many completed in 3-5 minutes
+- Notable: Linux phases were faster than equivalent Windows phases due to /proc simplicity vs Win32 API complexity
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -183,6 +230,7 @@
 | v0.2.6 | 5 | 10 | Multi-provider + WSL + auto-update, single-day milestone |
 | v0.2.7 | 2 | 3 | Cost estimation, smallest milestone, fully cross-platform |
 | v0.2.8 | 3 | 6 | Terminal detection fix + icons, UAT-driven gap closure, TDD |
+| v0.3.9 | 7 | 10 | Full Linux support + smart context, largest since Windows port, 2 days |
 
 ### Top Lessons (Verified Across Milestones)
 
@@ -193,3 +241,5 @@
 5. Multi-signal detection is more robust than single-heuristic approaches for complex environments (IDE terminals, WSL)
 6. UAT-driven gap closure catches real-world issues that unit tests miss -- worth the verification overhead
 7. Scoring-based classification with weighted signals handles ambiguous detection better than binary heuristics
+8. /proc is dramatically simpler than macOS/Windows process APIs — consider Linux-first for future process features
+9. Token-budget approach for context is strictly superior to line-count limits — adapts to model size automatically

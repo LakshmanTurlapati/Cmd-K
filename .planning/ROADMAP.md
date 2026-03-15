@@ -9,7 +9,7 @@
 - ✅ v0.2.6 Multi-Provider, WSL & Auto-Update -- Phases 21-24 (shipped 2026-03-09) | [Archive](milestones/v0.2.6-ROADMAP.md)
 - ✅ v0.2.7 Cost Estimation -- Phases 25-26 (shipped 2026-03-10) | [Archive](milestones/v0.2.7-ROADMAP.md)
 - ✅ v0.2.8 Windows Terminal Detection Fix & Provider Icons -- Phases 27-29 (shipped 2026-03-14) | [Archive](milestones/v0.2.8-ROADMAP.md)
-- **v0.3.9 Linux Support & Smart Terminal Context** -- Phases 30-35 (in progress)
+- ✅ v0.3.9 Linux Support & Smart Terminal Context -- Phases 30-36 (shipped 2026-03-15) | [Archive](milestones/v0.3.9-ROADMAP.md)
 
 ## Phases
 
@@ -87,96 +87,18 @@
 
 </details>
 
-### v0.3.9 Linux Support & Smart Terminal Context (In Progress)
+<details>
+<summary>v0.3.9 Linux Support & Smart Terminal Context (Phases 30-36) -- SHIPPED 2026-03-15</summary>
 
-- [x] **Phase 30: Linux Process Detection** - CWD, shell type, and process tree via /proc filesystem (completed 2026-03-14)
-- [x] **Phase 31: Linux Overlay & Hotkey** - X11 system-wide hotkey, floating overlay, PID capture, CSS glass fallback (completed 2026-03-14)
-- [x] **Phase 32: Linux Paste** - xdotool paste on X11, clipboard fallback on Wayland, destructive pattern integration (completed 2026-03-15)
-- [x] **Phase 33: Smart Terminal Context** - Cross-platform ANSI stripping, token-budget truncation, command-output pairing (completed 2026-03-15)
-- [x] **Phase 34: Linux Terminal Text Reading** - AT-SPI2 for VTE terminals, kitty/WezTerm remote control APIs (completed 2026-03-15)
-- [x] **Phase 35: AppImage Distribution & CI/CD** - AppImage bundling, third CI job, auto-updater support, GitHub Release artifacts (completed 2026-03-15)
-- [x] **Phase 36: Showcase Website Update** - Version numbers, platform-specific downloads, privacy policy with history (completed 2026-03-15)
+- [x] Phase 30: Linux Process Detection (2/2 plans) -- completed 2026-03-14
+- [x] Phase 31: Linux Overlay & Hotkey (2/2 plans) -- completed 2026-03-14
+- [x] Phase 32: Linux Paste (1/1 plan) -- completed 2026-03-15
+- [x] Phase 33: Smart Terminal Context (1/1 plan) -- completed 2026-03-15
+- [x] Phase 34: Linux Terminal Text Reading (1/1 plan) -- completed 2026-03-15
+- [x] Phase 35: AppImage Distribution & CI/CD (1/1 plan) -- completed 2026-03-15
+- [x] Phase 36: Showcase Website Update (2/2 plans) -- completed 2026-03-15
 
-## Phase Details
-
-### Phase 30: Linux Process Detection
-**Goal**: User's terminal CWD and shell type are detected on Linux without any shell configuration
-**Depends on**: Nothing (foundation phase)
-**Requirements**: LPROC-01, LPROC-02, LPROC-03
-**Success Criteria** (what must be TRUE):
-  1. User opens a terminal on Linux and CMD+K detects the correct current working directory
-  2. User's shell type (bash, zsh, fish) is correctly identified regardless of terminal emulator
-  3. Process tree walking finds the shell process from any terminal emulator PID (GNOME Terminal, kitty, Alacritty, etc.)
-  4. The project compiles on Linux with real /proc code paths replacing stubs
-**Plans:** 2/2 plans complete
-Plans:
-- [ ] 30-01-PLAN.md -- /proc leaf functions and ancestry search in process.rs
-- [ ] 30-02-PLAN.md -- Linux detection orchestration (detect_linux.rs + mod.rs wiring)
-
-### Phase 31: Linux Overlay & Hotkey
-**Goal**: User can press Ctrl+K on Linux X11 and see a floating overlay appear above their active terminal
-**Depends on**: Phase 30
-**Requirements**: LOVRL-01, LOVRL-02, LOVRL-03, LOVRL-04, LOVRL-05
-**Success Criteria** (what must be TRUE):
-  1. User presses Ctrl+K on X11 and the overlay appears as a floating panel above the active window
-  2. Active terminal's PID is captured before the overlay steals focus (capture-before-show pattern works on X11)
-  3. Overlay has CSS-only frosted glass styling that looks reasonable without window-vibrancy
-  4. Wayland users running with GDK_BACKEND=x11 get full overlay functionality via XWayland
-  5. Overlay can be dismissed with Escape, repositioned by dragging (existing functionality carries over)
-**Plans:** 2/2 plans complete
-Plans:
-- [x] 31-01-PLAN.md -- x11rb PID capture, hotkey handler Linux block, always-on-top setup
-- [x] 31-02-PLAN.md -- CSS frosted glass fallback and isLinux() platform helper
-
-### Phase 32: Linux Paste
-**Goal**: User completes the full Ctrl+K workflow on Linux -- query to AI response pasted into terminal
-**Depends on**: Phase 31
-**Requirements**: LPST-01, LPST-02, LPST-03
-**Success Criteria** (what must be TRUE):
-  1. User accepts an AI-generated command on X11 and it is pasted into the active terminal via xdotool
-  2. User on Wayland sees the command copied to clipboard with a "press Ctrl+Shift+V" hint
-  3. Destructive commands trigger the warning overlay before paste on Linux (existing patterns already cover Linux commands)
-**Plans:** 1/1 plans complete
-Plans:
-- [ ] 32-01-PLAN.md -- Linux paste backend (xdotool/xclip) + frontend clipboard hint
-
-### Phase 33: Smart Terminal Context
-**Goal**: AI receives intelligently truncated terminal context that maximizes useful information within token budget
-**Depends on**: Nothing (cross-platform, can parallel with Phases 30-32)
-**Requirements**: SCTX-01, SCTX-02, SCTX-03, SCTX-04
-**Success Criteria** (what must be TRUE):
-  1. Terminal output sent to AI has ANSI escape sequences stripped (no color codes wasting tokens)
-  2. Terminal context uses approximately 10-15% of the model's context window, adapting to whichever model is selected
-  3. When terminal output exceeds the budget, oldest complete command+output segments are removed while recent output is preserved
-  4. Smart truncation works identically on macOS, Windows, and Linux
-**Plans:** 1/1 plans complete
-Plans:
-- [ ] 33-01-PLAN.md -- Smart context pipeline (ANSI strip, token budget, command segmentation) + ai.rs integration
-
-### Phase 34: Linux Terminal Text Reading
-**Goal**: User's recent terminal output is captured on Linux for AI context, across multiple terminal emulators
-**Depends on**: Phase 30
-**Requirements**: LTXT-01, LTXT-02, LTXT-03, LTXT-04
-**Success Criteria** (what must be TRUE):
-  1. User in GNOME Terminal (or other VTE-based terminal) has visible terminal text read via AT-SPI2
-  2. User in kitty has terminal text read via kitty remote control API
-  3. User in WezTerm has terminal text read via WezTerm CLI
-  4. User in Alacritty or other unsupported terminals gets graceful degradation (CWD and shell type still work, just no visible output)
-**Plans:** 1/1 plans complete
-Plans:
-- [ ] 34-01-PLAN.md -- AT-SPI2 D-Bus reader, kitty/WezTerm subprocess readers, mod.rs wiring
-
-### Phase 35: AppImage Distribution & CI/CD
-**Goal**: Linux users can download and auto-update CMD+K as an AppImage from GitHub Releases
-**Depends on**: Phases 30-32 (needs working Linux build)
-**Requirements**: APKG-01, APKG-02, APKG-03, APKG-04
-**Success Criteria** (what must be TRUE):
-  1. AppImage built on Ubuntu 22.04 runs on Ubuntu 22.04+ and other mainstream distros without glibc errors
-  2. GitHub Release includes Linux AppImage alongside macOS DMG and Windows NSIS installer with SHA256 checksum
-  3. Auto-updater checks for and installs AppImage updates using the existing Ed25519 signing infrastructure
-**Plans:** 1/1 plans complete
-Plans:
-- [ ] 35-01-PLAN.md -- Linux AppImage CI build job, release assembly, updater write-permission guard
+</details>
 
 ## Progress
 
@@ -189,20 +111,4 @@ Plans:
 | 21-24 | v0.2.6 | 10/10 | Complete | 2026-03-09 |
 | 25-26 | v0.2.7 | 3/3 | Complete | 2026-03-10 |
 | 27-29 | v0.2.8 | 6/6 | Complete | 2026-03-14 |
-| 30. Linux Process Detection | 2/2 | Complete    | 2026-03-14 | - |
-| 31. Linux Overlay & Hotkey | 2/2 | Complete    | 2026-03-14 | 2026-03-14 |
-| 32. Linux Paste | 1/1 | Complete    | 2026-03-15 | - |
-| 33. Smart Terminal Context | 1/1 | Complete    | 2026-03-15 | - |
-| 34. Linux Terminal Text Reading | 1/1 | Complete    | 2026-03-15 | - |
-| 35. AppImage Distribution & CI/CD | 1/1 | Complete    | 2026-03-15 | - |
-
-### Phase 36: Showcase Website Update
-
-**Goal:** Showcase website reflects v0.3.9 with Linux support -- updated version numbers, platform-specific download buttons (macOS/Windows/Linux AppImage), and privacy policy page with version history
-**Requirements**: WEB-01-VERSION, WEB-02-DOWNLOADS, WEB-03-CONTENT, WEB-04-PRIVACY
-**Depends on:** Phase 35
-**Plans:** 2/2 plans complete
-
-Plans:
-- [ ] 36-01-PLAN.md -- Version infrastructure, OS-detect downloads, Linux badge, feature cards, carousel
-- [ ] 36-02-PLAN.md -- Privacy policy v0.3.9 updates with Linux details and version history
+| 30-36 | v0.3.9 | 10/10 | Complete | 2026-03-15 |

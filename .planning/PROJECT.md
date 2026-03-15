@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A lightweight overlay app that generates terminal commands using AI on macOS and Windows. Press Cmd+K (or Ctrl+K on Windows) from anywhere, a prompt overlay appears on top of your active window with frosted glass vibrancy, describe what you need in natural language, and it generates the right command using your choice of AI provider (OpenAI, Anthropic, Gemini, xAI, or OpenRouter) with real-time streaming. It flags destructive commands with warnings (150+ patterns across macOS/Linux/Windows), and pastes the result directly into your active terminal — including WSL sessions on Windows. It knows your context — current directory, recent commands, shell type — without requiring any shell configuration. Silent auto-updates keep the app current. Automated CI/CD publishes signed builds for both platforms on every release.
+A lightweight overlay app that generates terminal commands using AI on macOS, Windows, and Linux. Press Cmd+K (or Ctrl+K on Windows/Linux) from anywhere, a prompt overlay appears on top of your active window with frosted glass vibrancy, describe what you need in natural language, and it generates the right command using your choice of AI provider (OpenAI, Anthropic, Gemini, xAI, or OpenRouter) with real-time streaming. It flags destructive commands with warnings (150+ patterns across macOS/Linux/Windows), and pastes the result directly into your active terminal — including WSL sessions on Windows. It knows your context — current directory, recent commands, shell type — with model-aware smart truncation that fits terminal output within the AI's context window. No shell configuration required. Silent auto-updates keep the app current. Automated CI/CD publishes signed builds for all three platforms on every release.
 
 ## Core Value
 
@@ -66,24 +66,18 @@ The overlay must appear on top of the currently active application and feel inst
 - PROC-01 through PROC-03: ConPTY-aware shell discovery, cmd.exe filtering, consolidated ProcessSnapshot -- v0.2.8
 - UIAS-01, UIAS-02: Scoped UIA terminal text reading, multi-signal WSL detection scoring -- v0.2.8
 - ICON-01, ICON-02: Provider SVG icons in onboarding and settings UI -- v0.2.8
+- LPROC-01 through LPROC-03: Linux /proc process detection (CWD, shell type, process tree walking) -- v0.3.9
+- LOVRL-01 through LOVRL-05: Linux X11 overlay, system-wide hotkey, PID capture, CSS frosted glass -- v0.3.9
+- LPST-01 through LPST-03: Linux paste via xdotool on X11, Wayland clipboard fallback with hint -- v0.3.9
+- SCTX-01 through SCTX-04: Smart terminal context with ANSI stripping, model-aware token budget, command-output segmentation -- v0.3.9
+- LTXT-01 through LTXT-04: Linux terminal text reading via AT-SPI2, kitty, WezTerm with graceful degradation -- v0.3.9
+- APKG-01 through APKG-04: AppImage distribution with dual-arch CI, auto-updater, Ed25519 signing -- v0.3.9
 
 ### Active
-
-## Current Milestone: v0.3.9 Linux Support & Smart Terminal Context
-
-**Goal:** Add full Linux platform support (1:1 feature parity with macOS) and smart terminal context reading with scrollback + intelligent truncation.
-
-**Target features:**
-- Linux overlay (X11 + Wayland) with system-wide hotkey
-- Linux terminal context: CWD, shell type, terminal output reading, paste
-- Linux destructive command detection
-- AppImage universal distribution
-- Smart terminal context: full visible text + scrollback with intelligent truncation to fit AI context window
 
 ### Out of Scope
 
 - VS Code extension -- dropped in favor of standalone overlay app
-- ~~Linux support~~ -- Now active in v0.3.9
 - Command favorites/bookmarks -- future feature (history is v0.1.1 scope)
 - Multi-step command workflows -- future feature
 - Command explanation mode -- future feature
@@ -91,21 +85,22 @@ The overlay must appear on top of the currently active application and feel inst
 - App Store distribution -- incompatible with Accessibility API requirement
 - Auto-execution without review -- safety risk, always paste, never execute directly
 - Windows OV/EV code signing -- purchase when distribution warrants it
-- ~~Linux builds~~ -- Now active in v0.3.9
+- Native Wayland overlay/hotkey -- protocol-level gap, XWayland is industry standard fallback
+- .deb/.rpm/Snap/Flatpak packaging -- AppImage covers all distros, sandboxing conflicts with /proc and xdotool
 
 ## Context
 
-Shipped v0.2.8 with reliable Windows terminal detection (ConPTY-first shell discovery, scoped UIA text reading, multi-signal WSL scoring) and provider icon branding.
-Tech stack: Tauri v2 (Rust + React + TypeScript), NSPanel for overlay, 5 AI providers (OpenAI/Anthropic/Gemini/xAI/OpenRouter), macOS Accessibility API + raw libproc FFI, Win32 APIs + UIA for Windows, WSL process ancestry + wsl.exe subprocess for Linux context.
-32 phases across 8 milestones (v0.1.0 through v0.2.8), 62 plans executed over 18 days.
-All 93 requirements satisfied across milestones. ~185K LOC Rust + 5.6K LOC TypeScript.
-CI/CD pipeline produces signed macOS DMG, Windows installer, and auto-update artifacts (latest.json + .sig files) on every v* tag push.
+Shipped v0.3.9 with full Linux support (1:1 feature parity with macOS/Windows) and smart terminal context.
+Tech stack: Tauri v2 (Rust + React + TypeScript), NSPanel for macOS overlay, Win32 for Windows overlay, X11/x11rb for Linux overlay, 5 AI providers (OpenAI/Anthropic/Gemini/xAI/OpenRouter), macOS Accessibility API + raw libproc FFI, Win32 APIs + UIA for Windows, /proc + AT-SPI2 + xdotool for Linux.
+39 phases across 9 milestones (v0.1.0 through v0.3.9), 72 plans executed over 20 days.
+All 116 requirements satisfied across milestones. ~185K LOC Rust + 5.6K LOC TypeScript.
+CI/CD pipeline produces signed macOS DMG, Windows installer, Linux AppImage (x86_64 + aarch64), and auto-update artifacts (latest.json + .sig files) on every v* tag push.
 Ed25519 update signing configured with GitHub secrets.
 
 ## Constraints
 
 - **Tech stack**: Tauri (Rust + web frontend)
-- **Platform**: macOS + Windows
+- **Platform**: macOS + Windows + Linux
 - **Zero setup**: No shell plugins, no .zshrc modifications. One-time macOS accessibility permission is acceptable.
 - **Multi-provider**: 5 AI providers supported via provider abstraction layer
 
@@ -156,6 +151,16 @@ Ed25519 update signing configured with GitHub secrets.
 | ControlType::List for terminal panels | xterm.js accessibility nodes are List elements in UIA tree | Good -- precise terminal scoping |
 | 3-strategy UIA text cascade | TextPattern → scoped walk → full tree fallback | Good -- graceful degradation |
 | Inline SVG paths for provider icons | No external assets, same paths as showcase site | Good -- zero network, consistent branding |
+| /proc filesystem for Linux process detection | Zero external deps, simpler than macOS/Windows process APIs | Good -- pure Rust, race-condition safe |
+| target_os="linux" cfg gates (three-way split) | Explicit platform branching instead of not(macos+windows) | Good -- clear, auditable |
+| x11rb for EWMH PID capture | Already transitive dep, pure Rust, no runtime subprocess | Good -- 1ms per hotkey press |
+| CSS backdrop-blur-xl for Linux glass | No native vibrancy on Linux, CSS-only fallback | Good -- looks reasonable |
+| xdotool for Linux paste with Wayland hint fallback | Industry standard X11 automation, graceful Wayland degradation | Good -- clipboard hint UX |
+| Model-aware token budget (12% of context window) | Replaces 25-line hard cap, adapts to model size | Good -- more context for larger models |
+| AT-SPI2 + kitty + WezTerm strategy dispatch | Three strategies by exe name, graceful None for unsupported | Good -- covers major terminals |
+| zbus with default features for AT-SPI2 | zbus 5 requires async-io runtime even for blocking API | Good -- compiles correctly |
+| Native ARM runners for aarch64 AppImage | Cross-compilation too complex, native runners available | Good -- reliable builds |
+| AppImage write-permission guard | Tray warning when AppImage dir not writable, skip update | Good -- no error dialogs |
 
 ---
-*Last updated: 2026-03-14 after v0.2.8 milestone completion*
+*Last updated: 2026-03-15 after v0.3.9 milestone completion*

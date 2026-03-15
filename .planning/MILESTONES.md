@@ -1,5 +1,28 @@
 # Milestones
 
+## v0.3.9 Linux Support & Smart Terminal Context (Shipped: 2026-03-15)
+
+**Phases completed:** 7 phases (30-36), 10 plans
+**Timeline:** 2026-03-14 to 2026-03-15 (2 days)
+**Git range:** 77 commits (103 files changed, 12,748 insertions, 1,555 deletions)
+
+**Key accomplishments:**
+1. Linux /proc process detection — CWD via /proc/PID/cwd, shell type via /proc/PID/exe, process tree walking via /proc/PID/stat with 18 terminal emulators and 9 IDEs classified in detect_linux.rs
+2. X11 overlay and hotkey — system-wide Ctrl+K via x11rb EWMH properties for PID capture, CSS backdrop-blur-xl frosted glass fallback, always-on-top floating window
+3. Linux paste via xdotool key simulation on X11, with Wayland clipboard fallback and inline amber hint UI for manual paste
+4. Smart terminal context pipeline — regex ANSI stripping, model-aware 12% token-budget truncation with command-output segmentation, replacing 25-line hard cap (cross-platform)
+5. Linux terminal text reading — AT-SPI2 D-Bus for VTE terminals, kitty remote control, WezTerm CLI with 500ms timeouts and graceful degradation
+6. AppImage distribution with dual-arch CI (x86_64 + aarch64 native runners), auto-updater manifest with Ed25519 signatures, write-permission guard
+7. Showcase website update with OS-detected downloads, Linux platform badge, and privacy policy covering Linux-specific data handling
+
+**Delivered:** Full Linux platform support (1:1 parity with macOS/Windows) via /proc, X11, AT-SPI2, and xdotool, plus smart terminal context with model-aware truncation, distributed as AppImage with auto-updates.
+
+**Archives:**
+- milestones/v0.3.9-ROADMAP.md
+- milestones/v0.3.9-REQUIREMENTS.md
+
+---
+
 ## v0.2.8 Windows Terminal Detection Fix & Provider Icons (Shipped: 2026-03-14)
 
 **Phases completed:** 3 phases (27-29), 6 plans
