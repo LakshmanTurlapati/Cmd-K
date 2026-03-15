@@ -56,7 +56,7 @@
       <div class="privacy-header">
         <div class="section-label">Legal</div>
         <h1 class="section-title">Privacy Policy</h1>
-        <p class="privacy-last-updated">Last updated: March 9, 2026</p>
+        <p class="privacy-last-updated">Last updated: March 15, 2026</p>
       </div>
 
       <div class="privacy-content">
@@ -80,6 +80,7 @@
           <li>Shell type (e.g., zsh, bash)</li>
           <li>Current working directory</li>
           <li>Last 25 lines of visible terminal output</li>
+          <li>Recent terminal text (visible buffer content, up to approximately 12% of the model's context window)</li>
           <li>Running process name</li>
           <li>Your query text</li>
           <li>Session history (last 7 conversation turns)</li>
@@ -121,7 +122,7 @@
         <h2>What Is NOT Sent</h2>
         <p>The following information never leaves your device:</p>
         <ul>
-          <li>Your API key (stored in macOS Keychain or Windows Credential Manager, never included in prompts)</li>
+          <li>Your API key (stored in macOS Keychain, Windows Credential Manager, or Linux system keyring &mdash; never included in prompts)</li>
           <li>File contents from your filesystem</li>
           <li>Browsing history</li>
           <li>Location data</li>
@@ -135,7 +136,7 @@
         <h2>Where Your Data Is Stored</h2>
         <p>All persistent data is stored locally on your device:</p>
         <ul>
-          <li><strong>System credential store</strong> Your API key(s), encrypted by the operating system (macOS Keychain on Mac, Windows Credential Manager on Windows)</li>
+          <li><strong>System credential store</strong> Your API key(s), encrypted by the operating system (macOS Keychain on Mac, Windows Credential Manager on Windows, system keyring via libsecret on Linux)</li>
           <li><strong>Local settings file</strong> Model preference, hotkey binding, feature toggles</li>
         </ul>
         <p>There is no CMD+K server, no cloud database, no remote backup, and no sync service.</p>
@@ -153,7 +154,12 @@
 
         <!-- Permissions -->
         <h2>Permissions</h2>
-        <p>CMD+K uses platform accessibility APIs to read terminal output and detect the active application. On macOS, this permission must be explicitly granted in System Settings &gt; Privacy &amp; Security &gt; Accessibility. You can revoke it at any time, which will prevent CMD+K from capturing terminal context.</p>
+        <p>CMD+K uses platform APIs to read terminal output and detect the active application:</p>
+        <ul>
+          <li><strong>macOS</strong> &mdash; Accessibility API permission, granted in System Settings &gt; Privacy &amp; Security &gt; Accessibility. You can revoke it at any time, which will prevent CMD+K from capturing terminal context.</li>
+          <li><strong>Windows</strong> &mdash; No special permissions needed. CMD+K uses standard Win32 APIs (UI Automation, CreateToolhelp32Snapshot) that work without elevation.</li>
+          <li><strong>Linux</strong> &mdash; <code>/proc</code> filesystem for process detection (standard, no special permissions). <code>xdotool</code> for keystroke simulation on X11. AT-SPI2 accessibility API for reading terminal text from VTE-based terminals (GNOME Terminal, Tilix, Terminator). <code>kitty</code> and <code>WezTerm</code> remote-control APIs for those terminals.</li>
+        </ul>
 
         <!-- No Telemetry -->
         <h2>No Telemetry</h2>
@@ -173,6 +179,111 @@
 
         <!-- Policy History -->
         <h2>Policy History</h2>
+        <details class="policy-version">
+          <summary>
+            <span class="policy-version-date">March 9, 2026</span>
+            Multi-provider support &mdash; macOS and Windows
+          </summary>
+          <div class="policy-version-body">
+            <div class="privacy-callout">
+              <p><strong>TLDR</strong> CMD+K runs entirely on your device. No servers, no accounts, no analytics. You bring your own API key for the provider you choose (OpenAI, Anthropic, Google Gemini, xAI, or OpenRouter). Data goes directly from your device to your selected provider's API, nowhere else.</p>
+            </div>
+
+            <h2>How CMD+K Works</h2>
+            <p>CMD+K is a native desktop overlay application. You press a global hotkey, type a natural-language description of what you want to do, and CMD+K generates a working terminal command using AI models from your chosen provider. The entire application runs locally on your device. There is no CMD+K server in between.</p>
+
+            <h2>What Is Sent to the AI Provider</h2>
+            <p>When you submit a query, CMD+K sends context to your selected AI provider's API so the model can generate an accurate command. The exact data depends on which mode you are using.</p>
+
+            <h3>Terminal Mode</h3>
+            <ul>
+              <li>Terminal application name (e.g., Terminal.app, iTerm2)</li>
+              <li>Shell type (e.g., zsh, bash)</li>
+              <li>Current working directory</li>
+              <li>Last 25 lines of visible terminal output</li>
+              <li>Running process name</li>
+              <li>Your query text</li>
+              <li>Session history (last 7 conversation turns)</li>
+            </ul>
+
+            <h3>Assistant Mode</h3>
+            <ul>
+              <li>Active application name</li>
+              <li>Browser console last line (if DevTools is open)</li>
+              <li>Visible screen text (approximately 4 KB)</li>
+              <li>Your question</li>
+            </ul>
+
+            <p>All data is sent over HTTPS directly to the provider you selected:</p>
+            <ul>
+              <li><strong>OpenAI</strong> &mdash; <code>api.openai.com</code></li>
+              <li><strong>Anthropic</strong> &mdash; <code>api.anthropic.com</code></li>
+              <li><strong>Google Gemini</strong> &mdash; <code>generativelanguage.googleapis.com</code></li>
+              <li><strong>xAI</strong> &mdash; <code>api.x.ai</code></li>
+              <li><strong>OpenRouter</strong> &mdash; <code>openrouter.ai/api</code></li>
+            </ul>
+            <p>No data passes through any CMD+K-operated server.</p>
+
+            <h2>What Is Automatically Filtered</h2>
+            <p>Before any context is sent to the AI provider, CMD+K automatically scans for and redacts common secret patterns, including:</p>
+            <ul>
+              <li>AWS access keys</li>
+              <li>Generic API tokens</li>
+              <li>xAI API tokens</li>
+              <li>OpenAI API keys</li>
+              <li>GitHub personal access tokens</li>
+              <li>PEM-encoded private keys</li>
+              <li>Shell exports containing secret-like variable names</li>
+            </ul>
+            <p>Matched values are replaced with <code>[REDACTED]</code> before the request leaves your machine.</p>
+
+            <h2>What Is NOT Sent</h2>
+            <p>The following information never leaves your device:</p>
+            <ul>
+              <li>Your API key (stored in macOS Keychain or Windows Credential Manager, never included in prompts)</li>
+              <li>File contents from your filesystem</li>
+              <li>Browsing history</li>
+              <li>Location data</li>
+              <li>Device identifiers</li>
+              <li>Network configuration or IP addresses</li>
+              <li>System hardware information</li>
+              <li>Hotkey preferences or app settings</li>
+            </ul>
+
+            <h2>Where Your Data Is Stored</h2>
+            <p>All persistent data is stored locally on your device:</p>
+            <ul>
+              <li><strong>System credential store</strong> Your API key(s), encrypted by the operating system (macOS Keychain on Mac, Windows Credential Manager on Windows)</li>
+              <li><strong>Local settings file</strong> Model preference, hotkey binding, feature toggles</li>
+            </ul>
+            <p>There is no CMD+K server, no cloud database, no remote backup, and no sync service.</p>
+
+            <h2>Third-Party Services</h2>
+            <p>CMD+K connects to the AI provider you select. Your queries and the context described above are sent to that provider to generate command suggestions. Once data reaches the provider, their privacy policy applies.</p>
+            <ul>
+              <li><strong>OpenAI</strong> &mdash; <a href="https://openai.com/privacy" target="_blank" rel="noopener">openai.com/privacy</a></li>
+              <li><strong>Anthropic</strong> &mdash; <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener">anthropic.com/privacy</a></li>
+              <li><strong>Google Gemini</strong> &mdash; <a href="https://ai.google.dev/terms" target="_blank" rel="noopener">ai.google.dev/terms</a></li>
+              <li><strong>xAI</strong> &mdash; <a href="https://x.ai/legal/privacy-policy" target="_blank" rel="noopener">x.ai/legal/privacy-policy</a></li>
+              <li><strong>OpenRouter</strong> &mdash; <a href="https://openrouter.ai/privacy" target="_blank" rel="noopener">openrouter.ai/privacy</a></li>
+            </ul>
+
+            <h2>Permissions</h2>
+            <p>CMD+K uses platform accessibility APIs to read terminal output and detect the active application. On macOS, this permission must be explicitly granted in System Settings &gt; Privacy &amp; Security &gt; Accessibility. You can revoke it at any time, which will prevent CMD+K from capturing terminal context.</p>
+
+            <h2>No Telemetry</h2>
+            <p>CMD+K includes zero telemetry. There are no analytics SDKs, no tracking pixels, no cookies, no crash reporters, and no usage data transmitted anywhere. The application makes network requests only when you explicitly submit a query, and only to your selected AI provider.</p>
+
+            <h2>Open Source</h2>
+            <p>CMD+K is fully open source under the MIT license. The entire codebase is available on <a href="https://github.com/LakshmanTurlapati/Cmd-K" target="_blank" rel="noopener">GitHub</a>. Anyone can audit exactly what data is collected, how it is processed, and where it is sent.</p>
+
+            <h2>Changes to This Policy</h2>
+            <p>If this policy is updated, the changes will be reflected by the "Last updated" date at the top of this page. Significant changes will also be noted in the project's GitHub release notes.</p>
+
+            <h2>Contact</h2>
+            <p>If you have questions about this privacy policy or CMD+K's data handling, please open an issue on <a href="https://github.com/LakshmanTurlapati/Cmd-K/issues" target="_blank" rel="noopener">GitHub Issues</a>.</p>
+          </div>
+        </details>
         <details class="policy-version">
           <summary>
             <span class="policy-version-date">February 27, 2026</span>
@@ -218,7 +329,7 @@
 
     <div class="footer-bottom">
       <span>Built by <a href="https://github.com/LakshmanTurlapati" target="_blank" rel="noopener">Lakshman Turlapati</a></span>
-      <span>v0.2.8</span>
+      <span data-version>v0.3.9</span>
     </div>
   </footer>
 
