@@ -308,6 +308,16 @@ jobs:
             SIG_WINDOWS=$(cat "artifacts/windows-installer/CMD+K-${VERSION}-windows-x64.exe.sig")
           fi
 
+          SIG_LINUX_X64=""
+          if [ -f "artifacts/linux-appimage-x86_64/CMD+K-${VERSION}-linux-x86_64.AppImage.sig" ]; then
+            SIG_LINUX_X64=$(cat "artifacts/linux-appimage-x86_64/CMD+K-${VERSION}-linux-x86_64.AppImage.sig")
+          fi
+
+          SIG_LINUX_ARM64=""
+          if [ -f "artifacts/linux-appimage-aarch64/CMD+K-${VERSION}-linux-aarch64.AppImage.sig" ]; then
+            SIG_LINUX_ARM64=$(cat "artifacts/linux-appimage-aarch64/CMD+K-${VERSION}-linux-aarch64.AppImage.sig")
+          fi
+
           cat > artifacts/latest.json <<EOF
           {
             "version": "${VERSION}",
@@ -324,6 +334,14 @@ jobs:
               "windows-x86_64": {
                 "signature": "${SIG_WINDOWS}",
                 "url": "${REPO_URL}/CMD+K-${VERSION}-windows-x64.exe"
+              },
+              "linux-x86_64": {
+                "signature": "${SIG_LINUX_X64}",
+                "url": "${REPO_URL}/CMD+K-${VERSION}-linux-x86_64.AppImage"
+              },
+              "linux-aarch64": {
+                "signature": "${SIG_LINUX_ARM64}",
+                "url": "${REPO_URL}/CMD+K-${VERSION}-linux-aarch64.AppImage"
               }
             }
           }
@@ -341,14 +359,26 @@ jobs:
 
             ### Downloads
 
-            | Platform | File |
-            |----------|------|
-            | macOS (Universal) | CMD+K-${{ env.VERSION }}-universal.dmg |
-            | Windows (x64) | CMD+K-${{ env.VERSION }}-windows-x64.exe |
+            **macOS**
+            | Variant | File |
+            |---------|------|
+            | Universal (Intel + Apple Silicon) | CMD+K-${{ env.VERSION }}-universal.dmg |
+
+            **Windows**
+            | Variant | File |
+            |---------|------|
+            | x64 | CMD+K-${{ env.VERSION }}-windows-x64.exe |
+
+            **Linux**
+            | Variant | File |
+            |---------|------|
+            | x86_64 | CMD+K-${{ env.VERSION }}-linux-x86_64.AppImage |
+            | aarch64 | CMD+K-${{ env.VERSION }}-linux-aarch64.AppImage |
+
+            > Linux: `chmod +x CMD+K-*.AppImage && ./CMD+K-*.AppImage`
 
             ### Auto-Update
-
-            Users on v0.2.7+ will receive this update automatically.
+            Users on v0.3.9+ will receive this update automatically (macOS, Windows, Linux).
 
             ### Checksums (SHA256)
 
@@ -361,6 +391,8 @@ jobs:
             artifacts/macos-dmg/CMD+K.app.tar.gz
             artifacts/macos-dmg/CMD+K.app.tar.gz.sig
             artifacts/windows-installer/CMD+K-*.*
+            artifacts/linux-appimage-x86_64/CMD+K-*.*
+            artifacts/linux-appimage-aarch64/CMD+K-*.*
             artifacts/latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
