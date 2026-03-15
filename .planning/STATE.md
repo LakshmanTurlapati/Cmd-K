@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: executing
-stopped_at: Phase 35 context gathered
-last_updated: "2026-03-15T08:02:45.469Z"
+stopped_at: Completed 35-01-PLAN.md
+last_updated: "2026-03-15T08:30:25.367Z"
 last_activity: 2026-03-15 — Completed 34-01 linux terminal text reading
 progress:
   total_phases: 6
-  completed_phases: 5
-  total_plans: 7
-  completed_plans: 7
+  completed_phases: 6
+  total_plans: 8
+  completed_plans: 8
   percent: 92
 ---
 
@@ -69,6 +69,8 @@ Recent decisions affecting current work:
 - [Phase 33]: Pipeline order: ANSI strip -> budget truncate -> sensitive filter
 - [Phase 34]: zbus with default features (async-io required) for AT-SPI2 D-Bus blocking calls
 - [Phase 34]: Strategy dispatch by exe_name: VTE/Qt -> AT-SPI2, kitty -> remote control, wezterm -> CLI
+- [Phase 35]: Native ARM runner (ubuntu-22.04-arm) for aarch64 AppImage builds
+- [Phase 35]: Tray warning and skip when AppImage location not writable (no error)
 
 ### Pending Todos
 
@@ -82,6 +84,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-15T08:02:45.380Z
-Stopped at: Phase 35 context gathered
+Last session: 2026-03-15T08:30:25.308Z
+Stopped at: Completed 35-01-PLAN.md
 Next action: Execute next phase plan or advance to next phase

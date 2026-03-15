@@ -43,10 +43,10 @@ Requirements for Linux Support & Smart Terminal Context milestone. Each maps to 
 
 ### AppImage Distribution
 
-- [ ] **APKG-01**: AppImage built via Tauri bundler with ubuntu-22.04 CI base for glibc compatibility
-- [ ] **APKG-02**: Third CI job in release.yml builds Linux AppImage alongside macOS DMG and Windows NSIS
-- [ ] **APKG-03**: Auto-updater supports Linux AppImage (Ed25519 signed, latest.json manifest)
-- [ ] **APKG-04**: GitHub Release includes Linux AppImage artifact with SHA256 checksum
+- [x] **APKG-01**: AppImage built via Tauri bundler with ubuntu-22.04 CI base for glibc compatibility
+- [x] **APKG-02**: Third CI job in release.yml builds Linux AppImage alongside macOS DMG and Windows NSIS
+- [x] **APKG-03**: Auto-updater supports Linux AppImage (Ed25519 signed, latest.json manifest)
+- [x] **APKG-04**: GitHub Release includes Linux AppImage artifact with SHA256 checksum
 
 ## Future Requirements
 
@@ -92,10 +92,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LTXT-02 | Phase 34 | Complete |
 | LTXT-03 | Phase 34 | Complete |
 | LTXT-04 | Phase 34 | Complete |
-| APKG-01 | Phase 35 | Pending |
-| APKG-02 | Phase 35 | Pending |
-| APKG-03 | Phase 35 | Pending |
-| APKG-04 | Phase 35 | Pending |
+| APKG-01 | Phase 35 | Complete |
+| APKG-02 | Phase 35 | Complete |
+| APKG-03 | Phase 35 | Complete |
+| APKG-04 | Phase 35 | Complete |
 
 **Coverage:**
 - v0.3.9 requirements: 23 total

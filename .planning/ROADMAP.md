@@ -94,7 +94,7 @@
 - [x] **Phase 32: Linux Paste** - xdotool paste on X11, clipboard fallback on Wayland, destructive pattern integration (completed 2026-03-15)
 - [x] **Phase 33: Smart Terminal Context** - Cross-platform ANSI stripping, token-budget truncation, command-output pairing (completed 2026-03-15)
 - [x] **Phase 34: Linux Terminal Text Reading** - AT-SPI2 for VTE terminals, kitty/WezTerm remote control APIs (completed 2026-03-15)
-- [ ] **Phase 35: AppImage Distribution & CI/CD** - AppImage bundling, third CI job, auto-updater support, GitHub Release artifacts
+- [x] **Phase 35: AppImage Distribution & CI/CD** - AppImage bundling, third CI job, auto-updater support, GitHub Release artifacts (completed 2026-03-15)
 
 ## Phase Details
 
@@ -173,7 +173,7 @@ Plans:
   1. AppImage built on Ubuntu 22.04 runs on Ubuntu 22.04+ and other mainstream distros without glibc errors
   2. GitHub Release includes Linux AppImage alongside macOS DMG and Windows NSIS installer with SHA256 checksum
   3. Auto-updater checks for and installs AppImage updates using the existing Ed25519 signing infrastructure
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
 - [ ] 35-01-PLAN.md -- Linux AppImage CI build job, release assembly, updater write-permission guard
 
@@ -193,4 +193,4 @@ Plans:
 | 32. Linux Paste | 1/1 | Complete    | 2026-03-15 | - |
 | 33. Smart Terminal Context | 1/1 | Complete    | 2026-03-15 | - |
 | 34. Linux Terminal Text Reading | 1/1 | Complete    | 2026-03-15 | - |
-| 35. AppImage Distribution & CI/CD | v0.3.9 | 0/? | Not started | - |
+| 35. AppImage Distribution & CI/CD | 1/1 | Complete   | 2026-03-15 | - |
