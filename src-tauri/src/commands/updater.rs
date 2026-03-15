@@ -155,6 +155,7 @@ pub fn update_tray_text(app: &tauri::AppHandle, status: &UpdateStatus) {
 /// Install the pending update (called from quit handler).
 /// On Windows, this triggers the NSIS passive installer which force-exits.
 /// On macOS, this replaces the .app bundle.
+/// On Linux, this replaces the AppImage file (skips if location is not writable).
 pub fn install_pending_update(app: &tauri::AppHandle) {
     let state = match app.try_state::<UpdateState>() {
         Some(s) => s,
@@ -165,6 +166,35 @@ pub fn install_pending_update(app: &tauri::AppHandle) {
     let update = state.pending_update.lock().ok().and_then(|mut u| u.take());
 
     if let (Some(update), Some(bytes)) = (update, bytes) {
+        // On Linux (AppImage), check if the executable location is writable
+        // before attempting install. If not writable, warn and skip.
+        #[cfg(target_os = "linux")]
+        {
+            if let Ok(exe_path) = std::env::current_exe() {
+                if let Some(parent) = exe_path.parent() {
+                    let test_path = parent.join(".cmd-k-update-test");
+                    match std::fs::File::create(&test_path) {
+                        Ok(_) => {
+                            let _ = std::fs::remove_file(&test_path);
+                        }
+                        Err(e) => {
+                            eprintln!(
+                                "[updater] AppImage location not writable ({}): {}. Skipping update.",
+                                parent.display(),
+                                e
+                            );
+                            // Update tray to inform user
+                            if let Ok(mut s) = app.state::<UpdateState>().status.lock() {
+                                *s = UpdateStatus::Idle;
+                            }
+                            update_tray_text(app, &UpdateStatus::Idle);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
         if let Err(e) = update.install(&bytes) {
             eprintln!("[updater] Install failed: {}", e);
         }
