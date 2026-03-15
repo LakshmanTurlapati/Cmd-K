@@ -1166,6 +1166,72 @@
   position: relative;
 }
 
+/* ---------- Platform Badges ---------- */
+.platform-badges {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  margin-bottom: 40px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.platform-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ---------- Download Button Layout ---------- */
+.linux-download-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.platform-detected {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* ---------- Arch Popup ---------- */
+.arch-popup {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 8px;
+  min-width: 220px;
+  box-shadow: var(--shadow-lg);
+  z-index: 10;
+}
+
+.arch-popup.open {
+  display: block;
+}
+
+.arch-option {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: background var(--duration-fast);
+}
+
+.arch-option:hover {
+  background: var(--bg-code);
+}
+
+.arch-option span {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
 /* ---------- Responsive ---------- */
 @media (max-width: 900px) {
   .features-grid {
@@ -1191,6 +1257,11 @@
   .hero-buttons .btn {
     width: 100%;
     max-width: 280px;
+  }
+
+  .platform-badges {
+    gap: 12px;
+    font-size: 0.75rem;
   }
 
   .features-grid {
