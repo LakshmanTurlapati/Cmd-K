@@ -138,7 +138,9 @@ interface OverlayState {
   // Auto-paste preference
   autoPasteEnabled: boolean;
   isPasting: boolean;
+  pasteHint: string | null;
   setAutoPasteEnabled: (enabled: boolean) => void;
+  setPasteHint: (hint: string | null) => void;
 
   // Actions
   show: () => void;
@@ -251,6 +253,7 @@ export const useOverlayStore = create<OverlayState>((set) => ({
   // Auto-paste preference initial state
   autoPasteEnabled: true,
   isPasting: false,
+  pasteHint: null,
 
   show: () => {
     clearRevealTimer();
@@ -280,6 +283,7 @@ export const useOverlayStore = create<OverlayState>((set) => ({
       destructiveExplanation: null,
       destructiveDismissed: false,
       isPasting: false,
+      pasteHint: null,
     }));
 
     // Fire-and-forget context detection (non-blocking)
@@ -351,6 +355,7 @@ export const useOverlayStore = create<OverlayState>((set) => ({
       destructiveExplanation: null,
       destructiveDismissed: false,
       isPasting: false,
+      pasteHint: null,
     }));
   },
 
@@ -579,7 +584,12 @@ export const useOverlayStore = create<OverlayState>((set) => ({
           const afterCheck = useOverlayStore.getState();
           if (afterCheck.autoPasteEnabled) {
             set({ isPasting: true });
-            invoke("paste_to_terminal", { command: fullText })
+            invoke<string>("paste_to_terminal", { command: fullText })
+              .then((result) => {
+                if (result === "clipboard_hint") {
+                  set({ pasteHint: "Copied to clipboard \u2014 press Ctrl+Shift+V to paste" });
+                }
+              })
               .catch((err) => {
                 console.error(
                   "[store] auto-paste failed (clipboard fallback available):",
@@ -676,4 +686,5 @@ export const useOverlayStore = create<OverlayState>((set) => ({
 
   // Auto-paste preference action implementation
   setAutoPasteEnabled: (enabled) => set({ autoPasteEnabled: enabled }),
+  setPasteHint: (hint) => set({ pasteHint: hint }),
 }));

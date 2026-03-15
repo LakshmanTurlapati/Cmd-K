@@ -27,6 +27,7 @@ export function Overlay({ onSubmit }: OverlayProps) {
   const accessibilityGranted = useOverlayStore((s) => s.accessibilityGranted);
   const isDestructive = useOverlayStore((s) => s.isDestructive);
   const destructiveDismissed = useOverlayStore((s) => s.destructiveDismissed);
+  const pasteHint = useOverlayStore((s) => s.pasteHint);
   const badgeText = resolveBadge(appContext);
   const [animPhase, setAnimPhase] = useState<AnimationPhase>("hidden");
 
@@ -132,6 +133,11 @@ export function Overlay({ onSubmit }: OverlayProps) {
               <CommandInput onSubmit={onSubmit} />
               {(displayMode === "streaming" || displayMode === "result") && (
                 <ResultsArea />
+              )}
+              {pasteHint && (
+                <div className="text-[11px] text-amber-400/70 font-mono px-1">
+                  {pasteHint}
+                </div>
               )}
               {/* Badge stays visible in ALL display modes below input/output */}
               {mode === "command" && (

@@ -28,11 +28,19 @@ export function useKeyboard(): void {
           state.streamingText.length > 0
         ) {
           e.preventDefault();
-          invoke("confirm_terminal_command").catch((err) => {
-            console.error("[useKeyboard] confirm failed:", err);
-          });
-          invoke("hide_overlay").catch(console.error);
-          hide();
+          invoke<string>("confirm_terminal_command")
+            .then((result) => {
+              if (result === "confirm_hint") {
+                useOverlayStore.getState().setPasteHint("Press Enter in your terminal to run");
+              } else {
+                // Auto-confirmed, dismiss overlay
+                invoke("hide_overlay").catch(console.error);
+                hide();
+              }
+            })
+            .catch((err) => {
+              console.error("[useKeyboard] confirm failed:", err);
+            });
         }
       }
     };
