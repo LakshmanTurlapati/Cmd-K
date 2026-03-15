@@ -195,8 +195,93 @@ jobs:
           name: windows-installer
           path: src-tauri/target/release/bundle/nsis/CMD+K-*.*
 
+  build-linux:
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-22.04
+            rust-target: x86_64-unknown-linux-gnu
+          - arch: aarch64
+            runner: ubuntu-22.04-arm
+            rust-target: aarch64-unknown-linux-gnu
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libxdo-dev \
+            libssl-dev \
+            libdbus-1-dev \
+            build-essential \
+            curl \
+            wget \
+            file
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install frontend dependencies
+        run: pnpm install
+
+      - name: Build Tauri app
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          NO_STRIP: "true"
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: pnpm tauri build
+
+      - name: Rename artifacts
+        run: |
+          APPIMAGE_DIR="src-tauri/target/release/bundle/appimage"
+          ORIG_APPIMAGE=$(ls "$APPIMAGE_DIR"/*.AppImage | grep -v '.sig' | head -1)
+          ORIG_SIG="${ORIG_APPIMAGE}.sig"
+          mv "$ORIG_APPIMAGE" "$APPIMAGE_DIR/CMD+K-${{ env.VERSION }}-linux-${{ matrix.arch }}.AppImage"
+          if [ -f "$ORIG_SIG" ]; then
+            mv "$ORIG_SIG" "$APPIMAGE_DIR/CMD+K-${{ env.VERSION }}-linux-${{ matrix.arch }}.AppImage.sig"
+          fi
+
+      - name: Generate checksum
+        run: |
+          cd src-tauri/target/release/bundle/appimage
+          sha256sum "CMD+K-${{ env.VERSION }}-linux-${{ matrix.arch }}.AppImage" > "CMD+K-${{ env.VERSION }}-linux-${{ matrix.arch }}.AppImage.sha256"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage-${{ matrix.arch }}
+          path: src-tauri/target/release/bundle/appimage/CMD+K-*.*
+
   release:
-    needs: [build-macos, build-windows]
+    needs: [build-macos, build-windows, build-linux]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
