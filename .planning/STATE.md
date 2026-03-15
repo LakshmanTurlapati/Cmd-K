@@ -72,6 +72,10 @@ Recent decisions affecting current work:
 - [Phase 35]: Native ARM runner (ubuntu-22.04-arm) for aarch64 AppImage builds
 - [Phase 35]: Tray warning and skip when AppImage location not writable (no error)
 
+### Roadmap Evolution
+
+- Phase 36 added: Showcase Website Update — version numbers, platform-specific downloads, privacy policy with history
+
 ### Pending Todos
 
 None.

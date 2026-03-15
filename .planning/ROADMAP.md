@@ -95,6 +95,7 @@
 - [x] **Phase 33: Smart Terminal Context** - Cross-platform ANSI stripping, token-budget truncation, command-output pairing (completed 2026-03-15)
 - [x] **Phase 34: Linux Terminal Text Reading** - AT-SPI2 for VTE terminals, kitty/WezTerm remote control APIs (completed 2026-03-15)
 - [x] **Phase 35: AppImage Distribution & CI/CD** - AppImage bundling, third CI job, auto-updater support, GitHub Release artifacts (completed 2026-03-15)
+- [ ] **Phase 36: Showcase Website Update** - Version numbers, platform-specific downloads, privacy policy with history
 
 ## Phase Details
 
@@ -194,3 +195,13 @@ Plans:
 | 33. Smart Terminal Context | 1/1 | Complete    | 2026-03-15 | - |
 | 34. Linux Terminal Text Reading | 1/1 | Complete    | 2026-03-15 | - |
 | 35. AppImage Distribution & CI/CD | 1/1 | Complete    | 2026-03-15 | - |
+
+### Phase 36: Showcase Website Update
+
+**Goal:** Showcase website reflects v0.3.9 with Linux support — updated version numbers, platform-specific download buttons (macOS/Windows/Linux AppImage), and privacy policy page with version history
+**Requirements**: TBD
+**Depends on:** Phase 35
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 36 to break down)
