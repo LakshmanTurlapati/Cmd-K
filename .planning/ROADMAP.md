@@ -198,10 +198,11 @@ Plans:
 
 ### Phase 36: Showcase Website Update
 
-**Goal:** Showcase website reflects v0.3.9 with Linux support — updated version numbers, platform-specific download buttons (macOS/Windows/Linux AppImage), and privacy policy page with version history
-**Requirements**: TBD
+**Goal:** Showcase website reflects v0.3.9 with Linux support -- updated version numbers, platform-specific download buttons (macOS/Windows/Linux AppImage), and privacy policy page with version history
+**Requirements**: WEB-01-VERSION, WEB-02-DOWNLOADS, WEB-03-CONTENT, WEB-04-PRIVACY
 **Depends on:** Phase 35
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 36 to break down)
+- [ ] 36-01-PLAN.md -- Version infrastructure, OS-detect downloads, Linux badge, feature cards, carousel
+- [ ] 36-02-PLAN.md -- Privacy policy v0.3.9 updates with Linux details and version history
