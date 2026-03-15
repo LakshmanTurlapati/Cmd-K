@@ -7,6 +7,24 @@
 (function () {
   'use strict';
 
+  // ---- Version & download URLs ----
+  var VERSION = '0.3.9';
+  var DOWNLOAD_BASE = 'https://github.com/LakshmanTurlapati/Cmd-K/releases/download';
+  var URLS = {
+    macos: DOWNLOAD_BASE + '/v' + VERSION + '/CMD+K-' + VERSION + '-universal.dmg',
+    windows: DOWNLOAD_BASE + '/v' + VERSION + '/CMD+K-' + VERSION + '-windows-x64.exe',
+    linux_x86: DOWNLOAD_BASE + '/v' + VERSION + '/CMD+K-' + VERSION + '-linux-x86_64.AppImage',
+    linux_arm: DOWNLOAD_BASE + '/v' + VERSION + '/CMD+K-' + VERSION + '-linux-aarch64.AppImage'
+  };
+
+  function detectOS() {
+    var ua = navigator.userAgent;
+    if (/Linux/.test(ua) && !/Android/.test(ua)) return 'linux';
+    if (/Mac/.test(ua)) return 'macos';
+    if (/Win/.test(ua)) return 'windows';
+    return null;
+  }
+
   // ---- Theme (follows OS preference) ----
   function getSystemTheme() {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -168,5 +186,42 @@
         sectionObserver.observe(section);
       });
     }
+
+    // ---- Version & download URLs ----
+    document.querySelectorAll('[data-download]').forEach(function(el) {
+      var key = el.getAttribute('data-download');
+      if (URLS[key]) el.href = URLS[key];
+    });
+    document.querySelectorAll('[data-version]').forEach(function(el) {
+      el.textContent = 'v' + VERSION;
+    });
+
+    // ---- OS auto-detect ----
+    var detectedOS = detectOS();
+    if (detectedOS) {
+      document.querySelectorAll('[data-platform="' + detectedOS + '"]').forEach(function(btn) {
+        btn.classList.add('platform-detected');
+      });
+    }
+
+    // ---- Linux arch popup ----
+    var linuxBtns = document.querySelectorAll('.linux-download-btn');
+    linuxBtns.forEach(function(btn) {
+      var popup = btn.parentElement.querySelector('.arch-popup');
+      if (!popup) return;
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        popup.classList.toggle('open');
+      });
+    });
+
+    // Close arch popup on click outside
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('.linux-download-wrapper')) {
+        document.querySelectorAll('.arch-popup.open').forEach(function(p) {
+          p.classList.remove('open');
+        });
+      }
+    });
   });
 })();
