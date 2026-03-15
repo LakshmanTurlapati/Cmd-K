@@ -23,9 +23,9 @@ Requirements for Linux Support & Smart Terminal Context milestone. Each maps to 
 
 ### Linux Paste
 
-- [ ] **LPST-01**: Auto-paste into active terminal via xdotool keystroke simulation on X11
-- [ ] **LPST-02**: Wayland graceful fallback — copies to clipboard with "press Ctrl+Shift+V" hint
-- [ ] **LPST-03**: Destructive command detection works with Linux-specific patterns (already built)
+- [x] **LPST-01**: Auto-paste into active terminal via xdotool keystroke simulation on X11
+- [x] **LPST-02**: Wayland graceful fallback — copies to clipboard with "press Ctrl+Shift+V" hint
+- [x] **LPST-03**: Destructive command detection works with Linux-specific patterns (already built)
 
 ### Linux Terminal Text Reading
 
@@ -81,9 +81,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LOVRL-03 | Phase 31 | Complete |
 | LOVRL-04 | Phase 31 | Complete |
 | LOVRL-05 | Phase 31 | Complete |
-| LPST-01 | Phase 32 | Pending |
-| LPST-02 | Phase 32 | Pending |
-| LPST-03 | Phase 32 | Pending |
+| LPST-01 | Phase 32 | Complete |
+| LPST-02 | Phase 32 | Complete |
+| LPST-03 | Phase 32 | Complete |
 | SCTX-01 | Phase 33 | Pending |
 | SCTX-02 | Phase 33 | Pending |
 | SCTX-03 | Phase 33 | Pending |

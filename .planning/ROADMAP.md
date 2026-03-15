@@ -91,7 +91,7 @@
 
 - [x] **Phase 30: Linux Process Detection** - CWD, shell type, and process tree via /proc filesystem (completed 2026-03-14)
 - [x] **Phase 31: Linux Overlay & Hotkey** - X11 system-wide hotkey, floating overlay, PID capture, CSS glass fallback (completed 2026-03-14)
-- [ ] **Phase 32: Linux Paste** - xdotool paste on X11, clipboard fallback on Wayland, destructive pattern integration
+- [x] **Phase 32: Linux Paste** - xdotool paste on X11, clipboard fallback on Wayland, destructive pattern integration (completed 2026-03-15)
 - [ ] **Phase 33: Smart Terminal Context** - Cross-platform ANSI stripping, token-budget truncation, command-output pairing
 - [ ] **Phase 34: Linux Terminal Text Reading** - AT-SPI2 for VTE terminals, kitty/WezTerm remote control APIs
 - [ ] **Phase 35: AppImage Distribution & CI/CD** - AppImage bundling, third CI job, auto-updater support, GitHub Release artifacts
@@ -135,7 +135,7 @@ Plans:
   1. User accepts an AI-generated command on X11 and it is pasted into the active terminal via xdotool
   2. User on Wayland sees the command copied to clipboard with a "press Ctrl+Shift+V" hint
   3. Destructive commands trigger the warning overlay before paste on Linux (existing patterns already cover Linux commands)
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
 - [ ] 32-01-PLAN.md -- Linux paste backend (xdotool/xclip) + frontend clipboard hint
 
@@ -184,7 +184,7 @@ Plans:
 | 27-29 | v0.2.8 | 6/6 | Complete | 2026-03-14 |
 | 30. Linux Process Detection | 2/2 | Complete    | 2026-03-14 | - |
 | 31. Linux Overlay & Hotkey | 2/2 | Complete    | 2026-03-14 | 2026-03-14 |
-| 32. Linux Paste | v0.3.9 | 0/1 | Planning | - |
+| 32. Linux Paste | 1/1 | Complete   | 2026-03-15 | - |
 | 33. Smart Terminal Context | v0.3.9 | 0/? | Not started | - |
 | 34. Linux Terminal Text Reading | v0.3.9 | 0/? | Not started | - |
 | 35. AppImage Distribution & CI/CD | v0.3.9 | 0/? | Not started | - |
