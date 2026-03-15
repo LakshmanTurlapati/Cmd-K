@@ -184,7 +184,7 @@ Plans:
 | 27-29 | v0.2.8 | 6/6 | Complete | 2026-03-14 |
 | 30. Linux Process Detection | 2/2 | Complete    | 2026-03-14 | - |
 | 31. Linux Overlay & Hotkey | 2/2 | Complete    | 2026-03-14 | 2026-03-14 |
-| 32. Linux Paste | 1/1 | Complete   | 2026-03-15 | - |
+| 32. Linux Paste | 1/1 | Complete    | 2026-03-15 | - |
 | 33. Smart Terminal Context | v0.3.9 | 0/? | Not started | - |
 | 34. Linux Terminal Text Reading | v0.3.9 | 0/? | Not started | - |
 | 35. AppImage Distribution & CI/CD | v0.3.9 | 0/? | Not started | - |
