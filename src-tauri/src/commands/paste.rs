@@ -1,5 +1,5 @@
 use tauri::AppHandle;
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 use tauri::Manager;
 
 #[cfg(target_os = "macos")]
@@ -8,7 +8,7 @@ use tauri_nspanel::ManagerExt;
 #[cfg(target_os = "windows")]
 use crate::commands::hotkey::restore_focus;
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 use crate::state::AppState;
 #[cfg(target_os = "macos")]
 use crate::terminal::detect::get_bundle_id;
@@ -156,8 +156,90 @@ fn write_to_clipboard(command: &str) {
     }
 }
 
-/// Non-macOS, non-Windows stub.
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+// ---------------------------------------------------------------------------
+// Linux: display server detection, clipboard, xdotool keystroke simulation
+// ---------------------------------------------------------------------------
+
+#[cfg(target_os = "linux")]
+#[derive(Debug)]
+enum DisplayServer {
+    X11,
+    Wayland,
+    Unknown,
+}
+
+#[cfg(target_os = "linux")]
+fn detect_display_server() -> DisplayServer {
+    // GDK_BACKEND=x11 overrides everything (XWayland path)
+    if std::env::var("GDK_BACKEND")
+        .map(|v| v == "x11")
+        .unwrap_or(false)
+    {
+        return DisplayServer::X11;
+    }
+    // Check for Wayland indicators
+    let wayland_display = std::env::var("WAYLAND_DISPLAY").is_ok();
+    let session_wayland = std::env::var("XDG_SESSION_TYPE")
+        .map(|v| v == "wayland")
+        .unwrap_or(false);
+    if wayland_display && session_wayland {
+        return DisplayServer::Wayland;
+    }
+    // Default to X11 if DISPLAY is set
+    if std::env::var("DISPLAY").is_ok() {
+        return DisplayServer::X11;
+    }
+    DisplayServer::Unknown
+}
+
+/// Write command to system clipboard on Linux via xclip or wl-copy.
+#[cfg(target_os = "linux")]
+#[allow(dead_code)]
+fn write_to_clipboard(command: &str) {
+    use crate::state::LinuxToolAvailability;
+
+    let tools = LinuxToolAvailability::detect();
+    let display = detect_display_server();
+
+    write_to_clipboard_linux(command, &tools, &display);
+}
+
+#[cfg(target_os = "linux")]
+fn write_to_clipboard_linux(
+    command: &str,
+    tools: &crate::state::LinuxToolAvailability,
+    display: &DisplayServer,
+) {
+    use std::io::Write;
+
+    let (cmd, args): (&str, Vec<&str>) = match display {
+        DisplayServer::Wayland if tools.has_wl_copy => ("wl-copy", vec![]),
+        _ if tools.has_xclip => ("xclip", vec!["-selection", "clipboard"]),
+        _ => {
+            eprintln!("[paste] no clipboard tool available (install xclip or wl-copy)");
+            return;
+        }
+    };
+
+    match std::process::Command::new(cmd)
+        .args(&args)
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+    {
+        Ok(mut child) => {
+            if let Some(mut stdin) = child.stdin.take() {
+                let _ = stdin.write_all(command.as_bytes());
+                // stdin is dropped here, closing the pipe before wait()
+            }
+            let _ = child.wait();
+            eprintln!("[paste] clipboard written via {}", cmd);
+        }
+        Err(e) => eprintln!("[paste] {} failed (non-fatal): {}", cmd, e),
+    }
+}
+
+/// Non-macOS, non-Windows, non-Linux stub.
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 #[allow(dead_code)]
 fn write_to_clipboard(_command: &str) {
     // Stub for other platforms
@@ -170,9 +252,10 @@ fn write_to_clipboard(_command: &str) {
 /// - All other terminals: activates via simplified AppleScript, then CGEventPost
 ///   Ctrl+U (clear line) + Cmd+V (paste from clipboard).
 ///
-/// Returns `Ok(())` on success, `Err(message)` if any step fails.
+/// Returns `Ok("auto")` when paste was automatic, `Ok("clipboard_hint")` when
+/// the command was copied to clipboard and the user needs to paste manually.
 #[tauri::command]
-pub fn paste_to_terminal(app: AppHandle, command: String) -> Result<(), String> {
+pub fn paste_to_terminal(app: AppHandle, command: String) -> Result<String, String> {
     // Windows: early path — does not need bundle_id (uses HWND-based approach)
     #[cfg(target_os = "windows")]
     {
@@ -213,8 +296,31 @@ pub fn paste_to_terminal(app: AppHandle, command: String) -> Result<(), String> 
         paste_to_terminal_macos(&app, &bundle_id, &command, pid)?;
     }
 
+    // Linux: xdotool + xclip paste or clipboard fallback with hint
+    #[cfg(target_os = "linux")]
+    {
+        let state = app
+            .try_state::<AppState>()
+            .ok_or_else(|| "AppState not found".to_string())?;
+
+        let pid = {
+            let guard = state
+                .previous_app_pid
+                .lock()
+                .map_err(|_| "previous_app_pid mutex poisoned".to_string())?;
+            (*guard).ok_or_else(|| "no previous app PID recorded".to_string())?
+        };
+
+        eprintln!(
+            "[paste] paste_to_terminal called (Linux): pid={}, command={:?}",
+            pid, command
+        );
+
+        return paste_to_terminal_linux(&command, pid, &state.linux_tools);
+    }
+
     // Other platforms: not yet implemented
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
     {
         let _ = (&app, &command);
         return Err("paste not yet implemented for this platform".to_string());
@@ -243,7 +349,7 @@ pub fn paste_to_terminal(app: AppHandle, command: String) -> Result<(), String> 
             "[paste] paste succeeded | chars={}",
             command.len()
         );
-        Ok(())
+        Ok("auto".to_string())
     }
 }
 
@@ -425,6 +531,84 @@ end tell"#
     Ok(())
 }
 
+/// Linux: paste command into the terminal via clipboard + xdotool Ctrl+Shift+V.
+///
+/// On X11 with xdotool available:
+/// 1. Write command to clipboard via xclip/wl-copy
+/// 2. Find terminal window ID via `xdotool search --pid`
+/// 3. Activate terminal window via `xdotool windowactivate --sync`
+/// 4. Clear current line via `xdotool key ctrl+u`
+/// 5. Wait 50ms for shell processing
+/// 6. Paste via `xdotool key ctrl+shift+v`
+///
+/// On Wayland or without xdotool: clipboard is written, returns "clipboard_hint"
+/// so the frontend can show an inline hint.
+#[cfg(target_os = "linux")]
+fn paste_to_terminal_linux(
+    command: &str,
+    pid: i32,
+    tools: &crate::state::LinuxToolAvailability,
+) -> Result<String, String> {
+    let display = detect_display_server();
+
+    // Write to clipboard first (always needed)
+    write_to_clipboard_linux(command, tools, &display);
+
+    // Check if we can auto-paste (X11 + xdotool available)
+    let can_auto_paste = matches!(display, DisplayServer::X11) && tools.has_xdotool;
+
+    if can_auto_paste {
+        // Find terminal window ID via xdotool search --pid
+        let search_output = std::process::Command::new("xdotool")
+            .args(["search", "--pid", &pid.to_string()])
+            .output()
+            .map_err(|e| format!("xdotool search failed: {}", e))?;
+
+        let window_id = String::from_utf8_lossy(&search_output.stdout)
+            .lines()
+            .next()
+            .unwrap_or("")
+            .to_string();
+
+        if !window_id.is_empty() {
+            // Activate the window (--sync waits for WM confirmation)
+            let _ = std::process::Command::new("xdotool")
+                .args(["windowactivate", "--sync", &window_id])
+                .output();
+            eprintln!("[paste] xdotool windowactivate {} for pid {}", window_id, pid);
+        } else {
+            eprintln!("[paste] xdotool search --pid {} returned no windows, sending keys to focused window", pid);
+        }
+
+        // Clear current line
+        let _ = std::process::Command::new("xdotool")
+            .args(["key", "ctrl+u"])
+            .output();
+
+        // 50ms delay for shell to process Ctrl+U
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        // Paste from clipboard
+        let _ = std::process::Command::new("xdotool")
+            .args(["key", "ctrl+shift+v"])
+            .output();
+
+        eprintln!(
+            "[paste] Linux X11 auto-paste succeeded | pid={} | chars={}",
+            pid,
+            command.len()
+        );
+        Ok("auto".to_string())
+    } else {
+        // Fallback: clipboard already written, return hint
+        eprintln!(
+            "[paste] Linux fallback: clipboard written, showing hint | display={:?}",
+            display
+        );
+        Ok("clipboard_hint".to_string())
+    }
+}
+
 /// Windows: paste command into the terminal via clipboard + Ctrl+V.
 ///
 /// 1. Write command to clipboard via arboard
@@ -587,7 +771,7 @@ fn send_return() -> Result<(), String> {
 /// - iTerm2: uses `write text ""` (sends newline via direct AppleEvent)
 /// - All others: activates terminal, then CGEventPost Return
 #[tauri::command]
-pub fn confirm_terminal_command(app: AppHandle) -> Result<(), String> {
+pub fn confirm_terminal_command(app: AppHandle) -> Result<String, String> {
     // Windows: early path — does not need bundle_id
     #[cfg(target_os = "windows")]
     {
@@ -622,15 +806,46 @@ pub fn confirm_terminal_command(app: AppHandle) -> Result<(), String> {
         confirm_terminal_command_macos(&bundle_id, pid)?;
     }
 
+    // Linux: xdotool Return or confirm hint
+    #[cfg(target_os = "linux")]
+    {
+        let state = app
+            .try_state::<AppState>()
+            .ok_or_else(|| "AppState not found".to_string())?;
+
+        eprintln!("[paste] confirm_terminal_command called (Linux)");
+        return confirm_command_linux(&state.linux_tools);
+    }
+
     // Other platforms: not yet implemented
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
     {
         let _ = &app;
         return Err("confirm not yet implemented for this platform".to_string());
     }
 
     #[allow(unreachable_code)]
-    Ok(())
+    Ok("auto".to_string())
+}
+
+/// Linux-specific confirm implementation: xdotool Return or hint fallback.
+#[cfg(target_os = "linux")]
+fn confirm_command_linux(
+    tools: &crate::state::LinuxToolAvailability,
+) -> Result<String, String> {
+    let display = detect_display_server();
+    let can_auto = matches!(display, DisplayServer::X11) && tools.has_xdotool;
+
+    if can_auto {
+        let _ = std::process::Command::new("xdotool")
+            .args(["key", "Return"])
+            .output();
+        eprintln!("[paste] Linux confirm succeeded via xdotool");
+        Ok("auto".to_string())
+    } else {
+        eprintln!("[paste] Linux confirm fallback: showing hint | display={:?}", display);
+        Ok("confirm_hint".to_string())
+    }
 }
 
 /// Windows-specific confirm implementation: restore focus + SendInput Return.

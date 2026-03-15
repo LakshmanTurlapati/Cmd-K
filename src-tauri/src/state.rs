@@ -161,6 +161,42 @@ impl UsageAccumulator {
     }
 }
 
+/// Cached availability of Linux CLI tools (xdotool, xclip, wl-copy).
+/// Checked once at startup to avoid repeated `which` calls on every paste.
+#[cfg(target_os = "linux")]
+#[derive(Debug, Clone, Default)]
+pub struct LinuxToolAvailability {
+    pub has_xdotool: bool,
+    pub has_xclip: bool,
+    pub has_wl_copy: bool,
+}
+
+#[cfg(target_os = "linux")]
+impl LinuxToolAvailability {
+    pub fn detect() -> Self {
+        let result = Self {
+            has_xdotool: Self::command_exists("xdotool"),
+            has_xclip: Self::command_exists("xclip"),
+            has_wl_copy: Self::command_exists("wl-copy"),
+        };
+        eprintln!(
+            "[state] LinuxToolAvailability: xdotool={}, xclip={}, wl-copy={}",
+            result.has_xdotool, result.has_xclip, result.has_wl_copy
+        );
+        result
+    }
+
+    fn command_exists(cmd: &str) -> bool {
+        std::process::Command::new("which")
+            .arg(cmd)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
+}
+
 /// Application state shared across Tauri commands.
 ///
 /// All fields are Mutex-wrapped for thread-safe access from async command handlers
@@ -204,6 +240,9 @@ pub struct AppState {
     pub usage: Mutex<UsageAccumulator>,
     /// Cached OpenRouter model pricing: model_id -> (input_price_per_m, output_price_per_m).
     pub openrouter_pricing: Mutex<HashMap<String, (f64, f64)>>,
+    /// Cached Linux tool availability (xdotool, xclip, wl-copy).
+    #[cfg(target_os = "linux")]
+    pub linux_tools: LinuxToolAvailability,
 }
 
 impl Default for AppState {
@@ -221,6 +260,8 @@ impl Default for AppState {
             last_position: Mutex::new(None),
             usage: Mutex::new(UsageAccumulator::default()),
             openrouter_pricing: Mutex::new(HashMap::new()),
+            #[cfg(target_os = "linux")]
+            linux_tools: LinuxToolAvailability::detect(),
         }
     }
 }
