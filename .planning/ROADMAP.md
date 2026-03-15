@@ -95,7 +95,7 @@
 - [x] **Phase 33: Smart Terminal Context** - Cross-platform ANSI stripping, token-budget truncation, command-output pairing (completed 2026-03-15)
 - [x] **Phase 34: Linux Terminal Text Reading** - AT-SPI2 for VTE terminals, kitty/WezTerm remote control APIs (completed 2026-03-15)
 - [x] **Phase 35: AppImage Distribution & CI/CD** - AppImage bundling, third CI job, auto-updater support, GitHub Release artifacts (completed 2026-03-15)
-- [ ] **Phase 36: Showcase Website Update** - Version numbers, platform-specific downloads, privacy policy with history
+- [x] **Phase 36: Showcase Website Update** - Version numbers, platform-specific downloads, privacy policy with history (completed 2026-03-15)
 
 ## Phase Details
 
@@ -201,7 +201,7 @@ Plans:
 **Goal:** Showcase website reflects v0.3.9 with Linux support -- updated version numbers, platform-specific download buttons (macOS/Windows/Linux AppImage), and privacy policy page with version history
 **Requirements**: WEB-01-VERSION, WEB-02-DOWNLOADS, WEB-03-CONTENT, WEB-04-PRIVACY
 **Depends on:** Phase 35
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 36-01-PLAN.md -- Version infrastructure, OS-detect downloads, Linux badge, feature cards, carousel

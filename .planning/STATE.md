@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: executing
-stopped_at: Completed 36-02-PLAN.md
-last_updated: "2026-03-15T19:17:22.229Z"
-last_activity: 2026-03-15 — Completed 34-01 linux terminal text reading
+stopped_at: Completed 36-01-PLAN.md
+last_updated: "2026-03-15T19:19:25.763Z"
+last_activity: 2026-03-15 — Completed 36-02 privacy policy update
 progress:
   total_phases: 7
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 10
-  completed_plans: 9
-  percent: 92
+  completed_plans: 10
+  percent: 90
 ---
 
 # Project State
@@ -72,6 +72,8 @@ Recent decisions affecting current work:
 - [Phase 35]: Native ARM runner (ubuntu-22.04-arm) for aarch64 AppImage builds
 - [Phase 35]: Tray warning and skip when AppImage location not writable (no error)
 - [Phase 36]: Preserved full March 9 policy verbatim in collapsible details element for version history
+- [Phase 36]: data-download/data-version attributes for JS-driven URL and version population
+- [Phase 36]: navigator.userAgent with Android exclusion for OS detection
 
 ### Roadmap Evolution
 
@@ -89,6 +91,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-15T19:17:22.180Z
-Stopped at: Completed 36-02-PLAN.md
+Last session: 2026-03-15T19:19:25.710Z
+Stopped at: Completed 36-01-PLAN.md
 Next action: Execute next phase plan or advance to next phase
