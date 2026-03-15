@@ -193,4 +193,4 @@ Plans:
 | 32. Linux Paste | 1/1 | Complete    | 2026-03-15 | - |
 | 33. Smart Terminal Context | 1/1 | Complete    | 2026-03-15 | - |
 | 34. Linux Terminal Text Reading | 1/1 | Complete    | 2026-03-15 | - |
-| 35. AppImage Distribution & CI/CD | 1/1 | Complete   | 2026-03-15 | - |
+| 35. AppImage Distribution & CI/CD | 1/1 | Complete    | 2026-03-15 | - |
