@@ -26,7 +26,7 @@ Linux users can download and auto-update CMD+K as an AppImage from GitHub Releas
 - No special Linux-specific update logic beyond the write-permission check
 
 ### CI runner & system deps
-- x86_64 AND aarch64 targets — cross-compile aarch64 on x86_64 runner
+- x86_64 AND aarch64 targets — native ARM runner (`ubuntu-22.04-arm`) per research finding that linuxdeploy cannot cross-compile
 - Ubuntu 22.04 runner for glibc compatibility floor
 - System packages via `apt-get install` in workflow (no caching) — include webkit2gtk, libayatana-appindicator, libdbus-1-dev, and other Tauri prerequisites
 - Linux build job blocks release — `release` job `needs: [build-macos, build-windows, build-linux]`
