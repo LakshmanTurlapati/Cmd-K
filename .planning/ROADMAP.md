@@ -161,7 +161,9 @@ Plans:
   2. User in kitty has terminal text read via kitty remote control API
   3. User in WezTerm has terminal text read via WezTerm CLI
   4. User in Alacritty or other unsupported terminals gets graceful degradation (CWD and shell type still work, just no visible output)
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 34-01-PLAN.md -- AT-SPI2 D-Bus reader, kitty/WezTerm subprocess readers, mod.rs wiring
 
 ### Phase 35: AppImage Distribution & CI/CD
 **Goal**: Linux users can download and auto-update CMD+K as an AppImage from GitHub Releases
@@ -188,5 +190,5 @@ Plans:
 | 31. Linux Overlay & Hotkey | 2/2 | Complete    | 2026-03-14 | 2026-03-14 |
 | 32. Linux Paste | 1/1 | Complete    | 2026-03-15 | - |
 | 33. Smart Terminal Context | 1/1 | Complete    | 2026-03-15 | - |
-| 34. Linux Terminal Text Reading | v0.3.9 | 0/? | Not started | - |
+| 34. Linux Terminal Text Reading | v0.3.9 | 0/1 | Not started | - |
 | 35. AppImage Distribution & CI/CD | v0.3.9 | 0/? | Not started | - |
