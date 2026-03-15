@@ -148,7 +148,9 @@ Plans:
   2. Terminal context uses approximately 10-15% of the model's context window, adapting to whichever model is selected
   3. When terminal output exceeds the budget, oldest complete command+output segments are removed while recent output is preserved
   4. Smart truncation works identically on macOS, Windows, and Linux
-**Plans**: TBD
+**Plans:** 1 plans
+Plans:
+- [ ] 33-01-PLAN.md -- Smart context pipeline (ANSI strip, token budget, command segmentation) + ai.rs integration
 
 ### Phase 34: Linux Terminal Text Reading
 **Goal**: User's recent terminal output is captured on Linux for AI context, across multiple terminal emulators
@@ -185,6 +187,6 @@ Plans:
 | 30. Linux Process Detection | 2/2 | Complete    | 2026-03-14 | - |
 | 31. Linux Overlay & Hotkey | 2/2 | Complete    | 2026-03-14 | 2026-03-14 |
 | 32. Linux Paste | 1/1 | Complete    | 2026-03-15 | - |
-| 33. Smart Terminal Context | v0.3.9 | 0/? | Not started | - |
+| 33. Smart Terminal Context | v0.3.9 | 0/1 | Not started | - |
 | 34. Linux Terminal Text Reading | v0.3.9 | 0/? | Not started | - |
 | 35. AppImage Distribution & CI/CD | v0.3.9 | 0/? | Not started | - |
