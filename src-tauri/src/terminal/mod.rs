@@ -5,6 +5,7 @@ pub mod detect;
 pub mod detect_linux;
 #[allow(dead_code)]
 pub mod detect_windows;
+pub mod context;
 pub mod filter;
 pub mod process;
 

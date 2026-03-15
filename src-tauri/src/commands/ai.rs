@@ -92,11 +92,11 @@ struct TerminalContextView {
 
 /// Build the user message string from the app context and raw query.
 ///
-/// Terminal mode: includes App, Shell, CWD, Running process, Terminal output (last 25 lines),
+/// Terminal mode: includes App, Shell, CWD, Running process, Terminal output (smart-truncated),
 /// Console last line (if browser DevTools open), then the task.
 ///
 /// Assistant mode: includes App name (if available), Console last line (if browser), then the question.
-fn build_user_message(query: &str, ctx: &AppContextView, is_follow_up: bool) -> String {
+fn build_user_message(query: &str, ctx: &AppContextView, is_follow_up: bool, model: &str) -> String {
     let is_terminal_mode = ctx
         .terminal
         .as_ref()
@@ -133,14 +133,17 @@ fn build_user_message(query: &str, ctx: &AppContextView, is_follow_up: bool) -> 
                 parts.push(format!("Running: {}", proc));
             }
             if let Some(output) = &terminal.visible_output {
-                let lines: Vec<&str> = output.lines().collect();
-                let start = lines.len().saturating_sub(25);
-                let slice = &lines[start..];
-                parts.push(format!(
-                    "Terminal output (last {} lines):\n{}",
-                    slice.len(),
-                    slice.join("\n")
-                ));
+                let context_window = crate::terminal::context::context_window_for_model(model);
+                let prepared = crate::terminal::context::prepare_terminal_context(output, context_window);
+                if !prepared.is_empty() {
+                    let filtered = crate::terminal::filter::filter_sensitive(&prepared);
+                    let line_count = filtered.lines().count();
+                    parts.push(format!(
+                        "Terminal output ({} lines):\n{}",
+                        line_count,
+                        filtered
+                    ));
+                }
             }
         }
         if ctx.console_detected {
@@ -267,7 +270,7 @@ pub async fn stream_ai_response(
 
     // 4. Build the user message with context (follow-ups omit terminal context)
     let is_follow_up = !history.is_empty();
-    let user_message = build_user_message(&query, &ctx, is_follow_up);
+    let user_message = build_user_message(&query, &ctx, is_follow_up, &model);
 
     // 5. Build messages array: system prompt + history (pre-capped by frontend via turnLimit) + current user msg
     let mut messages: Vec<serde_json::Value> = Vec::new();
