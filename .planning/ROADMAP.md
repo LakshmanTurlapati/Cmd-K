@@ -92,7 +92,7 @@
 - [x] **Phase 30: Linux Process Detection** - CWD, shell type, and process tree via /proc filesystem (completed 2026-03-14)
 - [x] **Phase 31: Linux Overlay & Hotkey** - X11 system-wide hotkey, floating overlay, PID capture, CSS glass fallback (completed 2026-03-14)
 - [x] **Phase 32: Linux Paste** - xdotool paste on X11, clipboard fallback on Wayland, destructive pattern integration (completed 2026-03-15)
-- [ ] **Phase 33: Smart Terminal Context** - Cross-platform ANSI stripping, token-budget truncation, command-output pairing
+- [x] **Phase 33: Smart Terminal Context** - Cross-platform ANSI stripping, token-budget truncation, command-output pairing (completed 2026-03-15)
 - [ ] **Phase 34: Linux Terminal Text Reading** - AT-SPI2 for VTE terminals, kitty/WezTerm remote control APIs
 - [ ] **Phase 35: AppImage Distribution & CI/CD** - AppImage bundling, third CI job, auto-updater support, GitHub Release artifacts
 
@@ -148,7 +148,7 @@ Plans:
   2. Terminal context uses approximately 10-15% of the model's context window, adapting to whichever model is selected
   3. When terminal output exceeds the budget, oldest complete command+output segments are removed while recent output is preserved
   4. Smart truncation works identically on macOS, Windows, and Linux
-**Plans:** 1 plans
+**Plans:** 1/1 plans complete
 Plans:
 - [ ] 33-01-PLAN.md -- Smart context pipeline (ANSI strip, token budget, command segmentation) + ai.rs integration
 
@@ -187,6 +187,6 @@ Plans:
 | 30. Linux Process Detection | 2/2 | Complete    | 2026-03-14 | - |
 | 31. Linux Overlay & Hotkey | 2/2 | Complete    | 2026-03-14 | 2026-03-14 |
 | 32. Linux Paste | 1/1 | Complete    | 2026-03-15 | - |
-| 33. Smart Terminal Context | v0.3.9 | 0/1 | Not started | - |
+| 33. Smart Terminal Context | 1/1 | Complete   | 2026-03-15 | - |
 | 34. Linux Terminal Text Reading | v0.3.9 | 0/? | Not started | - |
 | 35. AppImage Distribution & CI/CD | v0.3.9 | 0/? | Not started | - |

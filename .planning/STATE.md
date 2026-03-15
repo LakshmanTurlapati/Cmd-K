@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: executing
-stopped_at: Phase 33 context gathered
-last_updated: "2026-03-15T02:59:56.027Z"
-last_activity: 2026-03-15 — Completed 32-01 Linux paste implementation
+stopped_at: Completed 33-01-PLAN.md
+last_updated: "2026-03-15T03:44:18.755Z"
+last_activity: 2026-03-15 — Completed 33-01 smart terminal context pipeline
 progress:
   total_phases: 6
-  completed_phases: 3
-  total_plans: 5
-  completed_plans: 5
+  completed_phases: 4
+  total_plans: 6
+  completed_plans: 6
   percent: 83
 ---
 
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-03-14)
 
 ## Current Position
 
-Phase: 32 (3 of 6 in v0.3.9) — Linux Paste
+Phase: 33 (4 of 6 in v0.3.9) — Smart Terminal Context
 Plan: 1 of 1 in current phase (phase complete)
 Status: Executing
-Last activity: 2026-03-15 — Completed 32-01 Linux paste implementation
+Last activity: 2026-03-15 — Completed 33-01 smart terminal context pipeline
 
 Progress: [████████░░] 83%
 
@@ -64,6 +64,9 @@ Recent decisions affecting current work:
 - [Phase Phase 31]: Fresh X11 connection per hotkey press (1ms overhead acceptable with 200ms debounce)
 - [Phase 32]: Return-value hint communication (Result<String, String>) for paste/confirm fallback signaling
 - [Phase 32]: arboard removed from Linux fallback (Windows-only dep); xclip/wl-copy sufficient
+- [Phase 33]: Prefix-based context window lookup in context.rs rather than extending ModelWithMeta struct
+- [Phase 33]: 12% budget fraction (midpoint of 10-15% range) with chars/4 token estimation
+- [Phase 33]: Pipeline order: ANSI strip -> budget truncate -> sensitive filter
 
 ### Pending Todos
 
@@ -77,6 +80,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-15T02:59:55.995Z
-Stopped at: Phase 33 context gathered
+Last session: 2026-03-15T03:44:18.723Z
+Stopped at: Completed 33-01-PLAN.md
 Next action: Execute next phase plan or advance to phase 33

@@ -36,10 +36,10 @@ Requirements for Linux Support & Smart Terminal Context milestone. Each maps to 
 
 ### Smart Terminal Context
 
-- [ ] **SCTX-01**: ANSI escape sequence stripping from terminal output before sending to AI
-- [ ] **SCTX-02**: Token budget allocation — terminal context uses ~10-15% of model's context window
-- [ ] **SCTX-03**: Command-output pairing — truncation removes oldest complete command+output segments, not arbitrary lines
-- [ ] **SCTX-04**: Cross-platform module — smart truncation applies to macOS, Windows, and Linux equally
+- [x] **SCTX-01**: ANSI escape sequence stripping from terminal output before sending to AI
+- [x] **SCTX-02**: Token budget allocation — terminal context uses ~10-15% of model's context window
+- [x] **SCTX-03**: Command-output pairing — truncation removes oldest complete command+output segments, not arbitrary lines
+- [x] **SCTX-04**: Cross-platform module — smart truncation applies to macOS, Windows, and Linux equally
 
 ### AppImage Distribution
 
@@ -84,10 +84,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LPST-01 | Phase 32 | Complete |
 | LPST-02 | Phase 32 | Complete |
 | LPST-03 | Phase 32 | Complete |
-| SCTX-01 | Phase 33 | Pending |
-| SCTX-02 | Phase 33 | Pending |
-| SCTX-03 | Phase 33 | Pending |
-| SCTX-04 | Phase 33 | Pending |
+| SCTX-01 | Phase 33 | Complete |
+| SCTX-02 | Phase 33 | Complete |
+| SCTX-03 | Phase 33 | Complete |
+| SCTX-04 | Phase 33 | Complete |
 | LTXT-01 | Phase 34 | Pending |
 | LTXT-02 | Phase 34 | Pending |
 | LTXT-03 | Phase 34 | Pending |
