@@ -135,7 +135,9 @@ Plans:
   1. User accepts an AI-generated command on X11 and it is pasted into the active terminal via xdotool
   2. User on Wayland sees the command copied to clipboard with a "press Ctrl+Shift+V" hint
   3. Destructive commands trigger the warning overlay before paste on Linux (existing patterns already cover Linux commands)
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 32-01-PLAN.md -- Linux paste backend (xdotool/xclip) + frontend clipboard hint
 
 ### Phase 33: Smart Terminal Context
 **Goal**: AI receives intelligently truncated terminal context that maximizes useful information within token budget
@@ -182,7 +184,7 @@ Plans:
 | 27-29 | v0.2.8 | 6/6 | Complete | 2026-03-14 |
 | 30. Linux Process Detection | 2/2 | Complete    | 2026-03-14 | - |
 | 31. Linux Overlay & Hotkey | 2/2 | Complete    | 2026-03-14 | 2026-03-14 |
-| 32. Linux Paste | v0.3.9 | 0/? | Not started | - |
+| 32. Linux Paste | v0.3.9 | 0/1 | Planning | - |
 | 33. Smart Terminal Context | v0.3.9 | 0/? | Not started | - |
 | 34. Linux Terminal Text Reading | v0.3.9 | 0/? | Not started | - |
 | 35. AppImage Distribution & CI/CD | v0.3.9 | 0/? | Not started | - |
