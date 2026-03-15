@@ -173,7 +173,9 @@ Plans:
   1. AppImage built on Ubuntu 22.04 runs on Ubuntu 22.04+ and other mainstream distros without glibc errors
   2. GitHub Release includes Linux AppImage alongside macOS DMG and Windows NSIS installer with SHA256 checksum
   3. Auto-updater checks for and installs AppImage updates using the existing Ed25519 signing infrastructure
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 35-01-PLAN.md -- Linux AppImage CI build job, release assembly, updater write-permission guard
 
 ## Progress
 
