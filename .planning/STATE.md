@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: executing
-stopped_at: Phase 36 context gathered
-last_updated: "2026-03-15T18:58:23.876Z"
+stopped_at: Completed 36-02-PLAN.md
+last_updated: "2026-03-15T19:17:22.229Z"
 last_activity: 2026-03-15 — Completed 34-01 linux terminal text reading
 progress:
   total_phases: 7
   completed_phases: 6
-  total_plans: 8
-  completed_plans: 8
+  total_plans: 10
+  completed_plans: 9
   percent: 92
 ---
 
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-14)
 
 ## Current Position
 
-Phase: 34 (5 of 6 in v0.3.9) — Linux Terminal Text Reading
-Plan: 1 of 1 in current phase (phase complete)
+Phase: 36 (7 of 7 in v0.3.9) — Showcase Website Update
+Plan: 2 of 3 in current phase
 Status: Executing
-Last activity: 2026-03-15 — Completed 34-01 linux terminal text reading
+Last activity: 2026-03-15 — Completed 36-02 privacy policy update
 
-Progress: [█████████░] 92%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -71,6 +71,7 @@ Recent decisions affecting current work:
 - [Phase 34]: Strategy dispatch by exe_name: VTE/Qt -> AT-SPI2, kitty -> remote control, wezterm -> CLI
 - [Phase 35]: Native ARM runner (ubuntu-22.04-arm) for aarch64 AppImage builds
 - [Phase 35]: Tray warning and skip when AppImage location not writable (no error)
+- [Phase 36]: Preserved full March 9 policy verbatim in collapsible details element for version history
 
 ### Roadmap Evolution
 
@@ -88,6 +89,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-15T18:58:23.821Z
-Stopped at: Phase 36 context gathered
+Last session: 2026-03-15T19:17:22.180Z
+Stopped at: Completed 36-02-PLAN.md
 Next action: Execute next phase plan or advance to next phase
