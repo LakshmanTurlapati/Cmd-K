@@ -93,7 +93,7 @@
 - [x] **Phase 31: Linux Overlay & Hotkey** - X11 system-wide hotkey, floating overlay, PID capture, CSS glass fallback (completed 2026-03-14)
 - [x] **Phase 32: Linux Paste** - xdotool paste on X11, clipboard fallback on Wayland, destructive pattern integration (completed 2026-03-15)
 - [x] **Phase 33: Smart Terminal Context** - Cross-platform ANSI stripping, token-budget truncation, command-output pairing (completed 2026-03-15)
-- [ ] **Phase 34: Linux Terminal Text Reading** - AT-SPI2 for VTE terminals, kitty/WezTerm remote control APIs
+- [x] **Phase 34: Linux Terminal Text Reading** - AT-SPI2 for VTE terminals, kitty/WezTerm remote control APIs (completed 2026-03-15)
 - [ ] **Phase 35: AppImage Distribution & CI/CD** - AppImage bundling, third CI job, auto-updater support, GitHub Release artifacts
 
 ## Phase Details
@@ -161,7 +161,7 @@ Plans:
   2. User in kitty has terminal text read via kitty remote control API
   3. User in WezTerm has terminal text read via WezTerm CLI
   4. User in Alacritty or other unsupported terminals gets graceful degradation (CWD and shell type still work, just no visible output)
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
 - [ ] 34-01-PLAN.md -- AT-SPI2 D-Bus reader, kitty/WezTerm subprocess readers, mod.rs wiring
 
@@ -190,5 +190,5 @@ Plans:
 | 31. Linux Overlay & Hotkey | 2/2 | Complete    | 2026-03-14 | 2026-03-14 |
 | 32. Linux Paste | 1/1 | Complete    | 2026-03-15 | - |
 | 33. Smart Terminal Context | 1/1 | Complete    | 2026-03-15 | - |
-| 34. Linux Terminal Text Reading | v0.3.9 | 0/1 | Not started | - |
+| 34. Linux Terminal Text Reading | 1/1 | Complete   | 2026-03-15 | - |
 | 35. AppImage Distribution & CI/CD | v0.3.9 | 0/? | Not started | - |

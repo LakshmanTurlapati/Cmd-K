@@ -8,10 +8,10 @@ last_updated: "2026-03-15T06:11:30.668Z"
 last_activity: 2026-03-15 — Completed 33-01 smart terminal context pipeline
 progress:
   total_phases: 6
-  completed_phases: 4
-  total_plans: 6
-  completed_plans: 6
-  percent: 83
+  completed_phases: 5
+  total_plans: 7
+  completed_plans: 7
+  percent: 92
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-14)
 
 ## Current Position
 
-Phase: 33 (4 of 6 in v0.3.9) — Smart Terminal Context
+Phase: 34 (5 of 6 in v0.3.9) — Linux Terminal Text Reading
 Plan: 1 of 1 in current phase (phase complete)
 Status: Executing
-Last activity: 2026-03-15 — Completed 33-01 smart terminal context pipeline
+Last activity: 2026-03-15 — Completed 34-01 linux terminal text reading
 
-Progress: [████████░░] 83%
+Progress: [█████████░] 92%
 
 ## Performance Metrics
 
@@ -67,6 +67,8 @@ Recent decisions affecting current work:
 - [Phase 33]: Prefix-based context window lookup in context.rs rather than extending ModelWithMeta struct
 - [Phase 33]: 12% budget fraction (midpoint of 10-15% range) with chars/4 token estimation
 - [Phase 33]: Pipeline order: ANSI strip -> budget truncate -> sensitive filter
+- [Phase 34]: zbus with default features (async-io required) for AT-SPI2 D-Bus blocking calls
+- [Phase 34]: Strategy dispatch by exe_name: VTE/Qt -> AT-SPI2, kitty -> remote control, wezterm -> CLI
 
 ### Pending Todos
 
@@ -80,6 +82,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-15T06:11:30.621Z
-Stopped at: Phase 34 context gathered
-Next action: Execute next phase plan or advance to phase 33
+Last session: 2026-03-15T07:24:08Z
+Stopped at: Completed 34-01-PLAN.md
+Next action: Execute next phase plan or advance to next phase

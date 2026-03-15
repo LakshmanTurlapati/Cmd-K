@@ -29,10 +29,10 @@ Requirements for Linux Support & Smart Terminal Context milestone. Each maps to 
 
 ### Linux Terminal Text Reading
 
-- [ ] **LTXT-01**: AT-SPI2 D-Bus integration reads terminal text from VTE-based terminals (GNOME Terminal, Tilix, Terminator)
-- [ ] **LTXT-02**: kitty remote control (`kitty @ get-text`) reads terminal text from kitty
-- [ ] **LTXT-03**: WezTerm CLI (`wezterm cli get-text`) reads terminal text from WezTerm
-- [ ] **LTXT-04**: Graceful None return for terminals without text reading support (Alacritty, st)
+- [x] **LTXT-01**: AT-SPI2 D-Bus integration reads terminal text from VTE-based terminals (GNOME Terminal, Tilix, Terminator)
+- [x] **LTXT-02**: kitty remote control (`kitty @ get-text`) reads terminal text from kitty
+- [x] **LTXT-03**: WezTerm CLI (`wezterm cli get-text`) reads terminal text from WezTerm
+- [x] **LTXT-04**: Graceful None return for terminals without text reading support (Alacritty, st)
 
 ### Smart Terminal Context
 
@@ -88,10 +88,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SCTX-02 | Phase 33 | Complete |
 | SCTX-03 | Phase 33 | Complete |
 | SCTX-04 | Phase 33 | Complete |
-| LTXT-01 | Phase 34 | Pending |
-| LTXT-02 | Phase 34 | Pending |
-| LTXT-03 | Phase 34 | Pending |
-| LTXT-04 | Phase 34 | Pending |
+| LTXT-01 | Phase 34 | Complete |
+| LTXT-02 | Phase 34 | Complete |
+| LTXT-03 | Phase 34 | Complete |
+| LTXT-04 | Phase 34 | Complete |
 | APKG-01 | Phase 35 | Pending |
 | APKG-02 | Phase 35 | Pending |
 | APKG-03 | Phase 35 | Pending |
