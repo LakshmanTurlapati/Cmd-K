@@ -12,6 +12,8 @@ pub mod process;
 #[cfg(target_os = "windows")]
 pub mod uia_reader;
 
+pub mod linux_reader;
+
 use serde::Serialize;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -317,10 +319,17 @@ fn detect_inner_linux(previous_app_pid: i32) -> Option<TerminalContext> {
         return None;
     }
 
+    let visible_output = if is_terminal {
+        linux_reader::read_terminal_text_linux(previous_app_pid, exe_str)
+            .map(|text| filter::filter_sensitive(&text))
+    } else {
+        None
+    };
+
     Some(TerminalContext {
         shell_type: proc_info.shell_type,
         cwd: proc_info.cwd,
-        visible_output: None, // Terminal text reading is Phase 34
+        visible_output,
         running_process: proc_info.running_process,
         is_wsl: false,
     })
@@ -434,11 +443,21 @@ fn detect_app_context_linux(previous_app_pid: i32, _pre_captured_text: Option<St
     let proc_info = process::get_foreground_info(previous_app_pid);
     let has_shell = proc_info.shell_type.is_some() || proc_info.cwd.is_some();
 
+    let is_terminal = detect_linux::is_known_terminal_exe(exe_str);
+    let is_ide = detect_linux::is_ide_with_terminal_exe(exe_str);
+
     let terminal = if has_shell {
+        let visible_output = if is_terminal || is_ide {
+            linux_reader::read_terminal_text_linux(previous_app_pid, exe_str)
+                .map(|text| filter::filter_sensitive(&text))
+        } else {
+            None
+        };
+
         Some(TerminalContext {
             shell_type: proc_info.shell_type,
             cwd: proc_info.cwd,
-            visible_output: None, // Terminal text reading is Phase 34
+            visible_output,
             running_process: proc_info.running_process,
             is_wsl: false,
         })
@@ -451,7 +470,7 @@ fn detect_app_context_linux(previous_app_pid: i32, _pre_captured_text: Option<St
         terminal,
         console_detected: false,
         console_last_line: None,
-        visible_text: None, // Generic text reading deferred to Phase 34
+        visible_text: None,
     })
 }
 
