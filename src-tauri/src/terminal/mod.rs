@@ -627,6 +627,20 @@ fn detect_app_context_windows(previous_app_pid: i32, _pre_captured_text: Option<
             running_process: None,
             is_wsl: false,
         })
+    } else if detect_windows::is_ide_with_terminal_exe(exe_str) {
+        // IDE (VS Code, Cursor) but no shell found in process tree.
+        // This happens in Remote-WSL mode where the shell runs inside the Hyper-V VM
+        // and is invisible to Windows process APIs (wsl.exe not in shell list).
+        // Create a placeholder so detect_full_with_hwnd can still run WSL detection
+        // via window title ([WSL:]) and UIA text (multi-signal scoring).
+        eprintln!("[detect_app_context_windows] IDE {} but no shell in process tree, creating placeholder for WSL detection", exe_str);
+        Some(TerminalContext {
+            shell_type: None,
+            cwd: None,
+            visible_output: None,
+            running_process: None,
+            is_wsl: false,
+        })
     } else {
         None
     };
