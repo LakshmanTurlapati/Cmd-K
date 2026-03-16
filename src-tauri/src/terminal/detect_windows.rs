@@ -40,6 +40,9 @@ pub const KNOWN_IDE_EXES: &[&str] = &[
 ];
 
 /// Known shell binary names (used for process tree walking).
+/// wsl.exe is included because ConPTY priority filtering in find_shell_by_ancestry
+/// naturally excludes internal VS Code wsl.exe processes (which are NOT ConPTY-hosted)
+/// while finding the terminal-originated wsl.exe (which IS ConPTY-hosted).
 pub const KNOWN_SHELL_EXES: &[&str] = &[
     "powershell.exe",
     "pwsh.exe",
@@ -49,6 +52,7 @@ pub const KNOWN_SHELL_EXES: &[&str] = &[
     "fish.exe",
     "nu.exe",
     "sh.exe",
+    "wsl.exe",
 ];
 
 /// Returns true if the given exe name is a known terminal emulator.

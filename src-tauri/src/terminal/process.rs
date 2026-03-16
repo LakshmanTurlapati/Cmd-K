@@ -137,12 +137,20 @@ pub fn get_foreground_info(terminal_pid: i32, snapshot: Option<&ProcessSnapshot>
 
     // Detect WSL session on Windows
     let is_wsl = {
+        // Check 0: the shell itself IS wsl.exe (found via ConPTY priority)
+        let mut wsl = shell_name.as_deref().is_some_and(|n| n.eq_ignore_ascii_case("wsl"));
+        if wsl {
+            eprintln!("[process] WSL detected: shell IS wsl.exe (pid {})", shell_pid);
+        }
+
         // Check 1: wsl.exe in the process ancestry (using shared snapshot)
-        let mut wsl = if let Some(s) = snap {
-            detect_wsl_in_ancestry(shell_pid, s)
-        } else {
-            false
-        };
+        if !wsl {
+            wsl = if let Some(s) = snap {
+                detect_wsl_in_ancestry(shell_pid, s)
+            } else {
+                false
+            };
+        }
 
         // Check 2: wsl.exe as a CHILD of the shell process (VS Code WSL terminal)
         if !wsl {
