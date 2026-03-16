@@ -8,7 +8,7 @@
   'use strict';
 
   // ---- Version & download URLs ----
-  var VERSION = '0.3.9';
+  var VERSION = '0.3.10';
   var DOWNLOAD_BASE = 'https://github.com/LakshmanTurlapati/Cmd-K/releases/download';
   var URLS = {
     macos: DOWNLOAD_BASE + '/v' + VERSION + '/CMD+K-' + VERSION + '-universal.dmg',

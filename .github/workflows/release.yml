@@ -378,7 +378,7 @@ jobs:
             > Linux: `chmod +x CMD+K-*.AppImage && ./CMD+K-*.AppImage`
 
             ### Auto-Update
-            Users on v0.3.9+ will receive this update automatically (macOS, Windows, Linux).
+            Users on v0.3.10+ will receive this update automatically (macOS, Windows, Linux).
 
             ### Checksums (SHA256)
 
