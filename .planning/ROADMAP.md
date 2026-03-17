@@ -138,7 +138,7 @@ Plans:
 **Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 38-01-PLAN.md -- Ollama /api/tags and LM Studio /v1/models parsing, param size auto-tiering, ModelTab refresh-on-mount
+- [x] 38-01-PLAN.md -- Ollama /api/tags and LM Studio /v1/models parsing, param size auto-tiering, ModelTab refresh-on-mount
 
 ### Phase 39: Streaming Integration
 **Goal**: Users can generate terminal commands using a local model with the same streaming experience as cloud providers
@@ -148,7 +148,10 @@ Plans:
   1. User types a natural language query and receives a streamed command from the local provider in real-time
   2. First request after a cold model load completes without timeout (up to 120s allowed for local providers)
   3. Token usage counts appear in the settings usage display after local provider queries
-**Plans**: TBD
+**Plans:** 1 plan
+
+Plans:
+- [ ] 39-01-PLAN.md -- Cost display fix ($0.00 for local providers) and streaming pipeline verification
 
 ### Phase 40: Local Provider Frontend
 **Goal**: The settings and onboarding UI adapts for local providers -- URL configuration instead of API keys, connection health instead of key validation, and provider branding
@@ -175,5 +178,5 @@ Plans:
 | 30-36 | v0.3.9 | 10/10 | Complete | 2026-03-15 |
 | 37 | v0.3.11 | Complete    | 2026-03-17 | 2026-03-17 |
 | 38 | 1/1 | Complete    | 2026-03-17 | - |
-| 39 | v0.3.11 | 0/? | Not started | - |
+| 39 | v0.3.11 | 0/1 | Not started | - |
 | 40 | v0.3.11 | 0/? | Not started | - |
