@@ -121,7 +121,11 @@
   2. Selecting a local provider does not prompt for an API key -- the app bypasses keychain storage entirely
   3. User can change the base URL for each local provider and the setting persists across app restarts
   4. App reports whether the local server is reachable, distinguishing "server not running" from "model not loaded" from network errors
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 37-01-PLAN.md -- Backend: Provider enum extension, streaming adapter URL parameterization, keychain bypass, health checks
+- [ ] 37-02-PLAN.md -- Frontend: PROVIDERS array, AccountTab URL input, provider icons, submitQuery bypass
 
 ### Phase 38: Model Discovery
 **Goal**: Users see their locally installed models and can select one for command generation
@@ -166,7 +170,7 @@
 | 25-26 | v0.2.7 | 3/3 | Complete | 2026-03-10 |
 | 27-29 | v0.2.8 | 6/6 | Complete | 2026-03-14 |
 | 30-36 | v0.3.9 | 10/10 | Complete | 2026-03-15 |
-| 37 | v0.3.11 | 0/? | Not started | - |
+| 37 | v0.3.11 | 0/2 | Not started | - |
 | 38 | v0.3.11 | 0/? | Not started | - |
 | 39 | v0.3.11 | 0/? | Not started | - |
 | 40 | v0.3.11 | 0/? | Not started | - |
