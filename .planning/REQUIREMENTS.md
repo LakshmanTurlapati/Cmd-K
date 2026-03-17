@@ -9,12 +9,12 @@ Requirements for v0.3.11 Local LLM Providers. Each maps to roadmap phases.
 
 ### Local Provider Backend
 
-- [ ] **LPROV-01**: User can select Ollama as an AI provider in settings and onboarding
-- [ ] **LPROV-02**: User can select LM Studio as an AI provider in settings and onboarding
-- [ ] **LPROV-03**: Ollama and LM Studio require no API key — keyless auth bypass in backend and frontend
-- [ ] **LPROV-04**: User can configure base URL for each local provider (defaults: localhost:11434 for Ollama, localhost:1234 for LM Studio)
-- [ ] **LPROV-05**: App checks local provider health (Ollama GET /, LM Studio GET /v1/models) and surfaces connection status
-- [ ] **LPROV-06**: Provider-specific error messages differentiate "server not running" from "model not loaded" from network errors
+- [x] **LPROV-01**: User can select Ollama as an AI provider in settings and onboarding
+- [x] **LPROV-02**: User can select LM Studio as an AI provider in settings and onboarding
+- [x] **LPROV-03**: Ollama and LM Studio require no API key — keyless auth bypass in backend and frontend
+- [x] **LPROV-04**: User can configure base URL for each local provider (defaults: localhost:11434 for Ollama, localhost:1234 for LM Studio)
+- [x] **LPROV-05**: App checks local provider health (Ollama GET /, LM Studio GET /v1/models) and surfaces connection status
+- [x] **LPROV-06**: Provider-specific error messages differentiate "server not running" from "model not loaded" from network errors
 
 ### Model Discovery
 
@@ -59,12 +59,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LPROV-01 | Phase 37 | Pending |
-| LPROV-02 | Phase 37 | Pending |
-| LPROV-03 | Phase 37 | Pending |
-| LPROV-04 | Phase 37 | Pending |
-| LPROV-05 | Phase 37 | Pending |
-| LPROV-06 | Phase 37 | Pending |
+| LPROV-01 | Phase 37 | Complete |
+| LPROV-02 | Phase 37 | Complete |
+| LPROV-03 | Phase 37 | Complete |
+| LPROV-04 | Phase 37 | Complete |
+| LPROV-05 | Phase 37 | Complete |
+| LPROV-06 | Phase 37 | Complete |
 | LMOD-01 | Phase 38 | Pending |
 | LMOD-02 | Phase 38 | Pending |
 | LMOD-03 | Phase 38 | Pending |
