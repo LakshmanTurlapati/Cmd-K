@@ -124,7 +124,7 @@ graph TB
     subgraph Linux["Linux Platform"]
         X11[X11 Overlay + CSS Glass]
         ATSPI[AT-SPI2 / kitty / WezTerm Reader]
-        LPROC[/proc Filesystem]
+        LPROC["/proc Filesystem"]
         LSECRET[libsecret Keyring]
         XDO[xdotool Paste]
     end
