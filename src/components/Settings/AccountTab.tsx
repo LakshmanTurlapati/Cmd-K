@@ -15,61 +15,116 @@ export function AccountTab() {
   const setSelectedProvider = useOverlayStore((s) => s.setSelectedProvider);
 
   const [inputValue, setInputValue] = useState("");
+  const [baseUrlInput, setBaseUrlInput] = useState("");
   const [revealed, setRevealed] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [providerHasKey, setProviderHasKey] = useState<Record<string, boolean>>({});
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const providerRef = useRef(selectedProvider);
 
+  const currentProvider = PROVIDERS.find(p => p.id === selectedProvider);
+  const isLocal = currentProvider?.local ?? false;
+
   // Keep providerRef in sync
   useEffect(() => {
     providerRef.current = selectedProvider;
   }, [selectedProvider]);
 
-  // On mount / provider change: check for existing stored key and validate it
+  // On mount / provider change: check key (cloud) or run health check (local)
   useEffect(() => {
-    const currentProvider = selectedProvider;
-    const checkStoredKey = async () => {
-      try {
-        const key = await invoke<string | null>("get_api_key", { provider: currentProvider });
-        if (providerRef.current !== currentProvider) return;
-        if (key) {
-          setApiKeyLast4(key.slice(-4));
+    const currentProv = selectedProvider;
+    const provEntry = PROVIDERS.find(p => p.id === currentProv);
+    const localProvider = provEntry?.local ?? false;
+
+    if (localProvider) {
+      // Local provider: load base URL from store, run health check
+      const checkHealth = async () => {
+        try {
+          const store = await Store.load("settings.json");
+          const storedUrl = await store.get<string>(
+            currentProv === "ollama" ? "ollama_base_url" : "lmstudio_base_url"
+          );
+          if (providerRef.current !== currentProv) return;
+          setBaseUrlInput(storedUrl ?? "");
+          setApiKeyLast4("");
+          setInputValue("");
+
+          // Run health check via validate_api_key (backend performs GET health check)
           setApiKeyStatus("validating");
           try {
-            await invoke("validate_api_key", { provider: currentProvider, apiKey: key });
-            if (providerRef.current !== currentProvider) return;
+            await invoke("validate_api_key", { provider: currentProv, apiKey: "" });
+            if (providerRef.current !== currentProv) return;
+            setApiKeyStatus("valid");
+            // Fetch models (empty for now, Phase 38 adds discovery)
             const models = await invoke<ModelWithMeta[]>(
               "fetch_models",
-              { provider: currentProvider, apiKey: key }
+              { provider: currentProv, apiKey: "" }
             );
-            if (providerRef.current !== currentProvider) return;
-            setApiKeyStatus("valid");
+            if (providerRef.current !== currentProv) return;
             setModels(models);
           } catch {
-            if (providerRef.current !== currentProvider) return;
+            if (providerRef.current !== currentProv) return;
             setApiKeyStatus("invalid");
           }
+        } catch {
+          // Store access failed
         }
-      } catch {
-        // No stored key -- leave status as "unknown"
-      }
-    };
-
-    checkStoredKey();
+      };
+      checkHealth();
+    } else {
+      // Cloud provider: existing checkStoredKey logic (unchanged)
+      const checkStoredKey = async () => {
+        try {
+          const key = await invoke<string | null>("get_api_key", { provider: currentProv });
+          if (providerRef.current !== currentProv) return;
+          if (key) {
+            setApiKeyLast4(key.slice(-4));
+            setApiKeyStatus("validating");
+            try {
+              await invoke("validate_api_key", { provider: currentProv, apiKey: key });
+              if (providerRef.current !== currentProv) return;
+              const models = await invoke<ModelWithMeta[]>(
+                "fetch_models",
+                { provider: currentProv, apiKey: key }
+              );
+              if (providerRef.current !== currentProv) return;
+              setApiKeyStatus("valid");
+              setModels(models);
+            } catch {
+              if (providerRef.current !== currentProv) return;
+              setApiKeyStatus("invalid");
+            }
+          }
+        } catch {
+          // No stored key
+        }
+      };
+      checkStoredKey();
+    }
   }, [selectedProvider]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Check which providers have stored keys when dropdown opens
+  // Check which providers have stored keys / healthy servers when dropdown opens
   useEffect(() => {
     if (!dropdownOpen) return;
     const checkKeys = async () => {
       const result: Record<string, boolean> = {};
       for (const p of PROVIDERS) {
-        try {
-          const key = await invoke<string | null>("get_api_key", { provider: p.id });
-          result[p.id] = !!key;
-        } catch {
-          result[p.id] = false;
+        if (p.local) {
+          // Local: check health instead of keychain
+          try {
+            await invoke("validate_api_key", { provider: p.id, apiKey: "" });
+            result[p.id] = true;
+          } catch {
+            result[p.id] = false;
+          }
+        } else {
+          // Cloud: check keychain
+          try {
+            const key = await invoke<string | null>("get_api_key", { provider: p.id });
+            result[p.id] = !!key;
+          } catch {
+            result[p.id] = false;
+          }
         }
       }
       setProviderHasKey(result);
@@ -77,8 +132,10 @@ export function AccountTab() {
     checkKeys();
   }, [dropdownOpen]);
 
-  // Debounced validation when user types
+  // Debounced validation when user types (cloud providers only)
   useEffect(() => {
+    if (isLocal) return; // Local providers use URL debounce effect instead
+
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
     }
@@ -120,16 +177,66 @@ export function AccountTab() {
     };
   }, [inputValue]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Debounced URL save + health check for local providers
+  useEffect(() => {
+    if (!isLocal) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    debounceRef.current = setTimeout(async () => {
+      const currentProv = selectedProvider;
+      // Save to store (even empty -- empty means use default)
+      try {
+        const store = await Store.load("settings.json");
+        const storeKey = currentProv === "ollama" ? "ollama_base_url" : "lmstudio_base_url";
+        if (baseUrlInput.trim()) {
+          await store.set(storeKey, baseUrlInput.trim());
+        } else {
+          await store.delete(storeKey);
+        }
+        await store.save();
+      } catch {
+        // Non-fatal
+      }
+
+      // Re-run health check
+      setApiKeyStatus("validating");
+      try {
+        await invoke("validate_api_key", { provider: currentProv, apiKey: "" });
+        if (providerRef.current !== currentProv) return;
+        setApiKeyStatus("valid");
+      } catch {
+        if (providerRef.current !== currentProv) return;
+        setApiKeyStatus("invalid");
+      }
+    }, 800);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [baseUrlInput]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleDelete = async () => {
-    try {
-      await invoke("delete_api_key", { provider: selectedProvider });
-    } catch {
-      // Best-effort delete
+    if (isLocal) {
+      // Clear stored URL
+      try {
+        const store = await Store.load("settings.json");
+        const storeKey = selectedProvider === "ollama" ? "ollama_base_url" : "lmstudio_base_url";
+        await store.delete(storeKey);
+        await store.save();
+      } catch { /* Best-effort */ }
+      setBaseUrlInput("");
+      setApiKeyStatus("unknown");
+      setModels([]);
+    } else {
+      // Existing cloud provider delete logic
+      try {
+        await invoke("delete_api_key", { provider: selectedProvider });
+      } catch { /* Best-effort delete */ }
+      setApiKeyStatus("unknown");
+      setApiKeyLast4("");
+      setModels([]);
+      setInputValue("");
     }
-    setApiKeyStatus("unknown");
-    setApiKeyLast4("");
-    setModels([]);
-    setInputValue("");
   };
 
   const handleProviderSelect = async (providerId: string) => {
@@ -150,12 +257,13 @@ export function AccountTab() {
     setApiKeyStatus("unknown");
     setApiKeyLast4("");
     setInputValue("");
+    setBaseUrlInput("");
     setModels([]);
     setDropdownOpen(false);
     // The useEffect on [selectedProvider] will re-trigger checkStoredKey automatically
   };
 
-  const currentProviderName = PROVIDERS.find((p) => p.id === selectedProvider)?.name ?? selectedProvider;
+  const currentProviderName = currentProvider?.name ?? selectedProvider;
 
   const placeholder =
     inputValue.length === 0 && apiKeyLast4
@@ -209,77 +317,134 @@ export function AccountTab() {
         </div>
       </div>
 
-      {/* API Key */}
-      <div className="flex flex-col gap-1.5">
-        <p className="text-white/40 text-xs uppercase tracking-wider">
-          API Key
-        </p>
-
-        {/* Input row */}
-        <div className="flex items-center gap-2">
-          <div className="flex-1 relative">
-            <input
-              type={revealed ? "text" : "password"}
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              placeholder={placeholder}
-              className={[
-                "w-full bg-white/8 border border-white/10 rounded-lg",
-                "px-3 py-2 text-sm text-white placeholder-white/30",
-                "focus:outline-none focus:border-white/25 transition-colors",
-                "pr-9",
-              ].join(" ")}
-              spellCheck={false}
-              autoComplete="off"
-            />
+      {isLocal ? (
+        /* Local provider: Server URL input */
+        <div className="flex flex-col gap-1.5">
+          <p className="text-white/40 text-xs uppercase tracking-wider">
+            Server URL
+          </p>
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <input
+                type="text"
+                value={baseUrlInput}
+                onChange={(e) => setBaseUrlInput(e.target.value)}
+                placeholder={selectedProvider === "ollama" ? "localhost:11434" : "localhost:1234"}
+                className={[
+                  "w-full bg-white/8 border border-white/10 rounded-lg",
+                  "px-3 py-2 text-sm text-white placeholder-white/30",
+                  "focus:outline-none focus:border-white/25 transition-colors",
+                ].join(" ")}
+                spellCheck={false}
+                autoComplete="off"
+              />
+            </div>
+            {/* Status indicator -- same as API key validation */}
+            <div className="flex items-center min-w-[20px]">
+              {apiKeyStatus === "validating" && (
+                <Loader2 size={16} className="text-white/50 animate-spin" />
+              )}
+              {apiKeyStatus === "valid" && (
+                <Check size={16} className="text-green-400" />
+              )}
+              {apiKeyStatus === "invalid" && (
+                <X size={16} className="text-red-400" />
+              )}
+              {apiKeyStatus === "error" && (
+                <AlertCircle size={16} className="text-red-400" />
+              )}
+            </div>
+          </div>
+          {/* Status message */}
+          <div className="min-h-[16px]">
+            {apiKeyStatus === "invalid" && (
+              <p className="text-red-400/80 text-xs">Server not running</p>
+            )}
+          </div>
+          {/* Reset URL button */}
+          {baseUrlInput && (
             <button
               type="button"
-              onClick={() => setRevealed((r) => !r)}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors cursor-default"
-              aria-label={revealed ? "Hide API key" : "Show API key"}
+              onClick={handleDelete}
+              className="self-start text-xs text-white/30 hover:text-red-400/70 transition-colors cursor-default"
             >
-              {revealed ? <EyeOff size={14} /> : <Eye size={14} />}
+              Reset to default
             </button>
+          )}
+        </div>
+      ) : (
+        /* Cloud provider: API Key section */
+        <div className="flex flex-col gap-1.5">
+          <p className="text-white/40 text-xs uppercase tracking-wider">
+            API Key
+          </p>
+
+          {/* Input row */}
+          <div className="flex items-center gap-2">
+            <div className="flex-1 relative">
+              <input
+                type={revealed ? "text" : "password"}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                placeholder={placeholder}
+                className={[
+                  "w-full bg-white/8 border border-white/10 rounded-lg",
+                  "px-3 py-2 text-sm text-white placeholder-white/30",
+                  "focus:outline-none focus:border-white/25 transition-colors",
+                  "pr-9",
+                ].join(" ")}
+                spellCheck={false}
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                onClick={() => setRevealed((r) => !r)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors cursor-default"
+                aria-label={revealed ? "Hide API key" : "Show API key"}
+              >
+                {revealed ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+
+            {/* Status indicator */}
+            <div className="flex items-center min-w-[20px]">
+              {apiKeyStatus === "validating" && (
+                <Loader2 size={16} className="text-white/50 animate-spin" />
+              )}
+              {apiKeyStatus === "valid" && (
+                <Check size={16} className="text-green-400" />
+              )}
+              {apiKeyStatus === "invalid" && (
+                <X size={16} className="text-red-400" />
+              )}
+              {apiKeyStatus === "error" && (
+                <AlertCircle size={16} className="text-red-400" />
+              )}
+            </div>
           </div>
 
-          {/* Status indicator */}
-          <div className="flex items-center min-w-[20px]">
-            {apiKeyStatus === "validating" && (
-              <Loader2 size={16} className="text-white/50 animate-spin" />
-            )}
-            {apiKeyStatus === "valid" && (
-              <Check size={16} className="text-green-400" />
-            )}
+          {/* Status message */}
+          <div className="min-h-[16px]">
             {apiKeyStatus === "invalid" && (
-              <X size={16} className="text-red-400" />
+              <p className="text-red-400/80 text-xs">Invalid API key</p>
             )}
             {apiKeyStatus === "error" && (
-              <AlertCircle size={16} className="text-red-400" />
+              <p className="text-red-400/80 text-xs">Validation failed</p>
             )}
           </div>
-        </div>
 
-        {/* Status message */}
-        <div className="min-h-[16px]">
-          {apiKeyStatus === "invalid" && (
-            <p className="text-red-400/80 text-xs">Invalid API key</p>
-          )}
-          {apiKeyStatus === "error" && (
-            <p className="text-red-400/80 text-xs">Validation failed</p>
+          {/* Delete key button */}
+          {(apiKeyStatus === "valid" || apiKeyLast4) && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="self-start text-xs text-white/30 hover:text-red-400/70 transition-colors cursor-default"
+            >
+              Remove key
+            </button>
           )}
         </div>
-
-        {/* Delete key button */}
-        {(apiKeyStatus === "valid" || apiKeyLast4) && (
-          <button
-            type="button"
-            onClick={handleDelete}
-            className="self-start text-xs text-white/30 hover:text-red-400/70 transition-colors cursor-default"
-          >
-            Remove key
-          </button>
-        )}
-      </div>
+      )}
     </div>
   );
 }
