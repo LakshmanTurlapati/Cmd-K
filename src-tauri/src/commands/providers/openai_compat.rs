@@ -5,13 +5,14 @@ use tauri_plugin_http::reqwest;
 use crate::state::TokenUsage;
 use super::{handle_http_status, Provider};
 
-/// Stream tokens from an OpenAI-compatible API (OpenAI, xAI, OpenRouter).
+/// Stream tokens from an OpenAI-compatible API (OpenAI, xAI, OpenRouter, Ollama, LM Studio).
 ///
-/// All three providers share the same SSE format:
+/// All providers share the same SSE format:
 /// - `data: {JSON}` with `choices[0].delta.content`
 /// - `data: [DONE]` sentinel to end the stream
 pub async fn stream(
     provider: &Provider,
+    api_url: &str,
     api_key: &str,
     model: &str,
     messages: Vec<serde_json::Value>,
@@ -29,9 +30,12 @@ pub async fn stream(
 
     let client = reqwest::Client::new();
     let mut request = client
-        .post(provider.api_url())
-        .header("Authorization", format!("Bearer {}", api_key))
+        .post(api_url)
         .header("Content-Type", "application/json");
+
+    if !api_key.is_empty() {
+        request = request.header("Authorization", format!("Bearer {}", api_key));
+    }
 
     // OpenRouter requires referrer and title headers
     if *provider == Provider::OpenRouter {

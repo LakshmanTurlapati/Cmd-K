@@ -188,6 +188,7 @@ fn build_user_message(query: &str, ctx: &AppContextView, is_follow_up: bool, mod
 /// - Dispatches to the appropriate adapter based on provider.adapter_kind().
 #[tauri::command]
 pub async fn stream_ai_response(
+    app_handle: tauri::AppHandle,
     state: tauri::State<'_, crate::state::AppState>,
     provider: Provider,
     query: String,
@@ -202,15 +203,25 @@ pub async fn stream_ai_response(
         model
     );
 
-    // 1. Read API key from Keychain using provider-specific account name
-    let entry = keyring::Entry::new(SERVICE, provider.keychain_account())
-        .map_err(|e| format!("Keyring error: {}", e))?;
-    let api_key = entry.get_password().map_err(|_| {
-        format!(
-            "No {} API key configured. Open Settings to add one.",
-            provider.display_name()
-        )
-    })?;
+    // 1. Resolve API URL and key based on provider type
+    let (api_url, api_key) = if provider.is_local() {
+        let base = super::providers::get_provider_base_url(
+            &app_handle,
+            &provider,
+        );
+        let url = format!("{}/v1/chat/completions", base.trim_end_matches('/'));
+        (url, String::new())
+    } else {
+        let entry = keyring::Entry::new(SERVICE, provider.keychain_account())
+            .map_err(|e| format!("Keyring error: {}", e))?;
+        let key = entry.get_password().map_err(|_| {
+            format!(
+                "No {} API key configured. Open Settings to add one.",
+                provider.display_name()
+            )
+        })?;
+        (provider.api_url().to_string(), key)
+    };
 
     // 2. Parse the context JSON into a lightweight view struct
     let ctx: AppContextView = serde_json::from_str(&context_json).unwrap_or_else(|e| {
@@ -301,7 +312,7 @@ pub async fn stream_ai_response(
     let token_usage = match provider.adapter_kind() {
         AdapterKind::OpenAICompat => {
             providers::openai_compat::stream(
-                &provider, &api_key, &model, messages, &on_token, timeout,
+                &provider, &api_url, &api_key, &model, messages, &on_token, timeout,
             )
             .await?
         }
