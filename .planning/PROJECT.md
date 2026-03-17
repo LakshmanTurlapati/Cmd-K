@@ -88,6 +88,15 @@ The overlay must appear on top of the currently active application and feel inst
 - Native Wayland overlay/hotkey -- protocol-level gap, XWayland is industry standard fallback
 - .deb/.rpm/Snap/Flatpak packaging -- AppImage covers all distros, sandboxing conflicts with /proc and xdotool
 
+## Current Milestone: v0.3.11 Local LLM Providers
+
+**Goal:** Add Ollama and LM Studio as local LLM providers, enabling fully offline AI command generation.
+
+**Target features:**
+- Ollama provider with auto-discovered models and connection status indicator
+- LM Studio provider with auto-discovered models and connection status indicator
+- Base URL configuration (defaults: localhost:11434 for Ollama, localhost:1234 for LM Studio)
+
 ## Context
 
 Shipped v0.3.9 with full Linux support (1:1 feature parity with macOS/Windows) and smart terminal context.
@@ -102,7 +111,7 @@ Ed25519 update signing configured with GitHub secrets.
 - **Tech stack**: Tauri (Rust + web frontend)
 - **Platform**: macOS + Windows + Linux
 - **Zero setup**: No shell plugins, no .zshrc modifications. One-time macOS accessibility permission is acceptable.
-- **Multi-provider**: 5 AI providers supported via provider abstraction layer
+- **Multi-provider**: 7 AI providers supported via provider abstraction layer (5 cloud + 2 local)
 
 ## Key Decisions
 
@@ -163,4 +172,4 @@ Ed25519 update signing configured with GitHub secrets.
 | AppImage write-permission guard | Tray warning when AppImage dir not writable, skip update | Good -- no error dialogs |
 
 ---
-*Last updated: 2026-03-15 after v0.3.9 milestone completion*
+*Last updated: 2026-03-17 after v0.3.11 milestone start*

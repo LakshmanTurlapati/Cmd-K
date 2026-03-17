@@ -1,32 +1,34 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.3.9
-milestone_name: Linux Support & Smart Terminal Context
-status: completed
+milestone: v0.3.11
+milestone_name: Local LLM Providers
+status: active
 stopped_at: null
-last_updated: "2026-03-15"
-last_activity: 2026-03-15 — Milestone v0.3.9 archived
+last_updated: "2026-03-17"
+last_activity: 2026-03-17 — Milestone v0.3.11 started
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 10
-  completed_plans: 10
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-15)
+See: .planning/PROJECT.md (updated 2026-03-17)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Planning next milestone
+**Current focus:** Defining requirements for v0.3.11 Local LLM Providers
 
 ## Current Position
 
-Milestone v0.3.9 complete. All 7 phases (30-36), 10 plans shipped.
-Ready for `/gsd:new-milestone` to plan next version.
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-17 — Milestone v0.3.11 started
 
 ## Performance Metrics
 
@@ -45,7 +47,7 @@ Ready for `/gsd:new-milestone` to plan next version.
 
 ### Decisions
 
-No active decisions — all v0.3.9 decisions archived in PROJECT.md Key Decisions table.
+No active decisions.
 
 ### Roadmap Evolution
 
@@ -62,6 +64,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-15
-Stopped at: Milestone v0.3.9 archived
-Next action: /gsd:new-milestone
+Last session: 2026-03-17
+Stopped at: Defining requirements
+Next action: Define REQUIREMENTS.md → create roadmap
