@@ -1,656 +1,655 @@
-# Architecture Patterns
+# Architecture: Local LLM Provider Integration (Ollama + LM Studio)
 
-**Domain:** Linux platform support + smart terminal context for existing cross-platform Tauri v2 app
-**Researched:** 2026-03-13
+**Domain:** Local LLM provider integration into existing multi-provider AI terminal overlay
+**Researched:** 2026-03-17
+**Confidence:** HIGH -- based on direct codebase analysis + official API documentation
+
+## Executive Summary
+
+Ollama and LM Studio both expose OpenAI-compatible `/v1/chat/completions` endpoints with SSE streaming. This is the same protocol the existing `openai_compat::stream()` adapter handles for OpenAI, xAI, and OpenRouter. The integration requires zero new streaming adapters. The main architectural changes are: (1) the `Provider` enum gains two keyless, URL-configurable variants, (2) model discovery calls local HTTP endpoints instead of cloud APIs, (3) a new connection health check system determines reachability before streaming, and (4) the frontend gains local-provider-specific UI for base URL configuration and connection status.
 
 ## Recommended Architecture
 
-The existing codebase already has a clean `#[cfg(target_os = "...")]` gating pattern across all platform-specific modules. Linux support fits into this pattern with **no architectural changes** to the existing structure. Every platform-specific function already has a `#[cfg(not(any(target_os = "macos", target_os = "windows")))]` stub that returns `None` or an empty value. Linux work replaces these stubs with real implementations.
+### Integration Strategy: Reuse OpenAI-Compatible Adapter
 
-Smart terminal context (scrollback + truncation) is a **new cross-platform module** that sits between context gathering and AI prompt building. It processes the output of the existing detection pipeline before it reaches the AI command in `commands/ai.rs`.
+Both Ollama (`localhost:11434/v1/chat/completions`) and LM Studio (`localhost:1234/v1/chat/completions`) speak the same SSE streaming protocol already handled by `providers/openai_compat.rs`. The existing adapter accepts a `Provider` reference and calls `provider.api_url()` for the endpoint URL. The path to integration is:
 
-### High-Level Component Map
-
-```
-                    +------------------+
-                    |   Frontend (React)|
-                    |   Zustand Store   |
-                    +--------+---------+
-                             |  IPC (invoke)
-                    +--------+---------+
-                    |   Tauri Commands  |
-                    |  commands/*.rs    |
-                    +--------+---------+
-                             |
-          +------------------+------------------+
-          |                  |                  |
-   +------+------+   +------+------+   +------+------+
-   |  macOS Path  |   | Windows Path|   | Linux Path  |  <-- NEW
-   | NSPanel      |   | HWND/Win32  |   | X11/Wayland |
-   | AX API       |   | UIA         |   | /proc fs    |
-   | libproc FFI  |   | Toolhelp32  |   | xdotool/    |
-   | AppleScript  |   | SendInput   |   | wl-clipboard|
-   | CGEventPost  |   | arboard     |   | arboard     |
-   +--------------+   +-------------+   +-------------+
-                             |
-                    +--------+---------+
-                    | Smart Context     |  <-- NEW (cross-platform)
-                    | terminal/context.rs|
-                    | Truncation logic  |
-                    +-------------------+
-```
+1. Add `Ollama` and `LMStudio` variants to the `Provider` enum
+2. Make `api_url()` return a dynamic URL (stored in config) instead of a `&'static str`
+3. Skip API key retrieval for local providers (they ignore authentication)
+4. Reuse `openai_compat::stream()` with a dummy/empty API key
 
 ### Component Boundaries
 
-| Component | Responsibility | Communicates With | Status |
-|-----------|---------------|-------------------|--------|
-| `terminal/detect_linux.rs` | App identification via `/proc`, `xdotool`, `xprop` | `terminal/mod.rs` | **NEW** |
-| `terminal/process.rs` (Linux cfg) | `/proc` filesystem: CWD, process name, child PIDs, process tree | `terminal/mod.rs` | **MODIFY** (replace stubs) |
-| `terminal/linux_reader.rs` | Terminal text reading via AT-SPI2/DBus | `terminal/mod.rs` | **NEW** |
-| `commands/paste.rs` (Linux cfg) | Clipboard write via arboard + synthetic paste via xdotool/wtype | `commands/paste.rs` | **MODIFY** (replace stubs) |
-| `commands/hotkey.rs` (Linux cfg) | Frontmost PID capture via xdotool/xprop | `commands/hotkey.rs` | **MODIFY** (replace stubs) |
-| `commands/window.rs` (Linux cfg) | Overlay show/hide, always-on-top, focus management | `commands/window.rs` | **MODIFY** (minor -- already uses generic Tauri path) |
-| `commands/ai.rs` (Linux cfg) | Linux-specific system prompt template | `commands/ai.rs` | **MODIFY** (replace generic stub) |
-| `terminal/context.rs` | Smart truncation: scrollback capture, token-aware trimming | `commands/ai.rs`, `terminal/mod.rs` | **NEW** (cross-platform) |
-| `lib.rs` | Linux-specific setup (always-on-top, skip-taskbar, no vibrancy) | All | **MODIFY** (add Linux setup block) |
-| `Cargo.toml` | Linux dependencies (arboard with wayland-data-control) | Build | **MODIFY** |
-| `.github/workflows/release.yml` | AppImage build job | CI/CD | **MODIFY** |
-| `tauri.conf.json` | AppImage bundle config, updater linux platform entries | Build | **MODIFY** |
+| Component | Responsibility | New/Modified | Communicates With |
+|-----------|---------------|--------------|-------------------|
+| `Provider` enum | Provider identity, adapter dispatch, URL resolution | **Modified** -- add Ollama, LMStudio variants | All provider-aware code |
+| `ProviderConfig` (new) | Store per-provider base URLs, persist to settings.json | **New** | Provider, AppState, frontend |
+| `openai_compat::stream()` | SSE streaming for OpenAI-compat APIs | **Modified** -- accept dynamic URL, optional API key | AI command handler |
+| `health::check_provider()` (new) | HTTP health check for local providers | **New** | Frontend (via IPC), streaming pre-flight |
+| `models::fetch_models()` | Model listing per provider | **Modified** -- add Ollama /api/tags + LM Studio /v1/models branches | Frontend model dropdown |
+| `models::validate_api_key()` | Key validation per provider | **Modified** -- local providers validate via health check instead | Frontend onboarding/settings |
+| `ai::stream_ai_response()` | Main AI dispatch | **Modified** -- read config URL, skip keychain for local | Frontend submitQuery |
+| `keychain.rs` | API key CRUD | **No change** -- local providers skip keychain entirely | Account settings |
+| `state::AppState` | Shared Tauri state | **Modified** -- add provider_configs field | All IPC commands |
+| `PROVIDERS` (frontend) | Provider list for UI | **Modified** -- add Ollama, LM Studio entries | Onboarding, Settings |
+| `AccountTab.tsx` | Provider selection + API key entry | **Modified** -- show URL config instead of key input for local | Settings panel |
+| `StepApiKey.tsx` | Onboarding key entry | **Modified** -- skip or show URL config for local | Onboarding wizard |
+| `ProviderIcon.tsx` | SVG icons per provider | **Modified** -- add Ollama + LM Studio icons | All provider UI |
+| `store/index.ts` | Zustand state + submitQuery | **Modified** -- handle keyless providers in validation checks | Entire frontend |
 
-### Data Flow
+## Data Flow Changes
 
-**Existing flow (unchanged):**
+### 1. Model Discovery Flow
+
+**Current flow (cloud providers):**
 ```
-Hotkey pressed
-  -> capture frontmost PID (platform-specific)
-  -> store in AppState.previous_app_pid
-  -> toggle_overlay()
-  -> frontend receives "overlay-shown" event
-  -> frontend calls get_app_context()
-  -> Rust: detect_app_context() runs platform-specific detection
-  -> returns AppContext { app_name, terminal: TerminalContext { shell, cwd, visible_output, ... } }
-  -> frontend sends to stream_ai_response with context JSON
-  -> ai.rs builds system prompt + user message from context
-  -> streams response back
-```
-
-**New Linux additions in this flow:**
-
-1. **PID capture** (hotkey.rs): `get_frontmost_pid()` Linux impl uses `xdotool getactivewindow getwindowpid` (X11) or compositor-specific DBus query (Wayland)
-2. **Detection** (terminal/mod.rs): `detect_app_context()` calls new Linux-specific functions via `#[cfg(target_os = "linux")]`
-3. **Process info** (process.rs): reads `/proc/PID/cwd` symlink, `/proc/PID/exe` for process name, `/proc/PID/task/*/children` or `/proc/*/stat` for child PIDs
-4. **Terminal text** (linux_reader.rs): AT-SPI2/DBus for accessible terminals (gnome-terminal, xfce4-terminal), returns None for GPU terminals
-5. **Paste** (paste.rs): arboard for clipboard + xdotool (X11) or wtype (Wayland) for synthetic Ctrl+Shift+V
-6. **Focus restore** (hotkey.rs): `xdotool windowactivate` (X11) to return focus to terminal after paste
-
-**New smart context flow (cross-platform):**
-```
-detect_app_context() returns TerminalContext.visible_output (raw text)
-  -> terminal/context.rs: truncate_for_ai(visible_output, max_chars)
-  -> Strips ANSI escapes, collapses blanks, deduplicates repeated lines
-  -> Keeps last N lines fitting within token budget
-  -> ai.rs uses truncated output in user message (replaces current .lines().rev().take(25))
+Frontend selects provider
+  -> invoke("fetch_models", { provider, apiKey })
+    -> Rust reads API key from keychain
+    -> HTTP GET to cloud /v1/models endpoint
+    -> Parse OpenAI-format response { data: [{ id }] }
+    -> Merge curated + API models
+    -> Return ModelWithMeta[]
 ```
 
-## New Components (Detailed)
+**New flow (local providers):**
+```
+Frontend selects Ollama/LMStudio
+  -> invoke("fetch_models", { provider, apiKey: "" })
+    -> Rust reads base_url from ProviderConfig (settings.json)
+    -> For Ollama:
+         GET {base_url}/api/tags
+         Parse { models: [{ name, details: { parameter_size, family } }] }
+         Map to ModelWithMeta with tier="" (no tiers for local)
+    -> For LM Studio:
+         GET {base_url}/v1/models
+         Parse OpenAI-format { data: [{ id }] }
+         Map to ModelWithMeta with tier=""
+    -> Return ModelWithMeta[] (no curated list, all dynamic)
+```
 
-### 1. `terminal/detect_linux.rs` -- Linux App Identification
+**Key differences:**
+- No API key needed (pass empty string or skip keychain lookup)
+- Ollama has its own `/api/tags` response format (not OpenAI-format) with richer metadata (parameter_size, quantization, family)
+- LM Studio uses standard OpenAI `/v1/models` format
+- No curated model list -- all models are dynamic (user controls what they download)
+- Model labels should include parameter size and quantization info where available (e.g., "llama3.2:3b-q4_0" -> "Llama 3.2 3B Q4_0")
 
-**Purpose:** Equivalent of `detect.rs` (macOS bundle IDs) and `detect_windows.rs` (exe names) for Linux.
+### 2. Connection Health Check Flow (New)
 
-**Approach:** Use `/proc/PID/exe` symlink to identify the running application binary. This is the Linux analog of macOS bundle IDs and Windows exe names.
+**Purpose:** Local servers may not be running. The UI needs to show connection status before the user tries to generate.
+
+```
+Frontend mounts/provider changes
+  -> invoke("check_local_provider", { provider })
+    -> Rust reads base_url from ProviderConfig
+    -> For Ollama:
+         GET {base_url}/  (returns 200 "Ollama is running")
+    -> For LM Studio:
+         GET {base_url}/v1/models  (returns 200 with model list)
+    -> Return { connected: bool, model_count: u32 }
+```
+
+**Health check characteristics:**
+- Ollama: `GET http://localhost:11434/` returns `200 OK` with body "Ollama is running"
+- LM Studio: `GET http://localhost:1234/v1/models` returns `200 OK` with model list (double-duty as health check + model discovery)
+- Timeout: 2 seconds (local server should respond near-instantly)
+- Called on: provider selection change, settings mount, overlay open (if local provider active)
+- Result drives UI: green dot = connected, red dot = not running, amber = unreachable
+
+### 3. Streaming Flow
+
+**Current flow:**
+```
+submitQuery()
+  -> invoke("stream_ai_response", { provider, query, model, contextJson, history, onToken })
+    -> Read API key from keychain
+    -> Build messages array
+    -> Dispatch to openai_compat::stream(provider, api_key, model, messages, on_token, timeout)
+      -> POST to provider.api_url() with Bearer auth
+      -> SSE stream: data: {JSON} chunks with choices[0].delta.content
+      -> Final chunk: usage { prompt_tokens, completion_tokens }
+    -> Record token usage
+```
+
+**New flow (local providers):**
+```
+submitQuery()
+  -> invoke("stream_ai_response", { provider, query, model, contextJson, history, onToken })
+    -> Skip keychain read (local provider)
+    -> Read base_url from ProviderConfig in AppState
+    -> Build messages array (identical)
+    -> Dispatch to openai_compat::stream(provider, "", model, messages, on_token, timeout)
+      -> POST to {base_url}/v1/chat/completions with empty/dummy Bearer
+      -> SSE stream: identical format (both are OpenAI-compatible)
+      -> Final chunk: usage { prompt_tokens, completion_tokens }
+         (Ollama supports stream_options.include_usage)
+         (LM Studio 0.3.18+ supports stream_options.include_usage)
+    -> Record token usage (cost = None for local providers, $0.00)
+```
+
+**Key differences:**
+- No API key needed -- pass empty string as Bearer token (both servers ignore it)
+- URL comes from config instead of hardcoded constant
+- Token usage tracking still works (local servers return prompt_tokens/completion_tokens)
+- Cost estimation: local models have no pricing, `pricing_available: false`
+- Timeout should be longer for local (models may need loading time): 60s default
+
+### 4. Cost Tracking Flow
+
+**No pricing for local models.** The existing cost display already handles `pricing_available: false` gracefully (shows "$---" with "pricing unavailable" note). Local providers will:
+- Still track token counts (input/output) via the existing UsageAccumulator
+- Return `None` for `estimated_cost` in usage stats
+- Not appear in curated_models_pricing()
+- Sparkline bars show `$0` / no bar for local queries (existing behavior for unpriced models)
+
+## Detailed Component Changes
+
+### Backend (Rust)
+
+#### 1. `providers/mod.rs` -- Provider Enum Extension
 
 ```rust
-// Key functions needed:
-pub fn get_app_identifier(pid: i32) -> Option<String>     // reads /proc/PID/exe -> basename
-pub fn get_app_display_name(pid: i32) -> Option<String>   // reads /proc/PID/comm or /proc/PID/cmdline
-pub fn is_known_terminal(app_id: &str) -> bool            // matches against known terminal exe names
-pub fn is_ide_with_terminal(app_id: &str) -> bool         // code, cursor, etc.
-pub fn is_known_browser(app_id: &str) -> bool             // chrome, firefox, etc.
-pub fn clean_app_name(raw: &str) -> String                // strip paths, suffixes
-```
-
-**Known terminal identifiers (exe basenames):**
-- `gnome-terminal-server`, `konsole`, `xfce4-terminal`, `mate-terminal` (GTK/Qt native)
-- `alacritty`, `kitty`, `wezterm-gui`, `foot` (GPU-rendered)
-- `xterm`, `rxvt-unicode`, `urxvt` (legacy X11)
-- `tilix`, `terminator`, `guake`, `yakuake` (tiling/dropdown)
-
-**Known IDE identifiers:**
-- `code`, `code-insiders` (VS Code)
-- `cursor` (Cursor)
-
-**GPU terminal identifiers (returns None for visible_output):**
-- `alacritty`, `kitty`, `wezterm-gui`, `foot`
-
-### 2. `terminal/process.rs` -- Linux `/proc` Implementations
-
-**Purpose:** Replace the `None`-returning stubs with real `/proc` filesystem reads.
-
-**Functions to implement:**
-
-```rust
-#[cfg(target_os = "linux")]
-fn get_process_cwd(pid: i32) -> Option<String> {
-    std::fs::read_link(format!("/proc/{}/cwd", pid))
-        .ok()
-        .map(|p| p.to_string_lossy().into_owned())
-    // Permission: works for same-user processes, fails for root-owned (returns None)
-}
-
-#[cfg(target_os = "linux")]
-fn get_process_name(pid: i32) -> Option<String> {
-    // Primary: /proc/PID/exe symlink -> extract basename
-    std::fs::read_link(format!("/proc/{}/exe", pid))
-        .ok()
-        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
-    // Fallback: /proc/PID/comm (first 15 chars of process name)
-}
-
-#[cfg(target_os = "linux")]
-fn get_child_pids(pid: i32) -> Vec<i32> {
-    // Primary: /proc/PID/task/PID/children (Linux 3.5+, fast, space-separated PIDs)
-    // Fallback: scan /proc/*/stat, parse ppid (4th field) to find children
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Provider {
+    OpenAI,
+    Anthropic,
+    Gemini,
+    #[serde(rename = "xai")]
+    XAI,
+    OpenRouter,
+    Ollama,       // NEW
+    LMStudio,     // NEW
 }
 ```
 
-**Key difference from macOS/Windows:** Linux `/proc` is a filesystem, not an API. It is synchronous, fast (<1ms per read), and does not require FFI or special permissions for same-user processes. Pure Rust `std::fs` operations -- no new crate dependencies.
+New methods needed:
+- `is_local(&self) -> bool` -- returns true for Ollama/LMStudio
+- `default_base_url(&self) -> &'static str` -- "http://localhost:11434" / "http://localhost:1234"
+- `display_name()` -- "Ollama" / "LM Studio"
+- `config_key(&self) -> &'static str` -- "ollama" / "lmstudio" (settings.json key)
 
-**Process tree walking** reuses the existing `find_shell_recursive()` function which is already cross-platform (not cfg-gated). Only the leaf functions (`get_process_cwd`, `get_process_name`, `get_child_pids`) need Linux implementations.
+Modified methods:
+- `api_url()` -- CANNOT return `&'static str` for local providers (URL is configurable). Two options:
+  - **Option A (recommended):** Keep `api_url()` for cloud, add `api_url_with_config(config: &ProviderConfig) -> String` that appends `/v1/chat/completions`
+  - **Option B:** Change signature to `api_url(&self, configs: &HashMap<String, ProviderConfig>) -> String` (breaks existing callers)
+- `keychain_account()` -- return a sentinel/empty string for local (never used)
+- `adapter_kind()` -- return `AdapterKind::OpenAICompat` for both Ollama and LMStudio
+- `default_timeout_secs()` -- return 60 for local providers (model loading latency)
+- `console_url()` -- return "ollama.com" / "lmstudio.ai"
 
-**`find_shell_pid` and `find_shell_by_ancestry` signature:**
-
-The existing function signatures differ between macOS (3 args) and Windows (4 args with ProcessSnapshot). Linux should follow the macOS signature pattern (no snapshot needed since `/proc` reads are stateless).
+#### 2. `ProviderConfig` -- New Configuration Struct
 
 ```rust
-#[cfg(target_os = "linux")]
-pub fn find_shell_pid(app_pid: i32, focused_cwd: Option<&str>, _unused: Option<()>) -> Option<i32> {
-    // Same logic as macOS: find_shell_recursive then find_shell_by_ancestry
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderConfig {
+    pub base_url: String,
 }
 
-#[cfg(target_os = "linux")]
-fn find_shell_by_ancestry(app_pid: i32, focused_cwd: Option<&str>) -> Option<i32> {
-    // Scan /proc for shell processes, walk parent chain to app_pid
-    // Can reuse existing macOS pattern since both use pgrep-style scanning
-}
-```
-
-### 3. `commands/hotkey.rs` -- Linux Frontmost PID
-
-**Purpose:** Implement `get_frontmost_pid()` for Linux.
-
-**X11 approach (primary, covers ~95% of Linux desktop users including XWayland):**
-```rust
-#[cfg(target_os = "linux")]
-fn get_frontmost_pid() -> Option<i32> {
-    let output = std::process::Command::new("xdotool")
-        .args(["getactivewindow", "getwindowpid"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    String::from_utf8_lossy(&output.stdout)
-        .trim()
-        .parse::<i32>()
-        .ok()
-}
-```
-
-**Wayland fallback:** Most Wayland compositors run XWayland, so xdotool works in practice. For pure Wayland without XWayland:
-- GNOME: `gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --method org.gnome.Shell.Eval "global.display.focus_window.get_pid()"`
-- KDE: DBus call to `org.kde.KWin`
-- wlroots: `wlr-foreign-toplevel-management` protocol
-
-**Recommendation:** Start with xdotool. If it fails, try GNOME DBus. Other compositors return None (graceful degradation). This matches the app's philosophy of returning `Option<i32>` for all detection steps.
-
-**Focus restoration:**
-```rust
-#[cfg(target_os = "linux")]
-pub fn restore_focus(window_id: isize) -> bool {
-    // X11: xdotool windowactivate <window_id>
-    std::process::Command::new("xdotool")
-        .args(["windowactivate", &window_id.to_string()])
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-}
-```
-
-**Note:** Linux needs a `previous_window_id` field in AppState (equivalent to `previous_hwnd` on Windows). This is the X11 window ID, captured via `xdotool getactivewindow` before showing the overlay.
-
-### 4. `commands/paste.rs` -- Linux Paste Mechanism
-
-**Clipboard write:**
-```rust
-#[cfg(target_os = "linux")]
-fn write_to_clipboard(command: &str) {
-    // Use arboard crate (same as Windows, with wayland-data-control feature)
-    match arboard::Clipboard::new() {
-        Ok(mut clipboard) => {
-            match clipboard.set_text(command) {
-                Ok(()) => eprintln!("[paste] clipboard written via arboard"),
-                Err(e) => eprintln!("[paste] arboard set_text failed: {}", e),
-            }
-        }
-        Err(e) => eprintln!("[paste] arboard Clipboard::new failed: {}", e),
+impl ProviderConfig {
+    pub fn chat_completions_url(&self) -> String {
+        format!("{}/v1/chat/completions", self.base_url.trim_end_matches('/'))
     }
 }
 ```
 
-**Paste to terminal:**
-```rust
-#[cfg(target_os = "linux")]
-fn paste_to_terminal_linux(app: &AppHandle, command: &str) -> Result<(), String> {
-    let state = app.try_state::<AppState>()
-        .ok_or("AppState not found")?;
-
-    // 1. Get captured window ID
-    let prev_wid = state.previous_window_id.lock()
-        .map_err(|_| "mutex poisoned")?
-        .ok_or("no previous window ID")?;
-
-    // 2. Write to clipboard
-    write_to_clipboard(command);
-
-    // 3. Restore focus to terminal
-    let _ = std::process::Command::new("xdotool")
-        .args(["windowactivate", "--sync", &prev_wid.to_string()])
-        .status();
-    std::thread::sleep(std::time::Duration::from_millis(100));
-
-    // 4. Send Ctrl+Shift+V (Linux terminal paste shortcut)
-    // CRITICAL: Linux terminals use Ctrl+SHIFT+V, not Ctrl+V
-    // Ctrl+V sends a literal control character in terminals
-    std::process::Command::new("xdotool")
-        .args(["key", "--clearmodifiers", "ctrl+shift+v"])
-        .status()
-        .map_err(|e| format!("xdotool key failed: {}", e))?;
-
-    Ok(())
-}
-```
-
-**Wayland paste:** Use `wtype` instead of `xdotool`:
-```rust
-// Wayland fallback
-std::process::Command::new("wtype")
-    .args(["-M", "ctrl", "-M", "shift", "-P", "v", "-p", "v", "-m", "shift", "-m", "ctrl"])
-    .status()
-```
-
-**Confirm (send Enter):**
-```rust
-#[cfg(target_os = "linux")]
-fn confirm_command_linux(app: &AppHandle) -> Result<(), String> {
-    // Restore focus + xdotool key Return
-    // Same pattern as paste but with "Return" instead of "ctrl+shift+v"
-}
-```
-
-### 5. `terminal/linux_reader.rs` -- Terminal Text Reading
-
-**Purpose:** Read visible terminal output on Linux. Equivalent of AX reader (macOS) and UIA reader (Windows).
-
-**Approach:** AT-SPI2 (Assistive Technology Service Provider Interface) is the Linux accessibility framework, equivalent to macOS AX API. GTK-based terminals expose text through it.
-
-**Terminals that support AT-SPI2 text reading:**
-- gnome-terminal (GTK, VTE-based)
-- xfce4-terminal (GTK, VTE-based)
-- mate-terminal (GTK, VTE-based)
-- tilix (GTK, VTE-based)
-- terminator (GTK, VTE-based)
-
-**Terminals that return None (GPU-rendered, no accessibility text):**
-- Alacritty, kitty, WezTerm, foot
-
-**Implementation approach:** Use `atspi` DBus interface via subprocess:
-```rust
-#[cfg(target_os = "linux")]
-pub fn read_terminal_text_linux(pid: i32) -> Option<String> {
-    // AT-SPI2 via gdbus or atspi python bindings is complex.
-    // Simpler approach for V1: use `xdotool getactivewindow` to get window ID,
-    // then `xdg-terminal-exec` or direct AT-SPI2 DBus calls.
-    //
-    // For MVP, return None (same as GPU terminals on macOS/Windows).
-    // Add AT-SPI2 reading in a follow-up phase.
-    None
-}
-```
-
-**Recommendation for initial release:** Return None for all Linux terminals. This matches the behavior of GPU terminals on macOS/Windows -- the app works without visible_output (CWD and shell type are the critical context). AT-SPI2 reading can be added later as an enhancement.
-
-### 6. `terminal/context.rs` -- Smart Terminal Context (Cross-Platform)
-
-**Purpose:** Intelligent truncation of terminal output to fit AI context windows.
-
-**Current behavior:** `build_user_message()` in `ai.rs` takes the last 25 lines of visible_output. This is naive.
-
-**New module design:**
-
-```rust
-/// Configuration for smart truncation.
-pub struct ContextConfig {
-    /// Maximum characters to include (rough token estimate: chars/4)
-    pub max_chars: usize,
-}
-
-impl Default for ContextConfig {
-    fn default() -> Self {
-        Self {
-            max_chars: 8000,  // ~2000 tokens, leaving room for prompt + response
-        }
-    }
-}
-
-/// Strip ANSI escape sequences from terminal output.
-fn strip_ansi(text: &str) -> String {
-    // Regex: \x1b\[[0-9;]*[a-zA-Z] and \x1b\].*?\x07
-    // Use once_cell::Lazy<Regex> for compiled pattern (existing project pattern)
-}
-
-/// Collapse runs of 3+ blank lines to a single blank line.
-fn collapse_blanks(text: &str) -> String { ... }
-
-/// Deduplicate consecutive identical lines (e.g., progress bars, spinner frames).
-fn dedup_lines(text: &str) -> String { ... }
-
-/// Truncate terminal output intelligently for AI context.
-///
-/// Processing pipeline:
-/// 1. Strip ANSI escape sequences
-/// 2. Collapse blank line runs
-/// 3. Deduplicate consecutive identical lines
-/// 4. Take from bottom up until max_chars
-/// 5. Prepend "[... earlier output truncated ...]" if truncated
-pub fn truncate_for_ai(raw_output: &str, config: &ContextConfig) -> String { ... }
-```
-
-**Integration point:** Called in `ai.rs` `build_user_message()` before including `visible_output` in the prompt. Replaces the current hardcoded `.lines().rev().take(25)` logic.
-
-### 7. `lib.rs` -- Linux Setup Block
-
-**Current state:** macOS creates NSPanel with vibrancy. Windows applies Acrylic + WS_EX_TOOLWINDOW. No Linux block exists.
-
-```rust
-#[cfg(target_os = "linux")]
-{
-    // 1. Always-on-top (works on X11, best-effort on Wayland)
-    window.set_always_on_top(true)
-        .unwrap_or_else(|e| eprintln!("[setup] always_on_top failed: {}", e));
-
-    // 2. Skip taskbar (Tauri supports via GTK)
-    window.set_skip_taskbar(true)
-        .unwrap_or_else(|e| eprintln!("[setup] skip_taskbar failed: {}", e));
-
-    // 3. No vibrancy -- window-vibrancy crate does NOT support Linux
-    //    CSS handles dark semi-transparent look via rgba() background
-    //    transparent: true in tauri.conf.json is already set
-}
-```
-
-**Vibrancy limitation:** The `window-vibrancy` crate explicitly does not support Linux. Behind-window blur depends on the compositor (KDE supports it via KWin rules, GNOME does not). The CSS-only approach (dark semi-transparent background) is the correct solution. Accept the visual difference from macOS/Windows.
-
-### 8. `Cargo.toml` -- Linux Dependencies
-
-```toml
-[target.'cfg(target_os = "linux")'.dependencies]
-keyring = { version = "3", features = ["linux-native"] }          # Already present
-arboard = { version = "3", features = ["wayland-data-control"] }  # Clipboard (X11 + Wayland)
-```
-
-**Why arboard with wayland-data-control:** arboard's default Linux backend is X11 only. The `wayland-data-control` feature adds Wayland support via `wl-clipboard-rs`. When enabled, Wayland is prioritized but falls back to X11 automatically if Wayland init fails. This covers both display server protocols.
-
-No other new crate dependencies needed. `/proc` access uses `std::fs`. External tools (`xdotool`, `xprop`, `wtype`) use `std::process::Command` -- same pattern as macOS's `osascript`.
-
-### 9. `tauri.conf.json` -- Linux Bundle Configuration
-
-The existing config has `"targets": "all"` which includes AppImage on Linux. Specific Linux configuration needed:
-
+Stored in `settings.json` as:
 ```json
 {
-  "bundle": {
-    "linux": {
-      "appimage": {
-        "bundleMediaFramework": true
-      }
-    }
+  "providerConfigs": {
+    "ollama": { "base_url": "http://localhost:11434" },
+    "lmstudio": { "base_url": "http://localhost:1234" }
   }
 }
 ```
 
-### 10. CI/CD -- AppImage Build Job
+Default values loaded on first use.
 
-Add a `build-linux` job to `release.yml` parallel to existing `build-macos` and `build-windows`:
-
-```yaml
-build-linux:
-  runs-on: ubuntu-22.04
-  steps:
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          libwebkit2gtk-4.1-dev \
-          libgtk-3-dev \
-          libappindicator3-dev \
-          librsvg2-dev \
-          patchelf
-    # Standard Rust + pnpm + Node setup (same as other jobs)
-    - name: Build Tauri app
-      env:
-        TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-        TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-      run: pnpm tauri build
-    # Artifacts: src-tauri/target/release/bundle/appimage/*.AppImage
-```
-
-Update `latest.json` assembly to include `linux-x86_64` platform entry for auto-updater.
-
-Update release `needs:` to include `build-linux` alongside `build-macos` and `build-windows`.
-
-### 11. `commands/ai.rs` -- Linux System Prompt
-
-Replace the current generic fallback with a Linux-specific template:
+#### 3. `state::AppState` -- Config Storage
 
 ```rust
-#[cfg(target_os = "linux")]
-const TERMINAL_SYSTEM_PROMPT_TEMPLATE: &str =
-    "You are a terminal command generator for Linux. Given the user's task description and terminal \
-     context, output ONLY the exact command(s) to run. No explanations, no markdown, no code fences. \
-     Just the raw command(s). If multiple commands are needed, separate them with && or use pipes. \
-     Prefer common POSIX tools (grep, find, sed, awk) over modern alternatives (rg, fd, jq). \
-     The user is on Linux with {shell_type} shell.";
-
-#[cfg(target_os = "linux")]
-const ASSISTANT_SYSTEM_PROMPT: &str =
-    "You are a concise assistant accessed via a Linux overlay. Answer in 2-3 sentences maximum. \
-     Be direct and helpful. No markdown formatting, no code fences unless the user explicitly asks for code.";
-```
-
-### 12. `commands/permissions.rs` -- Linux Accessibility
-
-Linux does not require macOS-style Accessibility permissions. No dialog needed. The stub should indicate permissions are granted:
-
-```rust
-#[cfg(target_os = "linux")]
-pub fn check_accessibility_permission() -> bool {
-    true  // Linux doesn't require accessibility permission for xdotool/AT-SPI2
+pub struct AppState {
+    // ... existing fields ...
+    /// Per-provider configuration (base URLs for local providers).
+    /// Loaded from settings.json on startup, updated via IPC.
+    pub provider_configs: Mutex<HashMap<String, ProviderConfig>>,
 }
 ```
 
-### 13. `state.rs` -- Linux Window ID Field
+#### 4. `ai::stream_ai_response()` -- Keyless Dispatch
 
-Add a field for the X11 window ID (equivalent to `previous_hwnd` on Windows):
+The main change is conditional keychain lookup:
 
 ```rust
-/// X11 Window ID of the foreground window captured BEFORE showing overlay (Linux only).
-/// Used by focus restoration and paste. u64 on X11 (Window type is unsigned long).
-pub previous_xid: Mutex<Option<u64>>,
+// For local providers: skip keychain, use empty API key
+let api_key = if provider.is_local() {
+    String::new()
+} else {
+    let entry = keyring::Entry::new(SERVICE, provider.keychain_account())
+        .map_err(|e| format!("Keyring error: {}", e))?;
+    entry.get_password().map_err(|_| {
+        format!("No {} API key configured.", provider.display_name())
+    })?
+};
 ```
 
-Alternatively, reuse `previous_hwnd` (both are integer window identifiers). The `isize` type works for X11 window IDs which are typically u32.
+And dynamic URL resolution:
+
+```rust
+// Get API URL: static for cloud, config-based for local
+let api_url = if provider.is_local() {
+    let configs = state.provider_configs.lock().unwrap();
+    let config = configs.get(provider.config_key())
+        .cloned()
+        .unwrap_or_else(|| ProviderConfig {
+            base_url: provider.default_base_url().to_string(),
+        });
+    config.chat_completions_url()
+} else {
+    provider.api_url().to_string()
+};
+```
+
+#### 5. `openai_compat::stream()` -- Accept Dynamic URL
+
+Change the function signature to accept an explicit URL instead of calling `provider.api_url()`:
+
+```rust
+pub async fn stream(
+    provider: &Provider,
+    api_url: &str,      // NEW: explicit URL instead of provider.api_url()
+    api_key: &str,
+    model: &str,
+    messages: Vec<serde_json::Value>,
+    on_token: &tauri::ipc::Channel<String>,
+    timeout: tokio::time::Duration,
+) -> Result<TokenUsage, String> {
+    // ... existing code, but use api_url parameter instead of provider.api_url()
+    let mut request = client
+        .post(api_url)  // Use parameter
+        .header("Content-Type", "application/json");
+
+    // Only add auth header if key is non-empty
+    if !api_key.is_empty() {
+        request = request.header("Authorization", format!("Bearer {}", api_key));
+    }
+
+    // OpenRouter-specific headers (unchanged)
+    if *provider == Provider::OpenRouter {
+        request = request
+            .header("HTTP-Referer", "https://cmdkapp.com")
+            .header("X-Title", "CMD+K");
+    }
+    // ... rest unchanged
+}
+```
+
+This also requires updating the three call sites in `ai.rs` (OpenAICompat, Anthropic, Gemini branches).
+
+#### 6. `models::fetch_models()` -- Local Model Discovery
+
+New branches in `fetch_api_models()`:
+
+```rust
+Provider::Ollama => {
+    let configs = state.provider_configs.lock().unwrap();
+    let base_url = configs.get("ollama")
+        .map(|c| c.base_url.clone())
+        .unwrap_or_else(|| "http://localhost:11434".to_string());
+    drop(configs);
+
+    let resp = client
+        .get(format!("{}/api/tags", base_url))
+        .timeout(std::time::Duration::from_secs(5))
+        .send()
+        .await
+        .map_err(|_| "Cannot reach Ollama. Is it running?".to_string())?;
+
+    let parsed: OllamaTagsResponse =
+        resp.json().await.map_err(|e| format!("Parse error: {}", e))?;
+
+    Ok(parsed.models.into_iter().map(|m| {
+        let label = format_ollama_label(&m.name, &m.details);
+        ModelWithMeta {
+            id: m.name,
+            label,
+            tier: String::new(),
+            input_price_per_m: None,
+            output_price_per_m: None,
+        }
+    }).collect())
+}
+
+Provider::LMStudio => {
+    // LM Studio uses standard OpenAI /v1/models format
+    let configs = state.provider_configs.lock().unwrap();
+    let base_url = configs.get("lmstudio")
+        .map(|c| c.base_url.clone())
+        .unwrap_or_else(|| "http://localhost:1234".to_string());
+    drop(configs);
+
+    let resp = client
+        .get(format!("{}/v1/models", base_url))
+        .timeout(std::time::Duration::from_secs(5))
+        .send()
+        .await
+        .map_err(|_| "Cannot reach LM Studio. Is the server running?".to_string())?;
+
+    let parsed: OpenAIModelsResponse =
+        resp.json().await.map_err(|e| format!("Parse error: {}", e))?;
+
+    Ok(parsed.data.into_iter().map(|m| ModelWithMeta {
+        label: m.id.clone(),
+        id: m.id,
+        tier: String::new(),
+        input_price_per_m: None,
+        output_price_per_m: None,
+    }).collect())
+}
+```
+
+New response types for Ollama:
+
+```rust
+#[derive(Deserialize)]
+struct OllamaTagsResponse {
+    models: Vec<OllamaModel>,
+}
+
+#[derive(Deserialize)]
+struct OllamaModel {
+    name: String,
+    details: OllamaModelDetails,
+}
+
+#[derive(Deserialize)]
+struct OllamaModelDetails {
+    parameter_size: Option<String>,
+    family: Option<String>,
+    quantization_level: Option<String>,
+}
+```
+
+#### 7. `models::validate_api_key()` -- Health Check for Local
+
+Local providers replace API key validation with a health/connectivity check. The `validate_api_key` function needs a `state` parameter added to access provider configs:
+
+```rust
+Provider::Ollama => {
+    let configs = state.provider_configs.lock().unwrap();
+    let base_url = configs.get("ollama")
+        .map(|c| c.base_url.clone())
+        .unwrap_or_else(|| "http://localhost:11434".to_string());
+    drop(configs);
+
+    let resp = client
+        .get(&base_url)
+        .timeout(std::time::Duration::from_secs(3))
+        .send()
+        .await
+        .map_err(|_| "connection_failed".to_string())?;
+
+    match resp.status().as_u16() {
+        200 => Ok(()),
+        _ => Err("connection_failed".to_string()),
+    }
+}
+
+Provider::LMStudio => {
+    let configs = state.provider_configs.lock().unwrap();
+    let base_url = configs.get("lmstudio")
+        .map(|c| c.base_url.clone())
+        .unwrap_or_else(|| "http://localhost:1234".to_string());
+    drop(configs);
+
+    let resp = client
+        .get(format!("{}/v1/models", base_url))
+        .timeout(std::time::Duration::from_secs(3))
+        .send()
+        .await
+        .map_err(|_| "connection_failed".to_string())?;
+
+    match resp.status().as_u16() {
+        200 => Ok(()),
+        _ => Err("connection_failed".to_string()),
+    }
+}
+```
+
+#### 8. New IPC Commands
+
+```rust
+/// Check if a local provider is reachable.
+#[tauri::command]
+pub async fn check_local_provider(
+    provider: Provider,
+    state: tauri::State<'_, crate::state::AppState>,
+) -> Result<LocalProviderStatus, String>
+
+/// Update base URL for a provider.
+#[tauri::command]
+pub async fn set_provider_config(
+    provider: Provider,
+    base_url: String,
+    state: tauri::State<'_, crate::state::AppState>,
+) -> Result<(), String>
+
+/// Get current config for a provider.
+#[tauri::command]
+pub fn get_provider_config(
+    provider: Provider,
+    state: tauri::State<'_, crate::state::AppState>,
+) -> ProviderConfig
+```
+
+### Frontend (TypeScript/React)
+
+#### 1. `store/index.ts` -- PROVIDERS Array
+
+```typescript
+export const PROVIDERS = [
+  { id: "openai", name: "OpenAI", local: false },
+  { id: "anthropic", name: "Anthropic", local: false },
+  { id: "gemini", name: "Google Gemini", local: false },
+  { id: "xai", name: "xAI", local: false },
+  { id: "openrouter", name: "OpenRouter", local: false },
+  { id: "ollama", name: "Ollama", local: true },
+  { id: "lmstudio", name: "LM Studio", local: true },
+] as const;
+```
+
+#### 2. `store/index.ts` -- submitQuery Changes
+
+The `submitQuery` function currently checks `apiKeyStatus !== "valid"` before submitting. For local providers, the validation check should be against connection health rather than API key:
+
+```typescript
+// Current: blocks on missing API key
+if (currentState.apiKeyStatus !== "valid") {
+  set({ streamError: "No API key configured..." });
+  return;
+}
+
+// New: local providers use connection check, not API key
+const provider = PROVIDERS.find(p => p.id === currentState.selectedProvider);
+if (provider?.local) {
+  if (currentState.localProviderStatus !== "connected") {
+    set({ streamError: "Cannot reach local server. Is it running?" });
+    return;
+  }
+} else {
+  if (currentState.apiKeyStatus !== "valid") {
+    set({ streamError: "No API key configured..." });
+    return;
+  }
+}
+```
+
+New store fields:
+```typescript
+localProviderStatus: "unknown" | "checking" | "connected" | "disconnected";
+localProviderBaseUrl: string;
+setLocalProviderStatus: (status) => void;
+setLocalProviderBaseUrl: (url: string) => void;
+```
+
+#### 3. `AccountTab.tsx` -- Conditional UI
+
+When a local provider is selected, replace the API key input with:
+- Base URL input (pre-filled with default, editable)
+- Connection status indicator (green/red dot)
+- "Test Connection" button
+- Model count badge when connected
+
+#### 4. `StepApiKey.tsx` -- Onboarding Adaptation
+
+When a local provider is selected during onboarding:
+- Show base URL field instead of API key field
+- Show connection test instead of key validation
+- Auto-proceed if health check succeeds
+
+#### 5. `ProviderIcon.tsx` -- New Icons
+
+Add SVG path data for Ollama and LM Studio icons.
 
 ## Patterns to Follow
 
-### Pattern 1: Platform cfg-gating (Existing)
-**What:** Every platform-specific function has exactly one impl per platform, gated by `#[cfg(target_os = "...")]`.
-**When:** Any new platform-specific code.
-**Rule:** The `#[cfg(not(any(target_os = "macos", target_os = "windows")))]` stubs become `#[cfg(target_os = "linux")]` implementations.
+### Pattern 1: Provider.is_local() Guard
+**What:** All provider-specific branching should use `provider.is_local()` rather than matching individual variants.
+**When:** Any code path that differs between cloud and local providers.
+**Why:** If more local providers are added later (e.g., llama.cpp server, vLLM), the guards automatically include them.
+**Example:**
+```rust
+let api_key = if provider.is_local() {
+    String::new()
+} else {
+    keychain_lookup(provider)?
+};
+```
 
-### Pattern 2: Subprocess Command Invocation (Existing)
-**What:** Use `std::process::Command` for external tool calls.
-**When:** xdotool, xprop, wtype calls on Linux.
-**Example:** macOS uses `osascript` this way in paste.rs. Linux uses `xdotool` the same way.
+### Pattern 2: Config Defaults with Override
+**What:** ProviderConfig provides defaults that the user can override. Never require configuration before first use.
+**When:** Any access to provider base URL.
+**Why:** Zero-friction first run. If Ollama is on default port, it should "just work" on provider selection.
+**Example:**
+```rust
+let config = configs.get(provider.config_key())
+    .cloned()
+    .unwrap_or_else(|| ProviderConfig {
+        base_url: provider.default_base_url().to_string(),
+    });
+```
 
-### Pattern 3: Timeout-wrapped Detection (Existing)
-**What:** All detection runs in a background thread with `mpsc::channel` + `recv_timeout`.
-**When:** Linux detection pipeline.
-**Key:** The outer `detect()` and `detect_full()` wrappers already apply timeouts. Linux detection code just needs to implement `detect_inner()` and `detect_app_context()` -- the timeout wrapper is unchanged.
+### Pattern 3: Graceful Degradation on Connection Failure
+**What:** Connection failures show clear status, never crash. Model list returns empty vec, not error.
+**When:** Any local provider HTTP call.
+**Why:** Local servers are expected to be offline sometimes. The UI should guide the user to start them.
+**Example:**
+```rust
+let models = fetch_api_models(&provider, &api_key, &state)
+    .await
+    .unwrap_or_default();  // Already exists in codebase
+```
 
-### Pattern 4: Graceful Degradation (Existing)
-**What:** Every detection step returns `Option`. Missing data produces `None`, not errors.
-**When:** Linux tools may not be installed (xdotool absent on pure Wayland, AT-SPI2 not running).
-**Example:** GPU terminals already return `None` for visible_output. Linux text reading follows the same pattern.
+### Pattern 4: Reuse validate_api_key for Local Connection Check
+**What:** Rather than creating a separate health check flow, local providers treat `validate_api_key` as a connection test. The frontend already calls this on provider selection.
+**When:** User selects Ollama or LM Studio in the provider dropdown.
+**Why:** Minimizes frontend changes. The existing flow (select provider -> validate -> fetch models -> show models) maps cleanly to (select provider -> check connection -> fetch models -> show models).
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Adding a heavyweight `/proc` crate
-**What:** Using `procfs` or `sysinfo` crate for simple `/proc` reads.
-**Why bad:** Adds a dependency for what is 5-10 lines of `std::fs::read_link` and `std::fs::read_to_string`. The macOS path uses raw FFI for the same reason (avoiding dependency conflicts).
-**Instead:** Use `std::fs` directly. `/proc` is a stable Linux ABI.
+### Anti-Pattern 1: New Streaming Adapter
+**What:** Creating a separate `ollama.rs` or `lmstudio.rs` streaming adapter.
+**Why bad:** Both use identical OpenAI-compat SSE format. Would duplicate ~100 lines of `openai_compat.rs`.
+**Instead:** Reuse `openai_compat::stream()` with dynamic URL parameter.
 
-### Anti-Pattern 2: Fighting Wayland always-on-top limitations
-**What:** Extensive compositor-specific hacks to force always-on-top on every Wayland compositor.
-**Why bad:** Wayland's security model explicitly prevents clients from controlling their own stacking order. Fighting this is fragile and compositor-dependent.
-**Instead:** Set `always_on_top: true` via Tauri API (works on X11, best-effort on Wayland via GTK hints). Accept that some Wayland compositors may not honor it -- the overlay still functions, it just might not float above other windows.
+### Anti-Pattern 2: Storing Base URL in Keychain
+**What:** Using the existing keychain infrastructure to store base URLs.
+**Why bad:** Keychain is for secrets. Base URLs are not secrets and should be visible/editable.
+**Instead:** Store in `settings.json` via Tauri plugin-store, same as other preferences.
 
-### Anti-Pattern 3: Duplicating detection orchestration
-**What:** Writing a completely separate `detect_app_context_linux()` orchestrator that duplicates the macOS pattern.
-**Why bad:** Creates maintenance burden. The macOS and Linux patterns are structurally identical (get app identifier, check if terminal, walk process tree, read text).
-**Instead:** Use a shared detection path where possible. The `#[cfg(target_os = "linux")]` blocks should be minimal -- just the leaf functions that differ.
+### Anti-Pattern 3: Polling Health Checks
+**What:** Setting up a timer to poll local server health every N seconds.
+**Why bad:** Unnecessary battery/CPU usage. The app is an overlay, not a monitoring dashboard.
+**Instead:** Check health on-demand: (1) when provider is selected, (2) when settings mount, (3) before streaming starts. Frontend can add a manual "refresh" button.
 
-### Anti-Pattern 4: Blocking on external tools without timeout
-**What:** Calling `xdotool` or `xprop` without timeout protection.
-**Why bad:** If X11 is unresponsive, the hotkey handler blocks indefinitely.
-**Instead:** The existing `mpsc` timeout wrapper handles this. Additionally, xdotool calls are in `get_frontmost_pid()` which is called within the timeout-protected detection pipeline.
+### Anti-Pattern 4: Hardcoding localhost URLs
+**What:** Using literal `"http://localhost:11434"` throughout the codebase.
+**Why bad:** Users may run Ollama on a different machine (network GPU server) or port.
+**Instead:** Always read from ProviderConfig with default fallback.
 
-### Anti-Pattern 5: Attempting AT-SPI2 terminal text reading in initial release
-**What:** Building complex DBus/AT-SPI2 integration for terminal text reading before the core Linux features work.
-**Why bad:** AT-SPI2 is complex, compositor-dependent, and not universally available. It blocks the entire Linux release for a feature that is optional (CWD + shell type are the critical context).
-**Instead:** Return None for visible_output in the initial release. Add AT-SPI2 reading as a follow-up enhancement.
-
-## Integration Points Summary
-
-### Already Works on Linux (No Changes Needed)
-- Frontend React/TypeScript -- fully cross-platform
-- AI provider abstraction (3 streaming adapters) -- no platform code
-- Settings/store persistence (tauri-plugin-store) -- cross-platform
-- Hotkey registration (tauri-plugin-global-shortcut) -- cross-platform
-- Destructive command detection (safety.rs) -- already has Linux patterns (SAFE-02)
-- Auto-updater (tauri-plugin-updater) -- cross-platform (needs AppImage artifacts)
-- Tray icon -- cross-platform via Tauri tray API
-- History/state management -- pure Rust HashMap, no platform code
-- Token tracking and usage stats -- no platform code
-
-### Needs Linux Implementations (Replace Stubs)
-
-| Stub Location | Current Return | Linux Implementation | Complexity |
-|---------------|---------------|---------------------|-----------|
-| `hotkey.rs:get_frontmost_pid()` | `None` | xdotool getactivewindow getwindowpid | Low |
-| `process.rs:get_process_cwd()` | `None` | `/proc/PID/cwd` symlink | Low |
-| `process.rs:get_process_name()` | `None` | `/proc/PID/exe` symlink basename | Low |
-| `process.rs:get_child_pids()` | `Vec::new()` | `/proc/PID/task/PID/children` | Low |
-| `process.rs:find_shell_by_ancestry()` | `None` | `/proc` scan + parent chain walk | Medium |
-| `detect.rs:get_bundle_id()` | `None` | `/proc/PID/exe` basename | Low |
-| `detect.rs:get_app_display_name()` | `None` | `/proc/PID/comm` | Low |
-| `paste.rs:write_to_clipboard()` | no-op | arboard with wayland-data-control | Low |
-| `paste.rs:paste_to_terminal()` | `Err(not implemented)` | xdotool key ctrl+shift+v | Medium |
-| `paste.rs:confirm_terminal_command()` | `Err(not implemented)` | xdotool key Return | Low |
-| `mod.rs:detect_app_context()` | `None` | Linux orchestrator using above | Medium |
-
-### New Modules Needed
-
-| Module | Purpose | Complexity | Priority |
-|--------|---------|-----------|----------|
-| `terminal/detect_linux.rs` | App identification, terminal lists, GPU check | Low | P0 (blocks detection) |
-| `terminal/context.rs` | Smart truncation (cross-platform) | Medium | P1 (enhances all platforms) |
-| `terminal/linux_reader.rs` | AT-SPI2 terminal text | High | P2 (defer to post-release) |
-
-## Build Order (Dependency-Aware)
-
-**Phase 1: Foundation** (no dependencies on other new code)
-1. Linux `/proc` process functions in process.rs -- get_process_cwd, get_process_name, get_child_pids
-2. Linux app identification in detect_linux.rs -- is_known_terminal, clean_app_name
-3. Linux system prompt + assistant prompt in ai.rs
-
-**Phase 2: Detection Pipeline** (depends on Phase 1)
-4. Linux frontmost PID capture in hotkey.rs -- xdotool getactivewindow getwindowpid
-5. Linux window ID capture + focus restore -- xdotool windowactivate
-6. Linux detect_app_context in mod.rs -- wire Phase 1 components into detection pipeline
-7. Linux window key computation in hotkey.rs -- needs detect_linux + process
-
-**Phase 3: Overlay + Actions** (depends on Phase 2)
-8. Linux overlay setup in lib.rs -- always-on-top, skip-taskbar
-9. Linux clipboard + paste in paste.rs -- arboard + xdotool key ctrl+shift+v
-10. Linux confirm (Enter) in paste.rs -- xdotool key Return
-
-**Phase 4: Smart Context** (independent, cross-platform)
-11. Smart context truncation module context.rs -- ANSI stripping, dedup, char-budget truncation
-12. Integration with ai.rs build_user_message -- replace hardcoded 25-line limit
-
-**Phase 5: Distribution**
-13. AppImage CI/CD job in release.yml -- parallel to macOS/Windows builds
-14. Updater config -- linux-x86_64 platform entry in latest.json assembly
-15. Linux permissions stub in permissions.rs -- always returns true
-
-**Dependency graph:**
-```
-Phase 1 (proc + detect_linux + ai prompts)
-    |
-    v
-Phase 2 (PID capture + detect pipeline + window key)
-    |
-    v
-Phase 3 (overlay setup + paste + confirm)
-
-Phase 4 (smart context) -- independent, can start any time
-    |
-    v
-Phase 5 (CI/CD + updater) -- needs working Linux build from Phases 1-3
-```
+### Anti-Pattern 5: Curated Model Lists for Local Providers
+**What:** Maintaining hardcoded model lists for Ollama/LM Studio like cloud providers.
+**Why bad:** Local model availability is entirely user-controlled. A curated list would be perpetually wrong.
+**Instead:** 100% dynamic model discovery from local API. No curated entries, no tier tags.
 
 ## Scalability Considerations
 
-| Concern | macOS | Windows | Linux |
-|---------|-------|---------|-------|
-| Process info read | libproc FFI ~1ms | PEB ReadProcessMemory ~2ms | `/proc` fs read <1ms |
-| Process tree scan | sysctl fallback ~5ms | Toolhelp32Snapshot ~1ms | `/proc/*/stat` scan ~3ms |
-| PID capture | NSWorkspace ObjC ~1ms | GetForegroundWindow ~0.1ms | xdotool subprocess ~10ms |
-| Clipboard write | pbcopy subprocess ~5ms | arboard ~1ms | arboard ~1ms |
-| Paste simulation | CGEventPost ~1ms | SendInput ~1ms | xdotool subprocess ~10ms |
-| Text reading | AX API ~50-200ms | UIA ~20-200ms | None (V1), AT-SPI2 ~50ms (V2) |
-| CI build time | ~8min (signed+notarized) | ~6min (NSIS) | ~6min (AppImage, no signing) |
-| Detection budget | 500/750ms timeout | 750ms timeout | 500/750ms timeout (same) |
+| Concern | Current (5 cloud) | After (5 cloud + 2 local) |
+|---------|--------------------|---------------------------|
+| Provider enum size | 5 variants | 7 variants -- negligible |
+| Keychain entries | 5 max | Still 5 (local providers skip keychain) |
+| Config persistence | settings.json (provider, model) | settings.json adds providerConfigs map |
+| Model list memory | ~50 models cached | +0-100 local models (dynamic) |
+| Network calls | Cloud APIs only | +localhost HTTP (sub-1ms latency) |
+| Token tracking | Works for all 5 | Works for all 7 (no cost for local) |
 
-**Key insight:** Linux detection is faster than macOS/Windows for process info (direct filesystem reads vs API calls) but slightly slower for PID capture and paste (subprocess invocation vs in-process API). All operations comfortably fit within the existing 500/750ms timeout budget.
+## Suggested Build Order
+
+Based on dependency analysis of the existing architecture:
+
+### Phase 1: Provider Enum + Config Foundation
+1. Add `Ollama` and `LMStudio` to `Provider` enum with all trait methods
+2. Add `ProviderConfig` struct with `base_url`
+3. Add `provider_configs` to `AppState`
+4. Add `is_local()` helper method
+5. Load/save configs from `settings.json` on startup
+6. Register new IPC commands (`check_local_provider`, `set_provider_config`, `get_provider_config`)
+
+**Why first:** Everything else depends on the Provider enum having the new variants. Until this compiles, nothing else can build.
+
+### Phase 2: Model Discovery
+1. Add `OllamaTagsResponse` and related deserialization types
+2. Add Ollama branch in `fetch_api_models()` -- `/api/tags` parsing
+3. Add LM Studio branch in `fetch_api_models()` -- reuse `OpenAIModelsResponse`
+4. Add Ollama/LMStudio branches in `validate_api_key()` (health-check-as-validation)
+5. Wire `validate_api_key` to accept `state` parameter (signature change)
+
+**Why second:** Model discovery is needed before streaming (user must select a model).
+
+### Phase 3: Streaming Integration
+1. Modify `openai_compat::stream()` to accept explicit URL parameter
+2. Update all 3 call sites in `ai::stream_ai_response()` to pass URL
+3. Add local provider branch in `stream_ai_response()` (skip keychain, read config URL)
+4. Set 60s timeout for local providers (model loading latency)
+
+**Why third:** Streaming depends on Phase 1 (enum) and Phase 2 (model selection).
+
+### Phase 4: Frontend -- Store + Provider List
+1. Add Ollama/LM Studio to `PROVIDERS` array with `local: true`
+2. Add `localProviderStatus`, `localProviderBaseUrl` to Zustand store
+3. Update `submitQuery()` to handle keyless providers
+4. Add health check invocation on local provider selection
+
+**Why fourth:** Frontend changes depend on all backend IPC commands being available.
+
+### Phase 5: Frontend -- Settings + Onboarding UI
+1. Add Ollama/LM Studio SVG icons to `ProviderIcon.tsx`
+2. Modify `AccountTab.tsx` for conditional URL config vs. API key input
+3. Add connection status indicator (green/red dot)
+4. Modify `StepApiKey.tsx` for local provider onboarding flow
+5. Modify `StepProviderSelect.tsx` to visually distinguish local vs. cloud providers
+
+**Why last:** UI polish depends on all backend integration being complete and testable.
 
 ## Sources
 
-- [Tauri v2 Window API](https://docs.rs/tauri/latest/tauri/window/struct.Window.html) -- Window management, always_on_top, skip_taskbar
-- [Tauri always-on-top Wayland issue #3117](https://github.com/tauri-apps/tauri/issues/3117) -- Wayland limitation confirmed
-- [tao always-on-top Wayland issue #1134](https://github.com/tauri-apps/tao/issues/1134) -- Upstream windowing limitation
-- [window-vibrancy crate](https://github.com/tauri-apps/window-vibrancy) -- No Linux support confirmed
-- [arboard crate](https://github.com/1Password/arboard) -- Linux X11 + Wayland clipboard via wayland-data-control feature
-- [Linux /proc filesystem documentation](https://www.kernel.org/doc/html/latest/filesystems/proc.html) -- proc_pid_cwd, cmdline, stat, children
-- [proc_pid_cwd(5)](https://man7.org/linux/man-pages/man5/proc_pid_cwd.5.html) -- CWD symlink specification
-- [xdotool man page](https://manpages.ubuntu.com/manpages/trusty/man1/xdotool.1.html) -- getactivewindow, getwindowpid, key, windowactivate
-- [xdotool getwindowpid issue #428](https://github.com/jordansissel/xdotool/issues/428) -- Known PID accuracy limitations
-- [Tauri AppImage distribution](https://v2.tauri.app/distribute/appimage/) -- AppImage bundling guide
-- [Tauri GitHub Actions pipeline](https://v2.tauri.app/distribute/pipelines/github/) -- CI/CD reference
-- [wl-clipboard](https://github.com/bugaevc/wl-clipboard) -- Wayland clipboard reference
-- [GNOME DBus window management](https://gist.github.com/rbreaves/257c3edfa301786e66e964d7ac036269) -- Wayland focused window via DBus
-- [KDE KWin window metadata](https://community.kde.org/KWin/Window_Metadata) -- KDE Wayland window PID via DBus
-- [Arch Wiki Clipboard](https://wiki.archlinux.org/title/Clipboard) -- X11 vs Wayland clipboard ecosystem
-- [sick.codes xdotool paste](https://sick.codes/paste-clipboard-linux-xdotool-ctrl-v-terminal-type/) -- xdotool paste patterns
-- [Tauri AppImage CI issue #14796](https://github.com/tauri-apps/tauri/issues/14796) -- Known AppImage CI issues
+- Ollama OpenAI Compatibility docs: https://docs.ollama.com/api/openai-compatibility (HIGH confidence)
+- Ollama /api/tags endpoint docs: https://docs.ollama.com/api/tags (HIGH confidence)
+- Ollama health check (root GET): https://github.com/ollama/ollama/issues/1378 (HIGH confidence)
+- Ollama streaming usage: https://docs.ollama.com/api/usage (HIGH confidence)
+- LM Studio OpenAI Compatibility docs: https://lmstudio.ai/docs/developer/openai-compat (HIGH confidence)
+- LM Studio models listing: https://lmstudio.ai/docs/developer/openai-compat/models (HIGH confidence)
+- LM Studio REST API v0: https://lmstudio.ai/docs/developer/rest/endpoints (MEDIUM confidence)
+- Existing codebase: Direct analysis of Provider enum, openai_compat adapter, models.rs, ai.rs, state.rs, store/index.ts, AccountTab.tsx, StepApiKey.tsx (HIGH confidence)

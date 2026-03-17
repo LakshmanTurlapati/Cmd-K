@@ -1,192 +1,170 @@
-# Feature Landscape
+# Feature Landscape: Local LLM Providers (Ollama + LM Studio)
 
-**Domain:** Linux platform support + smart terminal context for cross-platform AI terminal overlay
-**Researched:** 2026-03-13
+**Domain:** Local LLM provider integration for cross-platform AI terminal command overlay
+**Researched:** 2026-03-17
+**Confidence:** HIGH (verified against official API docs and existing codebase)
 
 ## Table Stakes
 
-Features users expect. Missing = product feels incomplete.
-
-### Linux Overlay (System-Wide Hotkey + Floating Window)
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| System-wide Ctrl+K hotkey on X11 | macOS/Windows already have it; Linux parity is the milestone goal | Low | Tauri's `global-shortcut` plugin works on X11 out of the box. Same plugin API, no platform-specific code needed. |
-| System-wide Ctrl+K hotkey on Wayland | Wayland is the default on Ubuntu 22.04+, Fedora 38+, most modern distros | Med | Tauri's global-shortcut plugin works on Wayland via compositor-specific protocols. May require portal-based shortcut registration on GNOME (GlobalShortcuts portal via xdg-desktop-portal). Needs testing per compositor. |
-| Always-on-top overlay on X11 | Core product behavior -- overlay MUST float above active window | Low | `always_on_top(true)` works on X11. WM treats it as a "hint" but all major WMs (GNOME/Mutter, KDE/KWin, i3, Sway on XWayland) honor it. |
-| Always-on-top overlay on Wayland | Wayland is increasingly the default display server | High | **Known Tauri limitation**: `always_on_top` does NOT work on native Wayland (tao issue #1134, tauri issue #3117). Workarounds: (1) Force XWayland via `GDK_BACKEND=x11` env var, (2) Use `wlr-layer-shell` protocol (requires compositor support, not in Tauri), (3) Accept that on some Wayland compositors the window may not stay on top. XWayland fallback is the pragmatic first approach. |
-| Overlay dismissal with Escape | Consistent with macOS/Windows behavior | Low | Pure frontend behavior, already implemented. No platform-specific work. |
-| Frosted glass / vibrancy effect | Differentiator on macOS, users expect visual polish | Med | No native vibrancy API on Linux (no NSVisualEffectView equivalent). Use CSS `backdrop-filter: blur()` with a semi-transparent background. GTK4 compositing supports this on most compositors. Visually close enough. |
-| Overlay positioning over active window | Core UX -- overlay should appear where the user is working | Med | On X11: `xdotool getactivewindow getwindowgeometry` gets position and size of the active window before overlay appears. On Wayland: no standard API to query other windows' geometry. Fallback: center on primary monitor or use cursor position. |
-| Tray icon / background daemon | Users expect to see the app is running | Low | Tauri's system tray plugin works on Linux (uses libappindicator/StatusNotifierItem on modern desktops). Already implemented cross-platform. |
-
-### Linux Terminal Context (CWD, Shell Type, Output)
+Features users expect when they see "Ollama" or "LM Studio" in a provider list.
+Missing any of these = product feels broken or amateur.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Detect focused terminal app | Must know which app was active to provide context | Med | X11: `xdotool getactivewindow getwindowpid` gives PID of focused window. Then `/proc/PID/exe` resolves to terminal binary. Wayland: compositor-specific -- GNOME D-Bus `org.gnome.Shell` (restricted since GNOME 41), KDE KWin scripting, or `wlr-foreign-toplevel-management` protocol. Fallback: track which window lost focus when overlay gained it. |
-| Read CWD of foreground shell | 1:1 macOS parity -- CWD is core context for AI command generation | Low | `/proc/PID/cwd` is a symlink to the process CWD. `readlink("/proc/{shell_pid}/cwd")` in Rust via `std::fs::read_link`. Trivially simple compared to macOS libproc FFI. No permissions issues for same-user processes. |
-| Detect shell type (bash/zsh/fish/etc.) | Must tell AI which shell syntax to use | Low | `/proc/PID/exe` is a symlink to the shell binary path (e.g., `/usr/bin/zsh`). Extract basename. Simpler than macOS `proc_pidpath` FFI. |
-| Walk process tree to find shell child | Terminal emulators spawn shells as children; need to find the right one | Med | `/proc/PID/stat` field 4 (ppid) lets you walk the tree. Or scan all `/proc/*/stat` entries for matching ppid. Equivalent to macOS `proc_listchildpids`. Handle tmux/screen multiplexers by walking deeper. Pattern: terminal -> login/bash -> user_shell. |
-| Detect running process inside shell | Show "node", "python", etc. when a command is running | Low | Same process tree walk as macOS. Find deepest child of the shell PID, check if it is a known shell (if not, it is the running process). |
-| Read visible terminal output | Context for AI to understand what the user is looking at | High | **This is the hardest Linux feature.** No unified API like macOS Accessibility or Windows UIA. Options per terminal: (1) kitty: `kitty @ get-text` remote control (requires `allow_remote_control` in kitty.conf), (2) WezTerm: `wezterm cli get-text` (works out of box), (3) GNOME Terminal/xterm/others: AT-SPI2 over D-Bus (accessibility API, equivalent to macOS AX), (4) Alacritty: no remote API at all. AT-SPI2 is the universal fallback but quality varies by terminal. |
-| Detect IDE integrated terminals | VS Code, Cursor have embedded terminals | Med | Same pattern as macOS/Windows. Detect process name (`code`, `cursor`), walk process tree for shell children. Linux process tree is easier to traverse than Windows ConPTY. |
-
-### Linux Paste (Inject Command into Terminal)
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Clipboard write | Must place generated command on clipboard | Low | X11: `xclip -selection clipboard` or `xsel --clipboard`. Wayland: `wl-copy`. Rust crate `arboard` handles both transparently (already used for Windows). |
-| Paste into terminal (X11) | 1:1 macOS parity -- user expects command to appear in terminal | Med | Strategy: (1) Write to clipboard via arboard, (2) Activate terminal window via `xdotool windowactivate {window_id}`, (3) Simulate Ctrl+Shift+V via `xdotool key ctrl+shift+v` (Linux terminals use Ctrl+Shift+V, not Ctrl+V). Alternative: `xdotool type --clearmodifiers "{text}"` to type text directly (avoids clipboard, but slow for long text and special chars can cause issues). |
-| Paste into terminal (Wayland) | Wayland is default on modern distros | High | Wayland's security model restricts synthetic input to other windows. Options: (1) `wtype` for keyboard simulation (wlroots compositors only, NOT GNOME), (2) `ydotool` uses kernel uinput (works everywhere but needs ydotoold daemon, may need root), (3) `wl-copy` + rely on user pressing Ctrl+Shift+V manually. Most reliable approach: clipboard write + focus restore + show "Press Ctrl+Shift+V to paste" hint if synthetic paste fails. |
-| Clear current line before paste | Ctrl+U to clear line (same as macOS behavior) | Low | `xdotool key ctrl+u` on X11. Wayland: same tools as paste (wtype/ydotool). |
-| Focus restore to terminal | After overlay dismissal, terminal must regain focus | Med | X11: `xdotool windowactivate {window_id}` (window_id captured before overlay). Wayland: no standard "activate other window" API. Hiding the overlay causes the previous window to naturally regain focus on most compositors. |
-| Confirm command (Enter) | User presses Enter to execute the pasted command | Low | Same mechanism as paste. `xdotool key Return` on X11. On Wayland, same limitations as paste apply. |
-
-### Smart Terminal Context (Scrollback + Intelligent Truncation) -- Cross-Platform
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Read full visible terminal text | Current behavior -- read what is on screen | Already exists for macOS/Windows | On Linux, this is the per-terminal-emulator text reading described above. |
-| Read scrollback buffer beyond visible area | Users run long commands (build logs, test output) and expect AI to understand recent output | High | No universal API. Terminal-specific: kitty `get-text --extent all`, WezTerm `cli get-text --start-line -N`, GNOME Terminal via AT-SPI2 text interface. Alacritty has no programmatic scrollback access at all. Fallback: shell HISTFILE for command history (not output). |
-| Intelligent truncation to fit context window | Sending 100K tokens of scrollback wastes money and degrades AI quality ("context rot") | Med | Must truncate scrollback to fit within AI model's context window minus prompt/response overhead. Strategy: keep last N lines (most recent output is most relevant), preserve the first few lines (often contain the command that produced the output), drop middle content. |
-| Token-aware context budgeting | Different AI providers have different context windows (4K to 200K tokens) | Med | Already have model metadata with context window sizes. Budget ~10-15% of context window for terminal context. Rough heuristic: 1 token ~= 4 chars. For a 4K context model, ~1600 chars of terminal text. For 128K+ models, cap at ~8000 chars regardless (diminishing returns, terminal context beyond recent output rarely helps). |
-| Preserve command prompts in truncation | Prompt lines (`user@host:~$`) show what commands were run -- critical context for AI | Med | When truncating, scan for prompt patterns (same regex patterns already used in WSL detection: `user@host:/path$`, `PS C:\>`, `$`, `#`) and preserve lines matching prompt patterns. This keeps the "what did the user do" narrative intact even when output between commands is trimmed. |
-| Strip ANSI escape codes from captured text | Raw terminal output contains color codes, cursor movement, and other escape sequences | Low | Regex strip `\x1b\[[0-9;]*[a-zA-Z]` and OSC sequences. Use the `strip-ansi-escapes` crate. Already partially handled by the sensitive data filter on macOS/Windows. |
+| Provider entries in PROVIDERS list | Users must select Ollama/LM Studio in onboarding and Settings dropdown | Low | Add to frontend `PROVIDERS` array, backend `Provider` enum. Two new entries with `isLocal: true` flag. |
+| Auto-discovered model list | Both tools expose model listing APIs; users expect to see their downloaded models, not a hardcoded list | Medium | Ollama: `GET /api/tags` returns `{models: [{name, details: {parameter_size, quantization_level}}]}`. LM Studio: `GET /v1/models` returns OpenAI-format `{data: [{id, state, max_context_length, quantization}]}`. No curated list -- dynamic only. |
+| Connection status indicator | Local servers may not be running; users need clear "connected" / "not running" feedback instead of API key validation | Medium | Replaces the API key validation flow entirely. Poll `GET http://localhost:11434` (Ollama returns "Ollama is running" with 200) or `GET http://localhost:1234/v1/models` (LM Studio returns model list on success). Show green/red connection dot in AccountTab and onboarding. |
+| No API key required | Local providers run without authentication; showing a key input field is confusing and wrong | Low | Skip keychain storage entirely for local providers. Skip onboarding `StepApiKey` when Ollama/LM Studio selected. Mark as "ready" when connection succeeds instead of when key validates. Ollama's OpenAI-compat endpoint accepts any bearer token (or none). |
+| Free usage (no cost tracking) | Local inference has no per-token cost; showing "$0.00" or pricing columns is misleading | Low | Set `input_price_per_m: None`, `output_price_per_m: None` on all local models. Existing `pricing_available: false` indicator in ModelTab already handles this. Token counting still works (useful for context awareness) but cost display shows "N/A". |
+| Base URL configuration | Users may run servers on non-default ports, Docker containers, or remote machines | Medium | Defaults: `http://localhost:11434` (Ollama), `http://localhost:1234` (LM Studio). Editable in Settings AccountTab for local providers. Persist to `settings.json` via Tauri plugin-store. URL used by connection check, model discovery, and streaming. |
+| Streaming chat completions | Users expect identical real-time token streaming as cloud providers | Low | Both Ollama and LM Studio support OpenAI-compatible `POST /v1/chat/completions` with `stream: true` and SSE format (`data: {JSON}` chunks, `data: [DONE]` sentinel). Reuse existing `openai_compat::stream` adapter -- just change the target URL. Both support `stream_options: { include_usage: true }`. |
+| Provider SVG icons | All 5 existing providers have inline SVG icons in onboarding and settings. Missing icons for new providers breaks visual consistency. | Low | Add inline SVG paths for Ollama (llama silhouette) and LM Studio (LM logo). Same pattern as existing `ProviderIcon` component with switch-on-provider-id. |
 
 ## Differentiators
 
-Features that set product apart. Not expected, but valued.
+Features that set CMD+K's local provider experience apart. Not expected by all users,
+but valued by power users who are already running local models.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Zero-config terminal detection on Linux | Most Linux terminal tools require shell plugin installation (oh-my-zsh plugins, starship config, shell integration scripts). CMD+K reads /proc directly -- no .bashrc modification needed. This is the core product differentiator. | Low | Direct carry-over of zero-setup philosophy from macOS. Linux /proc makes it EASIER than macOS (symlinks vs raw FFI). Major advantage vs Fig, Warp, and others that require shell integration. |
-| Multi-terminal-emulator support | Support GNOME Terminal, Konsole, kitty, Alacritty, WezTerm, Terminator, xterm, Tilix, foot, st -- not just one | High | CWD/shell/process detection works universally via /proc. Text reading is the variable -- each terminal may need a different strategy. Prioritize by popularity: GNOME Terminal > kitty > Alacritty > WezTerm > Konsole > others. |
-| Automatic X11/Wayland detection | App works regardless of display server without user configuration | Med | Check `$XDG_SESSION_TYPE` env var (`x11` or `wayland`) or `$WAYLAND_DISPLAY` (set when running on Wayland). Route to X11 or Wayland code paths accordingly. Tauri/GTK already handles window creation internally, but paste/focus code needs explicit routing. |
-| Smart context with command-output pairing | When truncating scrollback, pair each command prompt with its output block so the AI sees complete command-result pairs, not arbitrary line cuts | High | Parse scrollback into segments: [prompt + command] -> [output block]. Truncate by dropping oldest complete segments first. Preserves semantic coherence. This is meaningfully better than naive "last N lines" truncation and no existing tool does this well. |
-| Scrollback error prioritization | When truncating, prioritize keeping lines containing error patterns (stderr markers, stack traces, "error:", "failed", exit codes) over routine output | Med | Scan captured text for error indicators. When budget is tight, keep: (1) last prompt + command, (2) error lines, (3) first/last few lines of output. Drop "passing" test output, verbose logs, progress bars. |
-| Linux AppImage with auto-update | Single portable binary that updates itself, like macOS DMG + auto-updater | Med | Tauri v2 supports AppImage bundling natively. Auto-updater works with AppImage via the same `tauri-plugin-updater` used for macOS/Windows. CI/CD pipeline needs a Linux runner added to the existing 3-job architecture. |
+| Model metadata in label (parameter size + quantization) | Ollama's `/api/tags` returns `details.parameter_size` ("7B", "13B") and `details.quantization_level` ("Q4_K_M"). Shows users meaningful info about model capability instead of opaque IDs like "llama3.1:latest". | Low | Compose label as "Llama 3.1 8B (Q4_K_M)" or "Qwen 2.5 7B Q5_K_M". LM Studio also returns `quantization` and `arch` fields in `/v1/models`. Helps users pick the right model for their hardware. |
+| Connection auto-retry on overlay open | If user starts Ollama after CMD+K is already running, the next Cmd+K press should auto-detect the server without requiring a settings visit or app restart | Low | Re-check connection status on each overlay show() or settings panel open. Don't require manual "reconnect" button. Cache status in AppState for instant display, but background-verify on interaction. |
+| Server-not-running guidance | When connection fails, show actionable instructions instead of a generic error | Low | Ollama: "Ollama is not running. Start it with `ollama serve` in your terminal." LM Studio: "LM Studio server is not running. Open LM Studio and start the local server." Provider-specific messages are far more helpful than "Connection failed." |
+| Graceful token usage extraction | Track input/output tokens for local models so the usage stats tab shows query count and token breakdown (even without cost) | Low | Already implemented: `openai_compat::stream` extracts `usage.prompt_tokens` and `usage.completion_tokens` from the final SSE chunk when `stream_options.include_usage` is set. Both Ollama and LM Studio support this field. Works out of the box. |
+| Context window awareness for smart truncation | `context_window_for_model()` drives smart terminal context truncation. Local models need their context lengths known for optimal context budgeting. | Medium | Ollama: `POST /api/show` returns `model_info.{family}.context_length` (architecture max). LM Studio: `max_context_length` in `/v1/models` response per model. Cache on model discovery. Fallback: 4096 tokens for unknown models. |
+| Longer timeout for local models | Consumer hardware is 5-30x slower than cloud APIs, especially on first request when model must load into memory (10-30s on Ollama) | Low | Set `default_timeout_secs` to 120s for Ollama/LM Studio (vs. 10-30s for cloud). Ollama auto-loads models on first request, which adds significant latency the first time. Subsequent requests are much faster. |
 
 ## Anti-Features
 
-Features to explicitly NOT build.
+Features to explicitly NOT build. These add complexity without matching CMD+K's scope.
 
 | Anti-Feature | Why Avoid | What to Do Instead |
 |--------------|-----------|-------------------|
-| Shell plugin / .bashrc integration | Violates core "zero setup" philosophy. Users hate modifying shell configs. Every competitor requires this. Our differentiator is NOT needing it. | Use /proc filesystem for CWD/shell detection. Use AT-SPI2/terminal remote control for text reading. Accept that some terminals (Alacritty) may have limited text reading without plugins. |
-| PTY/pseudo-terminal interception | Intercepting the PTY fd to read terminal I/O would give perfect output capture but is extremely invasive, requires ptrace or LD_PRELOAD, breaks with sudo/su, and is a security concern. | Use terminal-emulator APIs (remote control) or accessibility APIs (AT-SPI2). Accept imperfect coverage over invasive approaches. |
-| Auto-execution of commands | Never run commands directly. Always paste and let user press Enter. This is a safety invariant of the entire product. | Paste to terminal + provide confirm button that sends Enter keystroke. User always has the chance to review before execution. |
-| Wayland-native layer-shell integration | Building a custom layer-shell client would bypass Tauri's window management entirely. Massive complexity, requires compositor-specific code, and marginal benefit over XWayland fallback. | Use XWayland fallback (`GDK_BACKEND=x11`) for Wayland sessions initially. Document the env var. Revisit when Tauri upstream adds native Wayland overlay support. |
-| Universal scrollback via LD_PRELOAD | Injecting a shared library to intercept write() syscalls on the PTY would capture all terminal output universally. Too invasive, fragile across distros, and a security concern. | Use per-terminal remote control APIs where available. Fall back to AT-SPI2. Accept that Alacritty users get CWD/shell context but not scrollback text. |
-| Snap/Flatpak distribution (initial release) | Sandboxing restrictions in Snap/Flatpak conflict with the app's need to read /proc, access clipboard tools (xclip, wl-copy), and interact with terminal emulators via D-Bus. Would require extensive permission manifests and testing. | Ship AppImage first (no sandbox restrictions). Consider Snap/Flatpak later with appropriate portal/permission configurations. |
-| Full tmux/screen scrollback extraction | Extracting scrollback from within tmux panes requires `tmux capture-pane -p` which only works if the user is running tmux. Adding tmux-specific integration adds complexity for a niche use case. | Detect tmux in the process tree (already handled by multiplexer detection in process.rs). Use the outer terminal's text reading for visible content. If tmux is detected, note it in context so AI knows commands may need `tmux` prefix. |
-| D-Bus GNOME Shell extension dependency | Requiring users to install a GNOME Shell extension for focused window detection is unacceptable UX friction. | Use xdotool on X11/XWayland (covers most cases). On native Wayland without XWayland, accept limited window identification and use process-based fallbacks. |
+| Model download/pull from within CMD+K | CMD+K is a command overlay, not a model manager. Downloading multi-GB models is a long background task that doesn't fit the overlay UX. Both Ollama and LM Studio have their own model management UIs. | Show "No models found" with guidance: "Pull a model with `ollama pull llama3.1` in your terminal" or "Download a model in LM Studio's Discover tab." |
+| Model loading/unloading controls | Both servers handle model memory management automatically. Ollama auto-loads on first request and unloads after idle timeout (default 5 min). LM Studio loads models on API request. Exposing load/unload controls adds complexity for zero user benefit. | Let the local server handle it. First request will be slower if model isn't loaded; the 120s timeout accommodates this. |
+| Custom Modelfile / model parameters | Ollama supports Modelfiles for custom system prompts, temperature, etc. This is a power-user feature that belongs in Ollama's own tooling and conflicts with CMD+K's own system prompt injection. | CMD+K injects its own terminal/assistant mode system prompts. Temperature is hardcoded at 0.1 for consistent command generation. No per-model customization needed. |
+| GPU/VRAM monitoring | Showing GPU utilization adds platform-specific complexity (NVML on NVIDIA, ROCm on AMD, Metal on Apple Silicon) and is irrelevant to CMD+K's job of generating terminal commands. | Out of scope. Users who monitor GPU usage have nvidia-smi, radeontop, or Activity Monitor. |
+| Remote server discovery (mDNS/Bonjour/SSDP) | Auto-discovering Ollama/LM Studio instances on the local network adds significant complexity (cross-platform mDNS, firewall traversal, security concerns) for a niche use case. | Base URL text field covers this entirely. Users running remote servers can type `http://192.168.1.100:11434`. Simple, explicit, secure. |
+| Tier grouping (Fast/Balanced/Capable) for local models | Cloud providers have well-known model tiers. Local model naming varies wildly across quantizations, finetunes, and custom Modelfiles. Tier assignment would require maintaining mappings for hundreds of model variants that change constantly. | Show all local models in a flat alphabetical list without tier grouping. Cloud providers keep their existing tier grouping. The model name + parameter size + quantization gives users enough info to choose. |
+| Offline-only mode toggle | A separate "offline mode" creates a confusing mental model. The app should just work regardless of whether the selected provider is local or cloud. | Provider selection IS the offline choice. Select Ollama = offline. Select OpenAI = online. No separate toggle. No airplane mode icon. |
+| Ollama native API (/api/chat) streaming | Ollama's native API uses NDJSON streaming (not SSE). Supporting both would mean maintaining a second streaming adapter just for Ollama. | Use Ollama's OpenAI-compatible endpoint `/v1/chat/completions` exclusively. It uses the same SSE format as all other providers. No reason to support the native NDJSON format. |
 
 ## Feature Dependencies
 
 ```
-System-wide hotkey --> Overlay window (hotkey triggers overlay)
-Overlay window --> Focus capture (must know previous window before showing overlay)
-Focus capture --> Terminal detection (need PID to identify terminal)
-Terminal detection --> Process tree walk (find shell child of terminal)
-Process tree walk --> CWD reading (/proc/{shell_pid}/cwd)
-Process tree walk --> Shell type detection (/proc/{shell_pid}/exe)
-Terminal detection --> Text reading (AT-SPI2 / remote control / per-terminal API)
-Text reading --> ANSI escape stripping (clean raw text)
-ANSI escape stripping --> Smart truncation (truncate cleaned text)
-Smart truncation --> AI prompt construction (include truncated context in system prompt)
-Clipboard write --> Paste to terminal (write first, then simulate Ctrl+Shift+V)
-Focus capture --> Focus restore (restore focus to captured window after overlay hides)
-Focus restore --> Paste to terminal (must focus terminal before pasting)
-X11/Wayland detection --> Paste method selection (xdotool vs wtype/ydotool)
-X11/Wayland detection --> Focus capture method selection (xdotool vs compositor fallback)
-X11/Wayland detection --> Overlay behavior (always-on-top vs XWayland fallback)
+Provider enum extension -----> All provider-dispatched code paths:
+    |                              keychain.rs    (skip for local)
+    |                              models.rs      (new fetch branch)
+    |                              ai.rs          (URL override, skip key)
+    |                              AccountTab.tsx (URL input, connection dot)
+    |                              StepApiKey.tsx (skip step for local)
+    |                              StepProviderSelect.tsx (new entries)
+    |                              ModelTab.tsx   (flat list, no tiers)
+    |
+    +--> Base URL config (settings.json) ---> Connection check (health endpoint)
+                                          |-> Model discovery (list models API)
+                                          |-> Streaming (chat completions API)
+    |
+    +--> Connection check ---> Model discovery (only if connected)
+                           |-> "Ready" state (replaces "valid" apiKeyStatus)
+    |
+    +--> No keychain dependency (local providers skip key storage entirely)
+
+Context window for local models ---> Smart truncation in terminal/context.rs
+                                 --> Requires /api/show (Ollama) or /v1/models metadata (LM Studio)
+                                 --> Can defer: use 4096 default until implemented
 ```
+
+## Existing Provider Abstraction Integration Points
+
+### Backend (Rust)
+
+| File | Current Pattern | Local Provider Change |
+|------|----------------|----------------------|
+| `providers/mod.rs` | `Provider` enum with 5 variants, `api_url()` returns `&'static str`, `keychain_account()`, `adapter_kind()`, `display_name()`, `console_url()`, `default_timeout_secs()` | Add `Ollama` and `LMStudio` variants. `api_url()` must change to support dynamic URLs (from settings) -- either add a method that accepts a base URL parameter, or return a default that callers override. `keychain_account()` returns a no-op value. `adapter_kind()` returns `OpenAICompat`. `console_url()` could point to `localhost:11434` / `localhost:1234`. `default_timeout_secs()` returns 120. |
+| `keychain.rs` | `save_api_key(provider, key)`, `get_api_key(provider)`, `delete_api_key(provider)` all take `Provider` | No keychain operations for local providers. Frontend simply never calls these for Ollama/LM Studio. Backend functions can return `Ok(None)` or `Ok(())` for local providers without touching keyring. |
+| `models.rs` | `curated_models()` returns hardcoded tier-tagged list; `fetch_api_models()` fetches from cloud; `validate_api_key()` hits cloud endpoints | Local providers: `curated_models()` returns empty vec (no curated list -- all dynamic). `fetch_api_models()` calls local server's model list endpoint (`/api/tags` for Ollama, `/v1/models` for LM Studio). New `check_local_connection(provider, base_url)` Tauri command replaces `validate_api_key()` for local providers. |
+| `ai.rs` | `stream_ai_response()` reads API key from keychain, dispatches to adapter via `provider.adapter_kind()` | For local providers: skip keychain read. Pass "ollama" as dummy bearer token (Ollama ignores auth). Construct chat completions URL from base URL config: `{base_url}/v1/chat/completions`. Existing `openai_compat::stream` needs URL parameter instead of using `provider.api_url()`. |
+| `providers/openai_compat.rs` | `stream()` uses `provider.api_url()` for the POST URL, sets `Authorization: Bearer {api_key}` header | Must accept `url: &str` parameter instead of deriving from `provider.api_url()`. For local providers, skip or use dummy auth header. For cloud providers, pass existing static URL. Minimal change: add `url` parameter to `stream()`, all callers pass it. |
+| `usage.rs` | Token tracking with pricing lookup from curated + OpenRouter cache | Works as-is. Local models have no curated pricing, no OpenRouter cache match, so `pricing_available: false` and `estimated_cost: None`. Token counts still tracked and displayed. |
+| `state.rs` | `AppState` struct with various Mutex fields | Optionally add `local_connection_status: Mutex<HashMap<String, bool>>` for caching Ollama/LM Studio connection state. Alternatively, let frontend re-check on each interaction (simpler). |
+
+### Frontend (TypeScript/React)
+
+| File | Current Pattern | Local Provider Change |
+|------|----------------|----------------------|
+| `store/index.ts` | `PROVIDERS` array (5 entries), `apiKeyStatus` drives submission guard, `submitQuery` checks `apiKeyStatus !== "valid"` | Add Ollama/LM Studio to PROVIDERS with `isLocal: true` flag. Add `connectionStatus: "unknown" \| "checking" \| "connected" \| "disconnected"` state. `submitQuery` must check `connectionStatus === "connected"` for local providers instead of `apiKeyStatus === "valid"`. Or: treat "connected" as equivalent to `apiKeyStatus = "valid"` by setting apiKeyStatus to "valid" when connection succeeds (simpler, fewer code paths). |
+| `StepProviderSelect.tsx` | Renders all PROVIDERS as selectable cards | Add Ollama/LM Studio cards with icons. No logic change needed. |
+| `StepApiKey.tsx` | Shows API key input, validates against cloud API | Skip this step entirely for local providers. Onboarding wizard should jump from provider select to connection check (inline in model select step or new step). |
+| `OnboardingWizard.tsx` | Steps: Provider -> ApiKey -> Model -> Done | For local providers: Provider -> ConnectionCheck -> Model -> Done. Skip ApiKey step. Connection check can be embedded in the model select step (show "Connecting..." then model list or error). |
+| `AccountTab.tsx` | Provider dropdown + API key input + validation indicator (green check / red X) | For local providers: hide key input field entirely. Show base URL text input + connection status dot (green = connected, red = not running). Show connection error message with guidance. "Edit URL" with default pre-filled. |
+| `ModelTab.tsx` | Tier-grouped model list (Fast/Balanced/Capable sections), pricing column | For local providers: flat model list (no tier groupings since all models have `tier: ""`). Show parameter size + quantization in model label. Hide pricing column (or show "Free"). |
+| `ProviderIcon.tsx` | Switch on provider ID returning inline SVG paths | Add `case "ollama":` and `case "lmstudio":` with appropriate SVG paths. |
 
 ## MVP Recommendation
 
-### Phase 1: Linux Core (X11-first)
+Prioritize (in implementation order):
 
-Prioritize these -- they establish basic Linux parity with macOS:
-1. **X11 hotkey + overlay** -- Tauri plugin handles this with zero platform-specific code
-2. **Process detection via /proc** -- CWD, shell type, running process via symlink reads. Easiest of all three platforms.
-3. **X11 focus capture** -- `xdotool getactivewindow` before overlay show, store window ID in AppState
-4. **X11 paste via xdotool** -- Clipboard write (arboard) + `xdotool windowactivate` + `xdotool key ctrl+shift+v`
-5. **AppImage distribution** -- Add Linux runner to CI/CD pipeline, Tauri bundles AppImage natively
+1. **Provider enum + frontend PROVIDERS extension** -- Foundation. Unblocks all other features. Add `Ollama` and `LMStudio` to both Rust `Provider` enum and TypeScript `PROVIDERS` array.
+2. **Connection check command** -- New `check_local_connection(provider, base_url)` Tauri command. Hits health endpoint and returns connected/disconnected. Replaces `validate_api_key` for local providers.
+3. **Base URL config** -- Settings persistence for Ollama/LM Studio base URLs in `settings.json`. Defaults: `http://localhost:11434`, `http://localhost:1234`.
+4. **Model discovery** -- Call `/api/tags` (Ollama) or `/v1/models` (LM Studio) to populate model list. Map to `ModelWithMeta` with descriptive labels.
+5. **Streaming via openai_compat adapter** -- Modify `openai_compat::stream` to accept URL parameter. Construct `{base_url}/v1/chat/completions` for local providers. Skip auth or use dummy token.
+6. **Onboarding flow adaptation** -- Skip StepApiKey for local providers. Show connection status in model selection step.
+7. **Settings UI adaptation** -- AccountTab shows URL input + connection dot for local providers instead of API key input.
+8. **Provider icons** -- Add Ollama and LM Studio SVG icons.
+9. **Longer timeout** -- Set 120s default for local providers.
 
-### Phase 2: Terminal Text Reading
+Defer to later enhancement:
+- **Context window detection** -- Use 4096 default initially. Add `/api/show` call for Ollama and use `max_context_length` from LM Studio's model list later.
+- **Model metadata enrichment** -- Can ship with raw model IDs initially, enhance labels with parameter_size + quantization in follow-up.
 
-6. **AT-SPI2 text reading** -- Universal fallback for GNOME Terminal, xterm, Konsole, and other accessible terminals via D-Bus
-7. **kitty remote control** -- `kitty @ get-text` for kitty users (second most popular terminal among power users)
-8. **WezTerm CLI** -- `wezterm cli get-text` for WezTerm users
+## Key API Endpoints Summary
 
-### Phase 3: Wayland Support
+### Ollama (default: http://localhost:11434)
 
-9. **Wayland detection** -- Check `$XDG_SESSION_TYPE` / `$WAYLAND_DISPLAY`, set `GDK_BACKEND=x11` for XWayland fallback
-10. **Wayland clipboard** -- `wl-copy` via arboard (arboard handles this automatically)
-11. **Wayland paste fallback** -- Try `ydotool` or `wtype`, gracefully degrade to "press Ctrl+Shift+V" hint
+| Purpose | Endpoint | Method | Response Format |
+|---------|----------|--------|----------------|
+| Health check | `/` | GET | Returns "Ollama is running" (text, HTTP 200) |
+| Version | `/api/version` | GET | `{"version": "0.5.x"}` |
+| List models (native) | `/api/tags` | GET | `{models: [{name, model, size, details: {parameter_size, quantization_level, family}}]}` |
+| List models (OpenAI) | `/v1/models` | GET | `{data: [{id, object}]}` |
+| Chat completion | `/v1/chat/completions` | POST | SSE streaming: `data: {"choices":[{"delta":{"content":"..."}}]}`, `data: [DONE]`. Supports `stream_options.include_usage`. |
+| Model details | `/api/show` | POST | Body: `{name: "model"}`. Returns `model_info.{family}.context_length`, parameters, license. |
+| Auth | None | - | No authentication required. OpenAI-compat accepts any bearer token or none. |
 
-### Phase 4: Smart Context (Cross-Platform)
+### LM Studio (default: http://localhost:1234)
 
-12. **ANSI escape stripping** -- Clean captured text from all platforms before sending to AI
-13. **Token-aware truncation** -- Budget terminal context to ~10-15% of model context window, cap at ~8000 chars
-14. **Command-output pairing** -- Parse prompts to create semantic segments for intelligent truncation
-15. **Scrollback reading** -- Use terminal-specific APIs (kitty, WezTerm) to read beyond visible area on Linux; extend macOS AX and Windows UIA to request more text
+| Purpose | Endpoint | Method | Response Format |
+|---------|----------|--------|----------------|
+| Health check | `/v1/models` | GET | Returns model list on success (doubles as health + model discovery). |
+| List models (OpenAI) | `/v1/models` | GET | `{data: [{id, object, type, publisher, arch, quantization, state, max_context_length}]}` |
+| Chat completion | `/v1/chat/completions` | POST | Standard OpenAI SSE streaming format. Same as Ollama's OpenAI-compat endpoint. |
+| Model state | In `/v1/models` response | - | `state` field: "loaded" or "not-loaded". `max_context_length` per model. |
+| Auth | None | - | No authentication required. |
 
-Defer:
-- **Wayland layer-shell**: Wait for Tauri upstream. XWayland covers all practical cases today.
-- **Snap/Flatpak**: Sandbox conflicts. AppImage first.
-- **tmux scrollback**: Detect tmux, note in context, but do not extract pane content.
-- **Error prioritization in truncation**: Ship basic "last N lines" first, iterate with error-aware truncation later.
+## Ollama vs LM Studio: Integration Differences
 
-## Complexity Estimates: Linux vs Existing Platforms
-
-| Feature Area | macOS Complexity | Windows Complexity | Linux Complexity | Notes |
-|--------------|-----------------|-------------------|-----------------|-------|
-| CWD detection | High (libproc FFI, raw C struct parsing) | High (PEB reading via ReadProcessMemory) | **Low** (`readlink /proc/PID/cwd`) | Linux is trivially the easiest platform |
-| Shell detection | Med (proc_pidpath FFI) | Med (QueryFullProcessImageName) | **Low** (`readlink /proc/PID/exe`, basename) | Linux is simplest |
-| Process tree walk | Med (proc_listchildpids FFI) | High (CreateToolhelp32Snapshot + ConPTY) | **Med** (scan /proc/*/stat for ppid) | Similar to macOS, much simpler than Windows |
-| Visible text reading | High (Accessibility API, per-terminal AX) | High (UIA, 3-strategy cascade) | **High** (AT-SPI2 + per-terminal remote control) | Most fragmented on Linux due to terminal diversity |
-| Paste into terminal | Med (AppleScript + CGEventPost) | Med (SendInput Ctrl+V) | **Med-High** (xdotool X11, much harder on Wayland) | Wayland's security model restricts synthetic input |
-| Focus capture/restore | Low (NSWorkspace ObjC FFI) | Low (GetForegroundWindow/SetForegroundWindow) | **Med** (xdotool X11, compositor-specific Wayland) | Wayland is the complication |
-| Overlay window | Low (NSPanel floating) | Med (WS_EX_TOPMOST + z-order) | **Med** (works X11, broken native Wayland without workaround) | XWayland fallback mitigates |
-| Smart truncation | N/A (new feature) | N/A (new feature) | N/A (new feature) | **Med** -- Cross-platform Rust code, no platform-specific work |
-| Scrollback reading | N/A (not yet built) | N/A (not yet built) | **High** (per-terminal APIs) | New feature, primarily benefits from Linux terminal APIs |
-
-## Known Terminal Emulators: Linux Detection + Text Reading Matrix
-
-| Terminal | Process Name | Text Reading Method | Scrollback Access | Popularity |
-|----------|-------------|--------------------|--------------------|------------|
-| GNOME Terminal | `gnome-terminal-server` | AT-SPI2 (good support) | AT-SPI2 Text interface | Very High (default on Ubuntu, Fedora) |
-| Konsole | `konsole` | AT-SPI2 (good support) | AT-SPI2 Text interface | High (default on KDE) |
-| kitty | `kitty` | `kitty @ get-text` (remote control) | `kitty @ get-text --extent all` | High (popular with power users) |
-| Alacritty | `alacritty` | **None** (GPU-rendered, no API) | **None** | High (minimalists) |
-| WezTerm | `wezterm-gui` | `wezterm cli get-text` | `wezterm cli get-text --start-line -N` | Medium |
-| xterm | `xterm` | AT-SPI2 (basic support) | Limited | Low (legacy) |
-| Terminator | `terminator` | AT-SPI2 (VTE-based) | AT-SPI2 Text interface | Medium |
-| Tilix | `tilix` | AT-SPI2 (VTE-based) | AT-SPI2 Text interface | Medium |
-| foot | `foot` | AT-SPI2 (if enabled) | Unknown | Low-Medium (Wayland-native) |
-| st (suckless) | `st` | **None** (minimal, no accessibility) | **None** | Low (tinkerers) |
-| VS Code terminal | `code` | AT-SPI2 (xterm.js accessibility) | Limited | Very High (IDE) |
-| Cursor terminal | `cursor` | AT-SPI2 (xterm.js accessibility) | Limited | Medium (IDE) |
+| Aspect | Ollama | LM Studio |
+|--------|--------|-----------|
+| Health check | Dedicated `GET /` endpoint (fast, lightweight) | Use `GET /v1/models` (returns full model list) |
+| Model list format | Native `/api/tags` has richer metadata (parameter_size, quantization_level, family). OpenAI-compat `/v1/models` is minimal. | `/v1/models` includes `max_context_length`, `state` (loaded/not-loaded), `quantization`, `arch` |
+| Context window discovery | `POST /api/show` with model name returns `model_info.{family}.context_length` (architecture max). Default runtime is 4096 unless `num_ctx` set. | `max_context_length` in `/v1/models` per model entry |
+| Model auto-loading | Auto-loads model on first chat request. First request adds 10-30s latency. | Must have model loaded (user does this in LM Studio UI or via `/api/v1/models/load`) |
+| Server auto-start | Ollama runs as a system service on macOS/Linux (auto-starts). On Windows, runs on login. | Must be started manually (LM Studio app must be open and server enabled) |
+| Server management | CLI: `ollama serve`, system service | GUI: toggle in LM Studio app, CLI: `lms server start` |
 
 ## Sources
 
-- [Tauri global-shortcut plugin docs](https://v2.tauri.app/plugin/global-shortcut/)
-- [Tauri AppImage distribution docs](https://v2.tauri.app/distribute/appimage/)
-- [tao issue #1134 - Wayland always_on_top not working](https://github.com/tauri-apps/tao/issues/1134)
-- [tauri issue #3117 - Always on top not working on Wayland](https://github.com/tauri-apps/tauri/issues/3117)
-- [kitty remote control protocol](https://sw.kovidgoyal.net/kitty/remote-control/)
-- [WezTerm CLI get-text](https://wezterm.org/cli/cli/get-text.html)
-- [WezTerm scrollback docs](https://wezterm.org/scrollback.html)
-- [AT-SPI2 accessibility protocol](https://www.freedesktop.org/wiki/Accessibility/AT-SPI2/)
-- [Linux /proc filesystem man page](https://man7.org/linux/man-pages/man5/proc.5.html)
-- [xdotool man page](https://man.archlinux.org/man/xdotool.1.en)
-- [ydotool - X11/Wayland automation](https://github.com/ReimuNotMoe/ydotool)
-- [wtype - Wayland keyboard simulation](https://www.linuxlinks.com/wtype-xdotool-type-wayland/)
-- [xdotool paste approach](https://sick.codes/paste-clipboard-linux-xdotool-ctrl-v-terminal-type/)
-- [GNOME window-calls extension](https://github.com/ickyicky/window-calls)
-- [Context window management strategies](https://www.getmaxim.ai/articles/context-window-management-strategies-for-long-context-ai-agents-and-chatbots/)
-- [Context windows - Claude API Docs](https://platform.claude.com/docs/en/build-with-claude/context-windows)
-- [Baeldung - Find CWD of running process](https://www.baeldung.com/linux/find-working-directory-of-running-process)
-- [wlr-layer-shell protocol](https://wayland.app/protocols/wlr-layer-shell-unstable-v1)
+- [Ollama API Introduction](https://docs.ollama.com/api/introduction) -- HIGH confidence
+- [Ollama OpenAI Compatibility](https://docs.ollama.com/api/openai-compatibility) -- HIGH confidence
+- [Ollama /api/tags endpoint](https://docs.ollama.com/api/tags) -- HIGH confidence
+- [Ollama Context Length docs](https://docs.ollama.com/context-length) -- HIGH confidence
+- [Ollama Show Model Details](https://docs.ollama.com/api-reference/show-model-details) -- HIGH confidence
+- [Ollama GitHub](https://github.com/ollama/ollama) -- HIGH confidence
+- [LM Studio Developer Docs](https://lmstudio.ai/docs/developer) -- HIGH confidence
+- [LM Studio REST API](https://lmstudio.ai/docs/developer/rest) -- HIGH confidence
+- [LM Studio OpenAI Compatibility](https://lmstudio.ai/docs/developer/openai-compat) -- HIGH confidence
+- [LM Studio Server Docs](https://lmstudio.ai/docs/developer/core/server) -- HIGH confidence
+- [LM Studio /v1/models Context Length](https://lmstudio.ai/docs/typescript/model-info/get-context-length) -- HIGH confidence
+- Existing codebase: `providers/mod.rs`, `models.rs`, `ai.rs`, `openai_compat.rs`, `keychain.rs`, `state.rs`, `store/index.ts`, `AccountTab.tsx`, `ModelTab.tsx`, `StepProviderSelect.tsx`, `StepApiKey.tsx` -- direct inspection
