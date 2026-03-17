@@ -399,7 +399,7 @@ fn tier_from_param_size(param_size: Option<&str>) -> String {
 /// so that get_usage_stats can calculate costs for dynamically-fetched models.
 #[tauri::command]
 pub async fn fetch_models(
-    _app_handle: tauri::AppHandle,
+    app_handle: tauri::AppHandle,
     provider: Provider,
     api_key: String,
     state: tauri::State<'_, crate::state::AppState>,
@@ -407,7 +407,7 @@ pub async fn fetch_models(
     let curated = curated_models(&provider);
     let curated_ids: Vec<String> = curated.iter().map(|m| m.id.clone()).collect();
 
-    let api_models = fetch_api_models(&provider, &api_key, &state).await.unwrap_or_default();
+    let api_models = fetch_api_models(&provider, &api_key, &state, &app_handle).await.unwrap_or_default();
 
     // Merge: curated first, then API models not already in curated list
     let mut result = curated;
@@ -426,6 +426,7 @@ async fn fetch_api_models(
     provider: &Provider,
     api_key: &str,
     state: &tauri::State<'_, crate::state::AppState>,
+    app_handle: &tauri::AppHandle,
 ) -> Result<Vec<ModelWithMeta>, String> {
     let client = reqwest::Client::new();
 
@@ -596,9 +597,68 @@ async fn fetch_api_models(
 
             Ok(models)
         }
-        Provider::Ollama | Provider::LMStudio => {
-            // Dynamic model discovery is Phase 38. Return empty for now.
-            Ok(vec![])
+        Provider::Ollama => {
+            let base_url = super::providers::get_provider_base_url(app_handle, &Provider::Ollama);
+            let tags_url = format!("{}/api/tags", base_url.trim_end_matches('/'));
+            let client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(2))
+                .build()
+                .map_err(|e| e.to_string())?;
+
+            let resp = client
+                .get(&tags_url)
+                .send()
+                .await
+                .map_err(|e| format!("Network error: {}", e))?;
+
+            let bytes = resp.bytes().await.map_err(|e| format!("Read error: {}", e))?;
+            let parsed: OllamaTagsResponse =
+                serde_json::from_slice(&bytes).map_err(|e| format!("Parse error: {}", e))?;
+
+            Ok(parsed
+                .models
+                .into_iter()
+                .map(|m| {
+                    let tier = tier_from_param_size(m.details.parameter_size.as_deref());
+                    ModelWithMeta {
+                        id: m.name.clone(),
+                        label: m.name, // Raw name per locked decision
+                        tier,
+                        input_price_per_m: None,
+                        output_price_per_m: None,
+                    }
+                })
+                .collect())
+        }
+        Provider::LMStudio => {
+            let base_url = super::providers::get_provider_base_url(app_handle, &Provider::LMStudio);
+            let models_url = format!("{}/v1/models", base_url.trim_end_matches('/'));
+            let client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(2))
+                .build()
+                .map_err(|e| e.to_string())?;
+
+            let resp = client
+                .get(&models_url)
+                .send()
+                .await
+                .map_err(|e| format!("Network error: {}", e))?;
+
+            let bytes = resp.bytes().await.map_err(|e| format!("Read error: {}", e))?;
+            let parsed: OpenAIModelsResponse =
+                serde_json::from_slice(&bytes).map_err(|e| format!("Parse error: {}", e))?;
+
+            Ok(parsed
+                .data
+                .into_iter()
+                .map(|m| ModelWithMeta {
+                    label: m.id.clone(), // Raw ID per locked decision
+                    id: m.id,
+                    tier: String::new(), // LM Studio has no parameter_size in OpenAI-compat format
+                    input_price_per_m: None,
+                    output_price_per_m: None,
+                })
+                .collect())
         }
     }
 }
