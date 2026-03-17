@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: completed
-stopped_at: Phase 39 context gathered
-last_updated: "2026-03-17T19:39:36.497Z"
-last_activity: 2026-03-17 -- Completed 38-01 model discovery for Ollama and LM Studio
+stopped_at: Completed 39-01-PLAN.md
+last_updated: "2026-03-17T20:32:35.301Z"
+last_activity: 2026-03-17 -- Completed 39-01 streaming integration cost display fix
 progress:
   total_phases: 4
-  completed_phases: 2
-  total_plans: 3
-  completed_plans: 3
+  completed_phases: 3
+  total_plans: 4
+  completed_plans: 4
   percent: 100
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-17)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Phase 38 - Model Discovery
+**Current focus:** Phase 39 - Streaming Integration
 
 ## Current Position
 
-Phase: 38 of 40 (Model Discovery)
+Phase: 39 of 40 (Streaming Integration)
 Plan: 1 of 1 in current phase (phase complete)
-Status: Phase 38 Complete
-Last activity: 2026-03-17 -- Completed 38-01 model discovery for Ollama and LM Studio
+Status: Phase 39 Complete
+Last activity: 2026-03-17 -- Completed 39-01 streaming integration cost display fix
 
-Progress: [##########] 100% (1/1 plans in phase 38)
+Progress: [##########] 100% (1/1 plans in phase 39)
 
 ## Performance Metrics
 
@@ -61,6 +61,8 @@ Recent decisions affecting current work:
 - [Phase 38]: Raw model names as labels (no pretty-printing) per locked decision
 - [Phase 38]: Auto-tier by parameter size: <7B=fast, 7-30B=balanced, >30B=capable
 - [Phase 38]: LM Studio models get empty tier (All Models) since OpenAI-compat lacks param size
+- [Phase 39]: Local provider cost display uses PROVIDERS.name lookup to detect local and show $0.00
+- [Phase 39]: Suppress asterisk footnote when unpriced entries are all local (free, not unknown)
 
 ### Pending Todos
 
@@ -73,6 +75,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-17T19:39:36.478Z
-Stopped at: Phase 39 context gathered
-Next action: Plan Phase 39 (Command Generation) or verify model discovery with running Ollama/LM Studio
+Last session: 2026-03-17T20:32:35.283Z
+Stopped at: Completed 39-01-PLAN.md
+Next action: Plan and execute Phase 40 (Local Provider Frontend)

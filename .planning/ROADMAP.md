@@ -107,7 +107,7 @@
 
 - [x] **Phase 37: Provider Foundation** - Ollama/LM Studio enum variants, keyless auth, base URL config, health checks, error messages (completed 2026-03-17)
 - [x] **Phase 38: Model Discovery** - Auto-discover installed models from Ollama and LM Studio with metadata display (completed 2026-03-17)
-- [ ] **Phase 39: Streaming Integration** - Local provider streaming via OpenAI-compat adapter with dynamic URL and extended timeout
+- [x] **Phase 39: Streaming Integration** - Local provider streaming via OpenAI-compat adapter with dynamic URL and extended timeout (completed 2026-03-17)
 - [ ] **Phase 40: Local Provider Frontend** - Settings UI, onboarding adaptation, connection indicators, and provider icons
 
 ## Phase Details
@@ -148,7 +148,7 @@ Plans:
   1. User types a natural language query and receives a streamed command from the local provider in real-time
   2. First request after a cold model load completes without timeout (up to 120s allowed for local providers)
   3. Token usage counts appear in the settings usage display after local provider queries
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] 39-01-PLAN.md -- Cost display fix ($0.00 for local providers) and streaming pipeline verification
@@ -178,5 +178,5 @@ Plans:
 | 30-36 | v0.3.9 | 10/10 | Complete | 2026-03-15 |
 | 37 | v0.3.11 | Complete    | 2026-03-17 | 2026-03-17 |
 | 38 | 1/1 | Complete    | 2026-03-17 | - |
-| 39 | v0.3.11 | 0/1 | Not started | - |
+| 39 | 1/1 | Complete   | 2026-03-17 | - |
 | 40 | v0.3.11 | 0/? | Not started | - |

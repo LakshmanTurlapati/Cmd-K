@@ -24,9 +24,9 @@ Requirements for v0.3.11 Local LLM Providers. Each maps to roadmap phases.
 
 ### Streaming & Generation
 
-- [ ] **LSTR-01**: AI command generation streams from local providers using existing OpenAI-compat SSE adapter with dynamic URL
-- [ ] **LSTR-02**: Local provider timeout is 120s (vs cloud default) to handle cold-start model loading
-- [ ] **LSTR-03**: Token tracking works for local providers via stream_options.include_usage
+- [x] **LSTR-01**: AI command generation streams from local providers using existing OpenAI-compat SSE adapter with dynamic URL
+- [x] **LSTR-02**: Local provider timeout is 120s (vs cloud default) to handle cold-start model loading
+- [x] **LSTR-03**: Token tracking works for local providers via stream_options.include_usage
 
 ### Frontend UX
 
@@ -68,9 +68,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LMOD-01 | Phase 38 | Complete |
 | LMOD-02 | Phase 38 | Complete |
 | LMOD-03 | Phase 38 | Complete |
-| LSTR-01 | Phase 39 | Pending |
-| LSTR-02 | Phase 39 | Pending |
-| LSTR-03 | Phase 39 | Pending |
+| LSTR-01 | Phase 39 | Complete |
+| LSTR-02 | Phase 39 | Complete |
+| LSTR-03 | Phase 39 | Complete |
 | LFUI-01 | Phase 40 | Pending |
 | LFUI-02 | Phase 40 | Pending |
 | LFUI-03 | Phase 40 | Pending |
