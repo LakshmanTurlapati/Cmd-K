@@ -2,11 +2,13 @@ import { create } from "zustand";
 import { invoke, Channel } from "@tauri-apps/api/core";
 
 export const PROVIDERS = [
-  { id: "openai", name: "OpenAI" },
-  { id: "anthropic", name: "Anthropic" },
-  { id: "gemini", name: "Google Gemini" },
-  { id: "xai", name: "xAI" },
-  { id: "openrouter", name: "OpenRouter" },
+  { id: "anthropic", name: "Anthropic", local: false },
+  { id: "gemini", name: "Google Gemini", local: false },
+  { id: "lmstudio", name: "LM Studio", local: true },
+  { id: "ollama", name: "Ollama", local: true },
+  { id: "openai", name: "OpenAI", local: false },
+  { id: "openrouter", name: "OpenRouter", local: false },
+  { id: "xai", name: "xAI", local: false },
 ] as const;
 
 export type OverlayMode = "command" | "onboarding" | "settings";
@@ -336,6 +338,28 @@ export const useOverlayStore = create<OverlayState>((set) => ({
         useOverlayStore.getState().setIsDetectingContext(false);
       }
     })();
+
+    // Fire-and-forget health check for local providers on overlay open
+    // Updates apiKeyStatus for the checkmark indicator; does NOT block input
+    (async () => {
+      try {
+        const state = useOverlayStore.getState();
+        const provEntry = PROVIDERS.find(p => p.id === state.selectedProvider);
+        if (!provEntry?.local) return; // Only for local providers
+
+        // Don't set "validating" -- that would show a spinner over the input.
+        // Just silently check and update the status.
+        await invoke("validate_api_key", {
+          provider: state.selectedProvider,
+          apiKey: "",
+        });
+        // Health check passed -- mark as valid
+        useOverlayStore.getState().setApiKeyStatus("valid");
+      } catch {
+        // Health check failed -- mark as invalid (but user can still type and submit)
+        useOverlayStore.getState().setApiKeyStatus("invalid");
+      }
+    })();
   },
 
   hide: () => {
@@ -443,7 +467,10 @@ export const useOverlayStore = create<OverlayState>((set) => ({
     clearRevealTimer();
     const currentState = useOverlayStore.getState();
 
-    if (currentState.apiKeyStatus !== "valid") {
+    const currentProviderEntry = PROVIDERS.find(p => p.id === currentState.selectedProvider);
+    const isLocalProvider = currentProviderEntry?.local ?? false;
+
+    if (!isLocalProvider && currentState.apiKeyStatus !== "valid") {
       set({
         streamError: "No API key configured. Open Settings to add one.",
         displayMode: "result",
