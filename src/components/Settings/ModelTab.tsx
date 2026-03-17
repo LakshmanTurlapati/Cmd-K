@@ -216,6 +216,16 @@ export function ModelTab() {
           const totalOutput = usageStats.entries.reduce((s, e) => s + e.output_tokens, 0);
           const allUnpriced = usageStats.entries.every((e) => !e.pricing_available);
           const someUnpriced = usageStats.entries.some((e) => !e.pricing_available) && !allUnpriced;
+          const allUnpricedAreLocal = allUnpriced && usageStats.entries.every((e) => {
+            const prov = PROVIDERS.find((p) => p.name === e.provider);
+            return prov?.local ?? false;
+          });
+          const unpricedAreLocal = someUnpriced && usageStats.entries
+            .filter((e) => !e.pricing_available)
+            .every((e) => {
+              const prov = PROVIDERS.find((p) => p.name === e.provider);
+              return prov?.local ?? false;
+            });
 
           const formatCost = (cost: number): string => {
             if (cost >= 1) return `$${cost.toFixed(2)}`;
@@ -237,14 +247,19 @@ export function ModelTab() {
             <>
               <div className="flex items-center gap-2">
                 <p className="text-white/70 text-xs">
-                  {allUnpriced ? (
+                  {allUnpricedAreLocal ? (
+                    <span title="Free (local model)">
+                      $0.00
+                      <span className="text-white/40"> &mdash; {tokenStr}</span>
+                    </span>
+                  ) : allUnpriced ? (
                     <span title="Pricing unavailable for this model">
                       {tokenStr} &mdash; $&mdash;
                     </span>
                   ) : (
                     <>
                       {formatCost(usageStats.session_total_cost ?? 0)}
-                      {someUnpriced && <span>*</span>}
+                      {someUnpriced && !unpricedAreLocal && <span>*</span>}
                       <span className="text-white/40"> &mdash; {tokenStr}</span>
                     </>
                   )}
@@ -257,7 +272,7 @@ export function ModelTab() {
                   Reset
                 </button>
               </div>
-              {someUnpriced && (
+              {someUnpriced && !unpricedAreLocal && (
                 <p className="text-white/20 text-xs">*excludes queries without pricing</p>
               )}
               {hasCosts && (
