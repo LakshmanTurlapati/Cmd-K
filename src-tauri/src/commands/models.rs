@@ -347,6 +347,51 @@ struct OpenRouterPricing {
     completion: Option<String>,
 }
 
+// ---- Ollama response types for /api/tags ----
+
+#[derive(Deserialize)]
+struct OllamaTagsResponse {
+    models: Vec<OllamaModel>,
+}
+
+#[derive(Deserialize)]
+struct OllamaModel {
+    name: String,
+    #[serde(default)]
+    details: OllamaModelDetails,
+}
+
+#[derive(Deserialize, Default)]
+struct OllamaModelDetails {
+    parameter_size: Option<String>,
+    quantization_level: Option<String>,
+    family: Option<String>,
+}
+
+/// Parse parameter size string like "3B", "7B", "70B", "4.3B", "270M" into
+/// a numeric value in billions. Returns None if parsing fails.
+fn parse_param_size_billions(s: &str) -> Option<f64> {
+    let trimmed = s.trim().to_uppercase();
+    if let Some(numeric) = trimmed.strip_suffix('B') {
+        numeric.parse::<f64>().ok()
+    } else if let Some(numeric) = trimmed.strip_suffix('M') {
+        numeric.parse::<f64>().ok().map(|v| v / 1000.0)
+    } else {
+        None
+    }
+}
+
+/// Assign tier based on parameter count: <7B=fast, 7-30B=balanced, >30B=capable.
+/// Returns empty string when size is unknown (model appears in "All Models" section).
+fn tier_from_param_size(param_size: Option<&str>) -> String {
+    match param_size.and_then(parse_param_size_billions) {
+        Some(b) if b < 7.0 => "fast".into(),
+        Some(b) if b <= 30.0 => "balanced".into(),
+        Some(_) => "capable".into(),
+        None => String::new(),
+    }
+}
+
 /// Fetch models for a provider: curated models first (with tier tags),
 /// then API-fetched models not in the curated list (with tier="").
 ///
@@ -555,5 +600,64 @@ async fn fetch_api_models(
             // Dynamic model discovery is Phase 38. Return empty for now.
             Ok(vec![])
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_param_size_billions() {
+        assert_eq!(parse_param_size_billions("3B"), Some(3.0));
+        assert_eq!(parse_param_size_billions("7B"), Some(7.0));
+        assert_eq!(parse_param_size_billions("70B"), Some(70.0));
+        assert_eq!(parse_param_size_billions("4.3B"), Some(4.3));
+        assert_eq!(parse_param_size_billions("1.5B"), Some(1.5));
+        assert_eq!(parse_param_size_billions("270M"), Some(0.27));
+        assert_eq!(parse_param_size_billions(""), None);
+        assert_eq!(parse_param_size_billions("garbage"), None);
+    }
+
+    #[test]
+    fn test_tier_from_param_size() {
+        assert_eq!(tier_from_param_size(Some("3B")), "fast");
+        assert_eq!(tier_from_param_size(Some("1.5B")), "fast");
+        assert_eq!(tier_from_param_size(Some("270M")), "fast");
+        assert_eq!(tier_from_param_size(Some("7B")), "balanced");
+        assert_eq!(tier_from_param_size(Some("13B")), "balanced");
+        assert_eq!(tier_from_param_size(Some("30B")), "balanced");
+        assert_eq!(tier_from_param_size(Some("70B")), "capable");
+        assert_eq!(tier_from_param_size(None), "");
+        assert_eq!(tier_from_param_size(Some("")), "");
+        assert_eq!(tier_from_param_size(Some("garbage")), "");
+    }
+
+    #[test]
+    fn test_ollama_tags_response_deserialization() {
+        let json = r#"{"models":[{"name":"llama3.2:3b-instruct-q4_K_M","details":{"parameter_size":"3B","quantization_level":"Q4_K_M","family":"llama"}}]}"#;
+        let parsed: OllamaTagsResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.models.len(), 1);
+        assert_eq!(parsed.models[0].name, "llama3.2:3b-instruct-q4_K_M");
+        assert_eq!(parsed.models[0].details.parameter_size.as_deref(), Some("3B"));
+        assert_eq!(parsed.models[0].details.quantization_level.as_deref(), Some("Q4_K_M"));
+        assert_eq!(parsed.models[0].details.family.as_deref(), Some("llama"));
+    }
+
+    #[test]
+    fn test_ollama_tags_response_missing_details() {
+        let json = r#"{"models":[{"name":"custom-model"}]}"#;
+        let parsed: OllamaTagsResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.models.len(), 1);
+        assert_eq!(parsed.models[0].name, "custom-model");
+        assert!(parsed.models[0].details.parameter_size.is_none());
+        assert!(parsed.models[0].details.quantization_level.is_none());
+    }
+
+    #[test]
+    fn test_ollama_tags_response_empty_models() {
+        let json = r#"{"models":[]}"#;
+        let parsed: OllamaTagsResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.models.len(), 0);
     }
 }
