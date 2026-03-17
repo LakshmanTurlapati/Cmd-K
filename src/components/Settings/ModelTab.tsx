@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Store } from "@tauri-apps/plugin-store";
 import { invoke } from "@tauri-apps/api/core";
 import { Loader2 } from "lucide-react";
-import { useOverlayStore, PROVIDERS } from "@/store";
+import { useOverlayStore, PROVIDERS, ModelWithMeta } from "@/store";
 
 interface UsageStatEntry {
   provider: string;
@@ -34,8 +34,12 @@ export function ModelTab() {
   const selectedProvider = useOverlayStore((s) => s.selectedProvider);
   const selectedModels = useOverlayStore((s) => s.selectedModels);
   const setSelectedModels = useOverlayStore((s) => s.setSelectedModels);
+  const setModels = useOverlayStore((s) => s.setModels);
 
   const [usageStats, setUsageStats] = useState<UsageStatsResponse | null>(null);
+
+  const currentProv = PROVIDERS.find((p) => p.id === selectedProvider);
+  const isLocal = currentProv?.local ?? false;
 
   const fetchUsage = async () => {
     try {
@@ -51,8 +55,22 @@ export function ModelTab() {
     fetchUsage();
   }, []);
 
-  const currentProv = PROVIDERS.find((p) => p.id === selectedProvider);
-  const isLocal = currentProv?.local ?? false;
+  // Refresh model list on mount for local providers (catches new model installs/unloads)
+  useEffect(() => {
+    if (!isLocal) return;
+    const refreshModels = async () => {
+      try {
+        const models = await invoke<ModelWithMeta[]>(
+          "fetch_models",
+          { provider: selectedProvider, apiKey: "" }
+        );
+        setModels(models);
+      } catch {
+        // Graceful degradation -- keep existing model list
+      }
+    };
+    refreshModels();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const isEnabled =
     apiKeyStatus === "valid" && availableModels.length > 0;
 
