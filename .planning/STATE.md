@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: completed
-stopped_at: Phase 38 context gathered
-last_updated: "2026-03-17T19:04:26.435Z"
-last_activity: 2026-03-17 -- Completed 37-02 frontend wiring for local providers
+stopped_at: Completed 38-01-PLAN.md
+last_updated: "2026-03-17T19:30:52.150Z"
+last_activity: 2026-03-17 -- Completed 38-01 model discovery for Ollama and LM Studio
 progress:
   total_phases: 4
-  completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  completed_phases: 2
+  total_plans: 3
+  completed_plans: 3
   percent: 100
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-17)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Phase 37 - Provider Foundation
+**Current focus:** Phase 38 - Model Discovery
 
 ## Current Position
 
-Phase: 37 of 40 (Provider Foundation)
-Plan: 2 of 2 in current phase (phase complete)
-Status: Phase 37 Complete
-Last activity: 2026-03-17 -- Completed 37-02 frontend wiring for local providers
+Phase: 38 of 40 (Model Discovery)
+Plan: 1 of 1 in current phase (phase complete)
+Status: Phase 38 Complete
+Last activity: 2026-03-17 -- Completed 38-01 model discovery for Ollama and LM Studio
 
-Progress: [##########] 100% (2/2 plans in phase 37)
+Progress: [##########] 100% (1/1 plans in phase 38)
 
 ## Performance Metrics
 
@@ -58,6 +58,9 @@ Recent decisions affecting current work:
 - [Phase 37]: Health-check-as-validation for local providers with 3 error states
 - [Phase 37]: Mixed alphabetical provider ordering (local and cloud interleaved)
 - [Phase 37]: Silent overlay-open health check (no validating spinner, updates status indicator only)
+- [Phase 38]: Raw model names as labels (no pretty-printing) per locked decision
+- [Phase 38]: Auto-tier by parameter size: <7B=fast, 7-30B=balanced, >30B=capable
+- [Phase 38]: LM Studio models get empty tier (All Models) since OpenAI-compat lacks param size
 
 ### Pending Todos
 
@@ -70,6 +73,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-17T19:04:26.415Z
-Stopped at: Phase 38 context gathered
-Next action: Plan Phase 38 (Model Discovery)
+Last session: 2026-03-17T19:30:52.132Z
+Stopped at: Completed 38-01-PLAN.md
+Next action: Plan Phase 39 (Command Generation) or verify model discovery with running Ollama/LM Studio

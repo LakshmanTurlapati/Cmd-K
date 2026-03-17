@@ -106,7 +106,7 @@
 **Milestone Goal:** Add Ollama and LM Studio as local LLM providers, enabling fully offline AI command generation with auto-discovered models and connection health indicators.
 
 - [x] **Phase 37: Provider Foundation** - Ollama/LM Studio enum variants, keyless auth, base URL config, health checks, error messages (completed 2026-03-17)
-- [ ] **Phase 38: Model Discovery** - Auto-discover installed models from Ollama and LM Studio with metadata display
+- [x] **Phase 38: Model Discovery** - Auto-discover installed models from Ollama and LM Studio with metadata display (completed 2026-03-17)
 - [ ] **Phase 39: Streaming Integration** - Local provider streaming via OpenAI-compat adapter with dynamic URL and extended timeout
 - [ ] **Phase 40: Local Provider Frontend** - Settings UI, onboarding adaptation, connection indicators, and provider icons
 
@@ -135,7 +135,7 @@ Plans:
   1. When Ollama is selected and running, the model picker shows all models installed on the Ollama server
   2. When LM Studio is selected and running, the model picker shows all loaded models from LM Studio
   3. Ollama models display parameter size and quantization level (e.g., "Llama 3.2 3B Q4_K_M") where the metadata is available
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] 38-01-PLAN.md -- Ollama /api/tags and LM Studio /v1/models parsing, param size auto-tiering, ModelTab refresh-on-mount
@@ -174,6 +174,6 @@ Plans:
 | 27-29 | v0.2.8 | 6/6 | Complete | 2026-03-14 |
 | 30-36 | v0.3.9 | 10/10 | Complete | 2026-03-15 |
 | 37 | v0.3.11 | Complete    | 2026-03-17 | 2026-03-17 |
-| 38 | v0.3.11 | 0/1 | Not started | - |
+| 38 | 1/1 | Complete   | 2026-03-17 | - |
 | 39 | v0.3.11 | 0/? | Not started | - |
 | 40 | v0.3.11 | 0/? | Not started | - |

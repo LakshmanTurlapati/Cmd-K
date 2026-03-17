@@ -18,9 +18,9 @@ Requirements for v0.3.11 Local LLM Providers. Each maps to roadmap phases.
 
 ### Model Discovery
 
-- [ ] **LMOD-01**: App auto-discovers available models from Ollama via /api/tags endpoint
-- [ ] **LMOD-02**: App auto-discovers available models from LM Studio via /v1/models endpoint
-- [ ] **LMOD-03**: Model list displays metadata where available (parameter size, quantization level for Ollama models)
+- [x] **LMOD-01**: App auto-discovers available models from Ollama via /api/tags endpoint
+- [x] **LMOD-02**: App auto-discovers available models from LM Studio via /v1/models endpoint
+- [x] **LMOD-03**: Model list displays metadata where available (parameter size, quantization level for Ollama models)
 
 ### Streaming & Generation
 
@@ -65,9 +65,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LPROV-04 | Phase 37 | Complete |
 | LPROV-05 | Phase 37 | Complete |
 | LPROV-06 | Phase 37 | Complete |
-| LMOD-01 | Phase 38 | Pending |
-| LMOD-02 | Phase 38 | Pending |
-| LMOD-03 | Phase 38 | Pending |
+| LMOD-01 | Phase 38 | Complete |
+| LMOD-02 | Phase 38 | Complete |
+| LMOD-03 | Phase 38 | Complete |
 | LSTR-01 | Phase 39 | Pending |
 | LSTR-02 | Phase 39 | Pending |
 | LSTR-03 | Phase 39 | Pending |
