@@ -90,7 +90,7 @@ pub(crate) fn curated_models(provider: &Provider) -> Vec<ModelWithMeta> {
             ModelWithMeta { id: "grok-3".into(), label: "Grok 3".into(), tier: "balanced".into(), input_price_per_m: Some(3.00), output_price_per_m: Some(15.00) },
             ModelWithMeta { id: "grok-3-mini".into(), label: "Grok 3 Mini".into(), tier: "fast".into(), input_price_per_m: Some(0.30), output_price_per_m: Some(0.50) },
         ],
-        Provider::OpenRouter => vec![],
+        Provider::OpenRouter | Provider::Ollama | Provider::LMStudio => vec![],
     }
 }
 
@@ -116,8 +116,13 @@ pub(crate) fn curated_models_pricing() -> HashMap<String, (f64, f64)> {
 }
 
 /// Validate an API key for a given provider by making a lightweight request.
+/// For local providers (Ollama, LM Studio), performs a health check instead.
 #[tauri::command]
-pub async fn validate_api_key(provider: Provider, api_key: String) -> Result<(), String> {
+pub async fn validate_api_key(
+    app_handle: tauri::AppHandle,
+    provider: Provider,
+    api_key: String,
+) -> Result<(), String> {
     let client = reqwest::Client::new();
 
     match provider {
@@ -227,6 +232,74 @@ pub async fn validate_api_key(provider: Provider, api_key: String) -> Result<(),
                 status => Err(format!("API error: {}", status)),
             }
         }
+        Provider::Ollama => {
+            let base_url = super::providers::get_provider_base_url(&app_handle, &provider);
+            let client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(2))
+                .build()
+                .map_err(|e| e.to_string())?;
+
+            // Step 1: Check if server is reachable
+            match client.get(&base_url).send().await {
+                Ok(r) if r.status().is_success() => {
+                    // Step 2: Check if any models are loaded
+                    let tags_url = format!("{}/api/tags", base_url.trim_end_matches('/'));
+                    match client.get(&tags_url).send().await {
+                        Ok(resp) => {
+                            let bytes = resp.bytes().await.unwrap_or_default();
+                            if let Ok(body) = serde_json::from_slice::<serde_json::Value>(&bytes) {
+                                let models = body.get("models").and_then(|m| m.as_array());
+                                match models {
+                                    Some(arr) if arr.is_empty() => {
+                                        Err("No models loaded".to_string())
+                                    }
+                                    Some(_) => Ok(()),
+                                    None => Ok(()), // Unexpected format, but server is running
+                                }
+                            } else {
+                                Ok(()) // Could not parse, but server responded -- treat as OK
+                            }
+                        }
+                        Err(e) => Err(format!("Request failed -- {}", e)),
+                    }
+                }
+                Ok(_) => Err("Server not running".to_string()),
+                Err(e) if e.is_connect() => Err("Server not running".to_string()),
+                Err(e) if e.is_timeout() => Err("Server not running".to_string()),
+                Err(e) => Err(format!("Request failed -- {}", e)),
+            }
+        }
+        Provider::LMStudio => {
+            let base_url = super::providers::get_provider_base_url(&app_handle, &provider);
+            let health_url = format!("{}/v1/models", base_url.trim_end_matches('/'));
+            let client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(2))
+                .build()
+                .map_err(|e| e.to_string())?;
+
+            match client.get(&health_url).send().await {
+                Ok(r) if r.status().is_success() => {
+                    // Check if any models are loaded
+                    let bytes = r.bytes().await.unwrap_or_default();
+                    if let Ok(body) = serde_json::from_slice::<serde_json::Value>(&bytes) {
+                        let data = body.get("data").and_then(|d| d.as_array());
+                        match data {
+                            Some(arr) if arr.is_empty() => {
+                                Err("No models loaded".to_string())
+                            }
+                            Some(_) => Ok(()),
+                            None => Ok(()), // Unexpected format, but server is running
+                        }
+                    } else {
+                        Ok(()) // Could not parse, but server responded -- treat as OK
+                    }
+                }
+                Ok(_) => Err("Server not running".to_string()),
+                Err(e) if e.is_connect() => Err("Server not running".to_string()),
+                Err(e) if e.is_timeout() => Err("Server not running".to_string()),
+                Err(e) => Err(format!("Request failed -- {}", e)),
+            }
+        }
     }
 }
 
@@ -281,6 +354,7 @@ struct OpenRouterPricing {
 /// so that get_usage_stats can calculate costs for dynamically-fetched models.
 #[tauri::command]
 pub async fn fetch_models(
+    _app_handle: tauri::AppHandle,
     provider: Provider,
     api_key: String,
     state: tauri::State<'_, crate::state::AppState>,
@@ -476,6 +550,10 @@ async fn fetch_api_models(
             *state.openrouter_pricing.lock().unwrap() = pricing_cache;
 
             Ok(models)
+        }
+        Provider::Ollama | Provider::LMStudio => {
+            // Dynamic model discovery is Phase 38. Return empty for now.
+            Ok(vec![])
         }
     }
 }
