@@ -59,28 +59,28 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LPROV-01 | — | Pending |
-| LPROV-02 | — | Pending |
-| LPROV-03 | — | Pending |
-| LPROV-04 | — | Pending |
-| LPROV-05 | — | Pending |
-| LPROV-06 | — | Pending |
-| LMOD-01 | — | Pending |
-| LMOD-02 | — | Pending |
-| LMOD-03 | — | Pending |
-| LSTR-01 | — | Pending |
-| LSTR-02 | — | Pending |
-| LSTR-03 | — | Pending |
-| LFUI-01 | — | Pending |
-| LFUI-02 | — | Pending |
-| LFUI-03 | — | Pending |
-| LFUI-04 | — | Pending |
+| LPROV-01 | Phase 37 | Pending |
+| LPROV-02 | Phase 37 | Pending |
+| LPROV-03 | Phase 37 | Pending |
+| LPROV-04 | Phase 37 | Pending |
+| LPROV-05 | Phase 37 | Pending |
+| LPROV-06 | Phase 37 | Pending |
+| LMOD-01 | Phase 38 | Pending |
+| LMOD-02 | Phase 38 | Pending |
+| LMOD-03 | Phase 38 | Pending |
+| LSTR-01 | Phase 39 | Pending |
+| LSTR-02 | Phase 39 | Pending |
+| LSTR-03 | Phase 39 | Pending |
+| LFUI-01 | Phase 40 | Pending |
+| LFUI-02 | Phase 40 | Pending |
+| LFUI-03 | Phase 40 | Pending |
+| LFUI-04 | Phase 40 | Pending |
 
 **Coverage:**
 - v1 requirements: 16 total
-- Mapped to phases: 0
-- Unmapped: 16 ⚠️
+- Mapped to phases: 16
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-17*
-*Last updated: 2026-03-17 after initial definition*
+*Last updated: 2026-03-17 after roadmap creation*

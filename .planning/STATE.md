@@ -5,9 +5,9 @@ milestone_name: Local LLM Providers
 status: active
 stopped_at: null
 last_updated: "2026-03-17"
-last_activity: 2026-03-17 — Milestone v0.3.11 started
+last_activity: 2026-03-17 — Roadmap created (Phases 37-40)
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,14 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-17)
 
 **Core value:** The overlay must appear on top of the active application and feel instant
-**Current focus:** Defining requirements for v0.3.11 Local LLM Providers
+**Current focus:** Phase 37 - Provider Foundation
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-17 — Milestone v0.3.11 started
+Phase: 37 of 40 (Provider Foundation)
+Plan: 0 of ? in current phase
+Status: Ready to plan
+Last activity: 2026-03-17 -- Roadmap created for v0.3.11 Local LLM Providers (4 phases, 16 requirements)
+
+Progress: [..........] 0% (0/4 phases in v0.3.11)
 
 ## Performance Metrics
 
@@ -47,11 +49,11 @@ Last activity: 2026-03-17 — Milestone v0.3.11 started
 
 ### Decisions
 
-No active decisions.
+Recent decisions affecting current work:
 
-### Roadmap Evolution
-
-No pending roadmap changes.
+- [v0.2.6]: Provider abstraction with 3 streaming adapters (OpenAI-compat, Anthropic, Gemini)
+- [v0.2.7]: Decoupled UsageAccumulator keys -- (String, String) not (Provider, String)
+- [v0.2.8]: Inline SVG paths for provider icons -- no external assets
 
 ### Pending Todos
 
@@ -59,11 +61,11 @@ None.
 
 ### Blockers/Concerns
 
-- Wayland has no global hotkey protocol — Tauri global-shortcut silently fails on pure Wayland
+- Wayland has no global hotkey protocol -- Tauri global-shortcut silently fails on pure Wayland
 - AT-SPI2 terminal text reliability untested across terminal emulators at runtime
 
 ## Session Continuity
 
 Last session: 2026-03-17
-Stopped at: Defining requirements
-Next action: Define REQUIREMENTS.md → create roadmap
+Stopped at: Roadmap created for v0.3.11
+Next action: Plan Phase 37 (Provider Foundation)
