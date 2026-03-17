@@ -290,7 +290,7 @@ export function AccountTab() {
             <ChevronDown size={14} className="text-white/40" />
           </button>
           {dropdownOpen && (
-            <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-[#2a2a2c]/95 backdrop-blur-xl border border-white/10 rounded-lg overflow-hidden">
+            <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-[#2a2a2c]/95 backdrop-blur-xl border border-white/10 rounded-lg overflow-y-auto max-h-60">
               {PROVIDERS.map((p) => (
                 <button
                   key={p.id}

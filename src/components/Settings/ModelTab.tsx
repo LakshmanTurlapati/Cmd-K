@@ -51,6 +51,8 @@ export function ModelTab() {
     fetchUsage();
   }, []);
 
+  const currentProv = PROVIDERS.find((p) => p.id === selectedProvider);
+  const isLocal = currentProv?.local ?? false;
   const isEnabled =
     apiKeyStatus === "valid" && availableModels.length > 0;
 
@@ -144,8 +146,12 @@ export function ModelTab() {
             {apiKeyStatus === "validating" ? (
               <span className="flex items-center gap-2">
                 <Loader2 size={14} className="animate-spin" />
-                Validating...
+                {isLocal ? "Checking server..." : "Validating..."}
               </span>
+            ) : isLocal && apiKeyStatus === "valid" ? (
+              "No models found — check that models are loaded"
+            ) : isLocal ? (
+              "Connect to server first"
             ) : (
               "Validate API key first"
             )}
