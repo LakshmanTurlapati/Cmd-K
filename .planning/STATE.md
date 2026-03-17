@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
-status: executing
-stopped_at: Completed 37-01-PLAN.md
-last_updated: "2026-03-17T18:32:44.798Z"
-last_activity: 2026-03-17 -- Completed 37-01 backend plumbing for Ollama/LMStudio providers
+status: phase_complete
+stopped_at: Completed 37-02-PLAN.md (Phase 37 complete)
+last_updated: "2026-03-17T18:48:53.811Z"
+last_activity: 2026-03-17 -- Completed 37-02 frontend wiring for local providers
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
-  percent: 50
+  completed_plans: 2
+  percent: 100
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 ## Current Position
 
 Phase: 37 of 40 (Provider Foundation)
-Plan: 1 of 2 in current phase
-Status: Executing
-Last activity: 2026-03-17 -- Completed 37-01 backend plumbing for Ollama/LMStudio providers
+Plan: 2 of 2 in current phase (phase complete)
+Status: Phase 37 Complete
+Last activity: 2026-03-17 -- Completed 37-02 frontend wiring for local providers
 
-Progress: [#####.....] 50% (1/2 plans in phase 37)
+Progress: [##########] 100% (2/2 plans in phase 37)
 
 ## Performance Metrics
 
@@ -56,6 +56,8 @@ Recent decisions affecting current work:
 - [v0.2.8]: Inline SVG paths for provider icons -- no external assets
 - [Phase 37]: is_local() guard pattern for local vs cloud provider branching
 - [Phase 37]: Health-check-as-validation for local providers with 3 error states
+- [Phase 37]: Mixed alphabetical provider ordering (local and cloud interleaved)
+- [Phase 37]: Silent overlay-open health check (no validating spinner, updates status indicator only)
 
 ### Pending Todos
 
@@ -68,6 +70,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-17T18:32:44.779Z
-Stopped at: Completed 37-01-PLAN.md
-Next action: Execute 37-02-PLAN.md (Frontend Wiring)
+Last session: 2026-03-17T18:49:00Z
+Stopped at: Completed 37-02-PLAN.md (Phase 37 complete)
+Next action: Plan Phase 38 (Model Discovery)
