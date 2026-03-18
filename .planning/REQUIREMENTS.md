@@ -30,10 +30,10 @@ Requirements for v0.3.11 Local LLM Providers. Each maps to roadmap phases.
 
 ### Frontend UX
 
-- [ ] **LFUI-01**: Connection health shown via same checkmark indicator used for API key validation — checkmark when server reachable, no checkmark when not
-- [ ] **LFUI-02**: Settings shows base URL input field instead of API key field for local providers
-- [ ] **LFUI-03**: Onboarding wizard skips API key step for local providers
-- [ ] **LFUI-04**: Provider SVG icons for Ollama and LM Studio in onboarding and settings
+- [x] **LFUI-01**: Connection health shown via same checkmark indicator used for API key validation — checkmark when server reachable, no checkmark when not
+- [x] **LFUI-02**: Settings shows base URL input field instead of API key field for local providers
+- [x] **LFUI-03**: Onboarding wizard skips API key step for local providers
+- [x] **LFUI-04**: Provider SVG icons for Ollama and LM Studio in onboarding and settings
 
 ## Future Requirements
 
@@ -71,10 +71,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LSTR-01 | Phase 39 | Complete |
 | LSTR-02 | Phase 39 | Complete |
 | LSTR-03 | Phase 39 | Complete |
-| LFUI-01 | Phase 40 | Pending |
-| LFUI-02 | Phase 40 | Pending |
-| LFUI-03 | Phase 40 | Pending |
-| LFUI-04 | Phase 40 | Pending |
+| LFUI-01 | Phase 40 | Complete |
+| LFUI-02 | Phase 40 | Complete |
+| LFUI-03 | Phase 40 | Complete |
+| LFUI-04 | Phase 40 | Complete |
 
 **Coverage:**
 - v1 requirements: 16 total

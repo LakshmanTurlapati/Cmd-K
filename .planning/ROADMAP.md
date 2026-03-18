@@ -108,7 +108,7 @@
 - [x] **Phase 37: Provider Foundation** - Ollama/LM Studio enum variants, keyless auth, base URL config, health checks, error messages (completed 2026-03-17)
 - [x] **Phase 38: Model Discovery** - Auto-discover installed models from Ollama and LM Studio with metadata display (completed 2026-03-17)
 - [x] **Phase 39: Streaming Integration** - Local provider streaming via OpenAI-compat adapter with dynamic URL and extended timeout (completed 2026-03-17)
-- [ ] **Phase 40: Local Provider Frontend** - Settings UI, onboarding adaptation, connection indicators, and provider icons
+- [x] **Phase 40: Local Provider Frontend** - Settings UI, onboarding adaptation, connection indicators, and provider icons (completed 2026-03-18)
 
 ## Phase Details
 
@@ -162,7 +162,7 @@ Plans:
   2. First-run onboarding with a local provider selected skips the API key step entirely
   3. Ollama and LM Studio have distinct SVG icons in both onboarding and settings provider selectors
   4. Usage stats display "Free (local)" for local provider queries instead of a dollar amount
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] 40-01-PLAN.md -- Onboarding step-skip for local providers, model fetch in StepModelSelect, "Free (local)" cost label
@@ -182,4 +182,4 @@ Plans:
 | 37 | v0.3.11 | Complete    | 2026-03-17 | 2026-03-17 |
 | 38 | 1/1 | Complete    | 2026-03-17 | - |
 | 39 | 1/1 | Complete    | 2026-03-17 | - |
-| 40 | v0.3.11 | 0/1 | Not started | - |
+| 40 | 1/1 | Complete   | 2026-03-18 | - |
