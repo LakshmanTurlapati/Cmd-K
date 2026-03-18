@@ -54,7 +54,7 @@ And when the generated command would `rm -rf` your home directory or `DROP` your
 | Feature | Description |
 |---|---|
 | **System-Wide Overlay** | Floating overlay triggered by a global hotkey from any application. No dock icon, no window clutter -- just a translucent command bar that appears and disappears. |
-| **Natural Language Commands** | Describe what you want in plain English. AI models from OpenAI, Anthropic, Google Gemini, xAI, or OpenRouter stream a working terminal command back token-by-token. |
+| **Natural Language Commands** | Describe what you want in plain English. AI models from OpenAI, Anthropic, Google Gemini, xAI, OpenRouter, Ollama, or LM Studio stream a working terminal command back token-by-token. |
 | **Zero-Config Context Detection** | Reads your current working directory, shell type, and recent terminal output via platform accessibility APIs and process introspection. No shell plugins, no rc file edits. |
 | **Multi-Terminal Support** | Detects and reads context from Terminal.app, iTerm2, Alacritty, kitty, WezTerm, GNOME Terminal, Konsole, and Windows Terminal. Recognizes shells inside VS Code and Cursor. |
 | **Browser DevTools Support** | Detects open DevTools consoles in Chrome, Safari, Firefox, Arc, Edge, and Brave. Switches to a conversational assistant mode for web debugging. |
@@ -130,7 +130,7 @@ graph TB
     end
 
     subgraph External["AI Providers"]
-        PROVIDERS["OpenAI · Anthropic · Gemini · xAI · OpenRouter"]
+        PROVIDERS["OpenAI · Anthropic · Gemini · xAI · OpenRouter · Ollama · LM Studio"]
     end
 
     HK --> OVR_WIN
@@ -188,6 +188,8 @@ graph TB
 ![Google Gemini](https://img.shields.io/badge/Google_Gemini-555555?style=flat-square&logo=googlegemini&logoColor=white)
 ![xAI](https://img.shields.io/badge/xAI_Grok-555555?style=flat-square&logo=x&logoColor=white)
 ![OpenRouter](https://img.shields.io/badge/OpenRouter-555555?style=flat-square&logo=openrouter&logoColor=white)
+![Ollama](https://img.shields.io/badge/Ollama-555555?style=flat-square&logo=ollama&logoColor=white)
+![LM Studio](https://img.shields.io/badge/LM_Studio-555555?style=flat-square&logo=lmstudio&logoColor=white)
 ![SSE Streaming](https://img.shields.io/badge/SSE_Streaming-FF6600?style=flat-square&logo=lightning&logoColor=white)
 
 ---
@@ -215,7 +217,7 @@ All builds are compiled and signed automatically via GitHub Actions -- nothing t
 - [Rust](https://rustup.rs/) (latest stable)
 - [Node.js](https://nodejs.org/) 18+
 - [pnpm](https://pnpm.io/)
-- An API key from one of the supported providers: [OpenAI](https://platform.openai.com/api-keys), [Anthropic](https://console.anthropic.com/), [Google Gemini](https://aistudio.google.com/apikey), [xAI](https://console.x.ai/), or [OpenRouter](https://openrouter.ai/keys)
+- An API key from one of the supported cloud providers: [OpenAI](https://platform.openai.com/api-keys), [Anthropic](https://console.anthropic.com/), [Google Gemini](https://aistudio.google.com/apikey), [xAI](https://console.x.ai/), or [OpenRouter](https://openrouter.ai/keys) -- or use a local provider ([Ollama](https://ollama.com/), [LM Studio](https://lmstudio.ai/)) with no API key required
 
 ### Install & Run
 
