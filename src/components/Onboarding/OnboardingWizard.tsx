@@ -1,5 +1,5 @@
 import { Store } from "@tauri-apps/plugin-store";
-import { useOverlayStore } from "@/store";
+import { useOverlayStore, PROVIDERS } from "@/store";
 import { isWindows } from "@/utils/platform";
 import { StepProviderSelect } from "./StepProviderSelect";
 import { StepAccessibility } from "./StepAccessibility";
@@ -27,6 +27,12 @@ export function OnboardingWizard() {
 
   const handleNext = async () => {
     let nextStep = onboardingStep + 1;
+    // Skip API Key step (index 1) for local providers — no key needed
+    const provider = useOverlayStore.getState().selectedProvider;
+    const isLocalProvider = PROVIDERS.find((p) => p.id === provider)?.local ?? false;
+    if (isLocalProvider && nextStep === 1) {
+      nextStep = 2;
+    }
     // Skip Accessibility step (index 3) on Windows — not required
     if (isWindows() && nextStep === 3) {
       nextStep = 4;

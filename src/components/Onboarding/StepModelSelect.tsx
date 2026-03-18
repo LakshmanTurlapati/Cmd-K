@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Store } from "@tauri-apps/plugin-store";
-import { useOverlayStore, PROVIDERS } from "@/store";
+import { invoke } from "@tauri-apps/api/core";
+import { useOverlayStore, PROVIDERS, ModelWithMeta } from "@/store";
 
 const TIER_ORDER = [
   { key: "fast", label: "Fast" },
@@ -20,11 +21,35 @@ export function StepModelSelect({ onNext }: StepModelSelectProps) {
   const selectedProvider = useOverlayStore((s) => s.selectedProvider);
   const selectedModels = useOverlayStore((s) => s.selectedModels);
   const setSelectedModels = useOverlayStore((s) => s.setSelectedModels);
+  const setApiKeyStatus = useOverlayStore((s) => s.setApiKeyStatus);
+  const setModels = useOverlayStore((s) => s.setModels);
 
   const hasModels = apiKeyStatus === "valid" && availableModels.length > 0;
 
   const providerName =
     PROVIDERS.find((p) => p.id === selectedProvider)?.name ?? selectedProvider;
+
+  const currentProv = PROVIDERS.find((p) => p.id === selectedProvider);
+  const isLocal = currentProv?.local ?? false;
+
+  // Fetch models directly for local providers (no API key needed)
+  useEffect(() => {
+    if (!isLocal) return;
+    const fetchLocal = async () => {
+      try {
+        await invoke("validate_api_key", { provider: selectedProvider, apiKey: "" });
+        setApiKeyStatus("valid");
+        const models = await invoke<ModelWithMeta[]>(
+          "fetch_models",
+          { provider: selectedProvider, apiKey: "" }
+        );
+        setModels(models);
+      } catch {
+        setApiKeyStatus("invalid");
+      }
+    };
+    fetchLocal();
+  }, [selectedProvider]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-select balanced default when models load
   useEffect(() => {
@@ -116,10 +141,12 @@ export function StepModelSelect({ onNext }: StepModelSelectProps) {
         ) : (
           <div className="flex flex-col gap-2">
             <div className="w-full bg-white/8 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/30">
-              No models available
+              {isLocal ? "No models found" : "No models available"}
             </div>
             <p className="text-white/30 text-xs">
-              Configure API key first to select a model
+              {isLocal
+                ? "Is your server running?"
+                : "Configure API key first to select a model"}
             </p>
           </div>
         )}
