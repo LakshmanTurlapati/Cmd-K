@@ -3,6 +3,17 @@ mod state;
 #[allow(dead_code)]
 mod terminal;
 
+/// Simple timestamp without external chrono dependency.
+#[cfg(not(debug_assertions))]
+fn chrono_free_timestamp() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    format!("unix:{}", secs)
+}
+
 use commands::{
     ai::stream_ai_response,
     history::{get_window_key, get_window_history, add_history_entry, clear_all_history},
@@ -77,6 +88,34 @@ fn migrate_v024_api_key(app: &tauri::App) {
 }
 
 pub fn run() {
+    // Install a panic hook that writes crash info to a file.
+    // In release mode (windows_subsystem = "windows"), stderr is invisible,
+    // so panics silently kill the app. This hook captures the crash reason.
+    #[cfg(not(debug_assertions))]
+    {
+        let default_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            let crash_msg = format!(
+                "CMD+K PANIC at {}\n{}\nThread: {:?}\n",
+                chrono_free_timestamp(),
+                info,
+                std::thread::current().name().unwrap_or("unnamed"),
+            );
+            // Write to crash.log next to the executable
+            if let Ok(exe) = std::env::current_exe() {
+                if let Some(dir) = exe.parent() {
+                    let crash_path = dir.join("crash.log");
+                    let _ = std::fs::write(&crash_path, &crash_msg);
+                }
+            }
+            // Also try the temp directory as fallback
+            let tmp = std::env::temp_dir().join("cmd-k-crash.log");
+            let _ = std::fs::write(tmp, &crash_msg);
+            // Call the default hook too (for debuggers)
+            default_hook(info);
+        }));
+    }
+
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default();
 
