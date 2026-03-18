@@ -362,6 +362,38 @@ pub fn register_hotkey(app: AppHandle, shortcut_str: String) -> Result<(), Strin
                 return;
             }
 
+            // Wrap the entire handler in catch_unwind to prevent panics from
+            // crashing the app. In release mode (windows_subsystem = "windows"),
+            // panics in the hotkey handler silently terminate the process.
+            let app_ref = &app_handle;
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                hotkey_handler_inner(app_ref);
+            }));
+            if let Err(e) = result {
+                let msg = if let Some(s) = e.downcast_ref::<&str>() {
+                    s.to_string()
+                } else if let Some(s) = e.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "unknown panic".to_string()
+                };
+                eprintln!("[hotkey] PANIC in hotkey handler (caught): {}", msg);
+            }
+        })
+        .map_err(|e| format!("Failed to register hotkey '{}': {}", shortcut_str, e))?;
+
+    // Update stored hotkey in AppState
+    if let Some(state) = app.try_state::<AppState>() {
+        if let Ok(mut hotkey) = state.hotkey.lock() {
+            *hotkey = shortcut_str;
+        }
+    }
+
+    Ok(())
+}
+
+/// Inner hotkey handler logic, extracted so it can be wrapped in catch_unwind.
+fn hotkey_handler_inner(app_handle: &AppHandle) {
             // Debounce: skip if fired within 200ms of the previous trigger
             // This works around the known Tauri double-fire bug (#10025)
             let should_fire = if let Some(state) = app_handle.try_state::<AppState>() {
@@ -522,17 +554,6 @@ pub fn register_hotkey(app: AppHandle, shortcut_str: String) -> Result<(), Strin
                     // restoration and owns the full lifecycle (read then clear).
                 }
 
-                toggle_overlay(&app_handle);
+                toggle_overlay(app_handle);
             }
-        })
-        .map_err(|e| format!("Failed to register hotkey '{}': {}", shortcut_str, e))?;
-
-    // Update stored hotkey in AppState
-    if let Some(state) = app.try_state::<AppState>() {
-        if let Ok(mut hotkey) = state.hotkey.lock() {
-            *hotkey = shortcut_str;
-        }
-    }
-
-    Ok(())
 }

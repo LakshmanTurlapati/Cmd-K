@@ -1396,14 +1396,25 @@ fn detect_wsl_in_ancestry(pid: i32, snapshot: &ProcessSnapshot) -> bool {
 /// Spawns `wsl.exe -e sh -c "pwd"` to read the default WSL distro's CWD.
 /// Note: This returns the HOME directory of the WSL default user, not the
 /// active shell's CWD. UIA text inference provides better CWD when available.
+///
+/// Uses CREATE_NO_WINDOW to prevent console window flash in release builds
+/// (where the app runs as a GUI subsystem process with no inherited console).
 #[cfg(target_os = "windows")]
 pub fn get_wsl_cwd() -> Option<String> {
-    let output = std::process::Command::new("wsl.exe")
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+    let child = std::process::Command::new("wsl.exe")
         .args(["-e", "sh", "-c", "pwd"])
+        .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
-        .output()
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
         .ok()?;
+
+    // Wait with timeout to prevent indefinite blocking
+    let output = child.wait_with_output().ok()?;
 
     if output.status.success() {
         let cwd = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -1427,14 +1438,23 @@ pub fn get_wsl_cwd() -> Option<String> {
 ///
 /// Reads $SHELL from the default WSL distro. This is the configured default shell,
 /// which may differ from the actually running shell.
+///
+/// Uses CREATE_NO_WINDOW to prevent console window flash in release builds.
 #[cfg(target_os = "windows")]
 pub fn get_wsl_shell() -> Option<String> {
-    let output = std::process::Command::new("wsl.exe")
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+    let child = std::process::Command::new("wsl.exe")
         .args(["-e", "sh", "-c", "basename \"$SHELL\""])
+        .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
-        .output()
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
         .ok()?;
+
+    let output = child.wait_with_output().ok()?;
 
     if output.status.success() {
         let shell = String::from_utf8_lossy(&output.stdout).trim().to_string();

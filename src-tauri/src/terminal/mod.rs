@@ -117,6 +117,31 @@ pub fn detect_full_with_hwnd(
 ) -> Option<AppContext> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
+        // Wrap in catch_unwind to prevent panics in detection from silently
+        // poisoning mutexes or leaking resources. Log and send None on panic.
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            detect_full_with_hwnd_inner(previous_app_pid, pre_captured_text, previous_hwnd)
+        }));
+        match result {
+            Ok(ctx) => { let _ = tx.send(ctx); }
+            Err(e) => {
+                let msg = e.downcast_ref::<&str>().map(|s| s.to_string())
+                    .or_else(|| e.downcast_ref::<String>().cloned())
+                    .unwrap_or_else(|| "unknown".to_string());
+                eprintln!("[detect_full_with_hwnd] PANIC in detection thread (caught): {}", msg);
+                let _ = tx.send(None);
+            }
+        }
+    });
+    rx.recv_timeout(Duration::from_millis(750)).ok().flatten()
+}
+
+/// Inner detection logic for detect_full_with_hwnd, separated for catch_unwind.
+fn detect_full_with_hwnd_inner(
+    previous_app_pid: i32,
+    pre_captured_text: Option<String>,
+    previous_hwnd: Option<isize>,
+) -> Option<AppContext> {
         // Windows: read UIA text FIRST to extract shell type hint for process tree disambiguation
         #[cfg(target_os = "windows")]
         let (uia_text, shell_type_hint) = {
@@ -215,9 +240,7 @@ pub fn detect_full_with_hwnd(
         #[cfg(not(target_os = "windows"))]
         let _ = previous_hwnd;
 
-        let _ = tx.send(result);
-    });
-    rx.recv_timeout(Duration::from_millis(750)).ok().flatten()
+        result
 }
 
 /// Inner detection logic (runs on background thread spawned by detect()).
