@@ -248,8 +248,8 @@ export function ModelTab() {
               <div className="flex items-center gap-2">
                 <p className="text-white/70 text-xs">
                   {allUnpricedAreLocal ? (
-                    <span title="Free (local model)">
-                      $0.00
+                    <span>
+                      Free (local)
                       <span className="text-white/40"> &mdash; {tokenStr}</span>
                     </span>
                   ) : allUnpriced ? (
