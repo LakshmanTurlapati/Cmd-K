@@ -364,7 +364,9 @@ struct OllamaModel {
 #[derive(Deserialize, Default)]
 struct OllamaModelDetails {
     parameter_size: Option<String>,
+    #[allow(dead_code)]
     quantization_level: Option<String>,
+    #[allow(dead_code)]
     family: Option<String>,
 }
 

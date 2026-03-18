@@ -34,6 +34,7 @@ impl Provider {
     }
 
     /// Whether this provider requires an API key stored in the keychain.
+    #[cfg(test)]
     pub fn requires_api_key(&self) -> bool {
         !self.is_local()
     }
@@ -150,6 +151,7 @@ pub fn handle_http_status(provider: &Provider, status: u16) -> Result<(), String
 }
 
 /// Normalize user-supplied base URL: ensure http:// prefix, strip trailing slash.
+#[cfg(test)]
 pub fn normalize_base_url(input: &str) -> String {
     let trimmed = input.trim().trim_end_matches('/');
     if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
