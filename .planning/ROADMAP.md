@@ -10,7 +10,7 @@
 - ✅ v0.2.7 Cost Estimation -- Phases 25-26 (shipped 2026-03-10) | [Archive](milestones/v0.2.7-ROADMAP.md)
 - ✅ v0.2.8 Windows Terminal Detection Fix & Provider Icons -- Phases 27-29 (shipped 2026-03-14) | [Archive](milestones/v0.2.8-ROADMAP.md)
 - ✅ v0.3.9 Linux Support & Smart Terminal Context -- Phases 30-36 (shipped 2026-03-15) | [Archive](milestones/v0.3.9-ROADMAP.md)
-- v0.3.11 Local LLM Providers -- Phases 37-40 (in progress)
+- ✅ v0.3.11 Local LLM Providers -- Phases 37-40 (shipped 2026-03-18) | [Archive](milestones/v0.3.11-ROADMAP.md)
 
 ## Phases
 
@@ -101,85 +101,12 @@
 
 </details>
 
-### v0.3.11 Local LLM Providers (Phases 37-40)
+<details>
+<summary>v0.3.11 Local LLM Providers (Phases 37-40) -- SHIPPED 2026-03-18</summary>
 
-**Milestone Goal:** Add Ollama and LM Studio as local LLM providers, enabling fully offline AI command generation with auto-discovered models and connection health indicators.
+- [x] Phase 37: Provider Foundation (2/2 plans) -- completed 2026-03-17
+- [x] Phase 38: Model Discovery (1/1 plan) -- completed 2026-03-17
+- [x] Phase 39: Streaming Integration (1/1 plan) -- completed 2026-03-17
+- [x] Phase 40: Local Provider Frontend (1/1 plan) -- completed 2026-03-18
 
-- [x] **Phase 37: Provider Foundation** - Ollama/LM Studio enum variants, keyless auth, base URL config, health checks, error messages (completed 2026-03-17)
-- [x] **Phase 38: Model Discovery** - Auto-discover installed models from Ollama and LM Studio with metadata display (completed 2026-03-17)
-- [x] **Phase 39: Streaming Integration** - Local provider streaming via OpenAI-compat adapter with dynamic URL and extended timeout (completed 2026-03-17)
-- [x] **Phase 40: Local Provider Frontend** - Settings UI, onboarding adaptation, connection indicators, and provider icons (completed 2026-03-18)
-
-## Phase Details
-
-### Phase 37: Provider Foundation
-**Goal**: Users can select Ollama or LM Studio as a provider, configure connection URLs, and see whether the local server is reachable
-**Depends on**: Phase 36 (v0.3.9 complete)
-**Requirements**: LPROV-01, LPROV-02, LPROV-03, LPROV-04, LPROV-05, LPROV-06
-**Success Criteria** (what must be TRUE):
-  1. User can select Ollama or LM Studio from the provider list in settings
-  2. Selecting a local provider does not prompt for an API key -- the app bypasses keychain storage entirely
-  3. User can change the base URL for each local provider and the setting persists across app restarts
-  4. App reports whether the local server is reachable, distinguishing "server not running" from "model not loaded" from network errors
-**Plans:** 2/2 plans complete
-
-Plans:
-- [x] 37-01-PLAN.md -- Backend: Provider enum extension, streaming adapter URL parameterization, keychain bypass, health checks
-- [x] 37-02-PLAN.md -- Frontend: PROVIDERS array, AccountTab URL input, provider icons, submitQuery bypass
-
-### Phase 38: Model Discovery
-**Goal**: Users see their locally installed models and can select one for command generation
-**Depends on**: Phase 37
-**Requirements**: LMOD-01, LMOD-02, LMOD-03
-**Success Criteria** (what must be TRUE):
-  1. When Ollama is selected and running, the model picker shows all models installed on the Ollama server
-  2. When LM Studio is selected and running, the model picker shows all loaded models from LM Studio
-  3. Ollama models display parameter size and quantization level (e.g., "Llama 3.2 3B Q4_K_M") where the metadata is available
-**Plans:** 1/1 plans complete
-
-Plans:
-- [x] 38-01-PLAN.md -- Ollama /api/tags and LM Studio /v1/models parsing, param size auto-tiering, ModelTab refresh-on-mount
-
-### Phase 39: Streaming Integration
-**Goal**: Users can generate terminal commands using a local model with the same streaming experience as cloud providers
-**Depends on**: Phase 38
-**Requirements**: LSTR-01, LSTR-02, LSTR-03
-**Success Criteria** (what must be TRUE):
-  1. User types a natural language query and receives a streamed command from the local provider in real-time
-  2. First request after a cold model load completes without timeout (up to 120s allowed for local providers)
-  3. Token usage counts appear in the settings usage display after local provider queries
-**Plans:** 1/1 plans complete
-
-Plans:
-- [ ] 39-01-PLAN.md -- Cost display fix ($0.00 for local providers) and streaming pipeline verification
-
-### Phase 40: Local Provider Frontend
-**Goal**: The settings and onboarding UI adapts for local providers -- URL configuration instead of API keys, connection health instead of key validation, and provider branding
-**Depends on**: Phase 39
-**Requirements**: LFUI-01, LFUI-02, LFUI-03, LFUI-04
-**Success Criteria** (what must be TRUE):
-  1. Settings shows a base URL input field (not an API key field) when a local provider is selected, with a checkmark when the server is reachable
-  2. First-run onboarding with a local provider selected skips the API key step entirely
-  3. Ollama and LM Studio have distinct SVG icons in both onboarding and settings provider selectors
-  4. Usage stats display "Free (local)" for local provider queries instead of a dollar amount
-**Plans:** 1/1 plans complete
-
-Plans:
-- [ ] 40-01-PLAN.md -- Onboarding step-skip for local providers, model fetch in StepModelSelect, "Free (local)" cost label
-
-## Progress
-
-| Phase | Milestone | Plans Complete | Status | Completed |
-|-------|-----------|----------------|--------|-----------|
-| 1-7.1 | v0.1.0 | 21/21 | Complete | 2026-02-28 |
-| 8-10 | v0.1.1 | 6/6 | Complete | 2026-03-01 |
-| 11-16, 01 | v0.2.1 | 7/7 | Complete | 2026-03-03 |
-| 17-20 | v0.2.4 | 5/5 | Complete | 2026-03-04 |
-| 21-24 | v0.2.6 | 10/10 | Complete | 2026-03-09 |
-| 25-26 | v0.2.7 | 3/3 | Complete | 2026-03-10 |
-| 27-29 | v0.2.8 | 6/6 | Complete | 2026-03-14 |
-| 30-36 | v0.3.9 | 10/10 | Complete | 2026-03-15 |
-| 37 | v0.3.11 | Complete    | 2026-03-17 | 2026-03-17 |
-| 38 | 1/1 | Complete    | 2026-03-17 | - |
-| 39 | 1/1 | Complete    | 2026-03-17 | - |
-| 40 | 1/1 | Complete    | 2026-03-18 | - |
+</details>

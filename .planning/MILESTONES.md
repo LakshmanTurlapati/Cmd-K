@@ -1,5 +1,14 @@
 # Milestones
 
+## v0.3.11 Local LLM Providers (Shipped: 2026-03-18)
+
+**Phases completed:** 4 phases, 5 plans, 0 tasks
+
+**Key accomplishments:**
+- (none recorded)
+
+---
+
 ## v0.3.9 Linux Support & Smart Terminal Context (Shipped: 2026-03-15)
 
 **Phases completed:** 7 phases (30-36), 10 plans

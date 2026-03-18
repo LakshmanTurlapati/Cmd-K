@@ -72,6 +72,10 @@ The overlay must appear on top of the currently active application and feel inst
 - SCTX-01 through SCTX-04: Smart terminal context with ANSI stripping, model-aware token budget, command-output segmentation -- v0.3.9
 - LTXT-01 through LTXT-04: Linux terminal text reading via AT-SPI2, kitty, WezTerm with graceful degradation -- v0.3.9
 - APKG-01 through APKG-04: AppImage distribution with dual-arch CI, auto-updater, Ed25519 signing -- v0.3.9
+- LPROV-01 through LPROV-06: Ollama/LM Studio provider selection, keyless auth, base URL config, health checks, error messages -- v0.3.11
+- LMOD-01 through LMOD-03: Auto-discover models from Ollama /api/tags and LM Studio /v1/models with metadata display -- v0.3.11
+- LSTR-01 through LSTR-03: Local provider streaming via OpenAI-compat adapter, 120s timeout, token tracking -- v0.3.11
+- LFUI-01 through LFUI-04: Connection health indicator, base URL input, onboarding step-skip, provider icons -- v0.3.11
 
 ### Active
 
@@ -81,28 +85,21 @@ The overlay must appear on top of the currently active application and feel inst
 - Command favorites/bookmarks -- future feature (history is v0.1.1 scope)
 - Multi-step command workflows -- future feature
 - Command explanation mode -- future feature
-- Offline mode -- requires internet for AI generation
+- Offline mode without local LLM -- requires either internet or local Ollama/LM Studio server
 - App Store distribution -- incompatible with Accessibility API requirement
 - Auto-execution without review -- safety risk, always paste, never execute directly
 - Windows OV/EV code signing -- purchase when distribution warrants it
 - Native Wayland overlay/hotkey -- protocol-level gap, XWayland is industry standard fallback
 - .deb/.rpm/Snap/Flatpak packaging -- AppImage covers all distros, sandboxing conflicts with /proc and xdotool
 
-## Current Milestone: v0.3.11 Local LLM Providers
-
-**Goal:** Add Ollama and LM Studio as local LLM providers, enabling fully offline AI command generation.
-
-**Target features:**
-- Ollama provider with auto-discovered models and connection status indicator
-- LM Studio provider with auto-discovered models and connection status indicator
-- Base URL configuration (defaults: localhost:11434 for Ollama, localhost:1234 for LM Studio)
+## Current Milestone: Planning next
 
 ## Context
 
-Shipped v0.3.9 with full Linux support (1:1 feature parity with macOS/Windows) and smart terminal context.
-Tech stack: Tauri v2 (Rust + React + TypeScript), NSPanel for macOS overlay, Win32 for Windows overlay, X11/x11rb for Linux overlay, 5 AI providers (OpenAI/Anthropic/Gemini/xAI/OpenRouter), macOS Accessibility API + raw libproc FFI, Win32 APIs + UIA for Windows, /proc + AT-SPI2 + xdotool for Linux.
-39 phases across 9 milestones (v0.1.0 through v0.3.9), 72 plans executed over 20 days.
-All 116 requirements satisfied across milestones. ~185K LOC Rust + 5.6K LOC TypeScript.
+Shipped v0.3.11 with local LLM provider support (Ollama + LM Studio) for fully offline AI command generation.
+Tech stack: Tauri v2 (Rust + React + TypeScript), NSPanel for macOS overlay, Win32 for Windows overlay, X11/x11rb for Linux overlay, 7 AI providers (OpenAI/Anthropic/Gemini/xAI/OpenRouter + Ollama/LM Studio), macOS Accessibility API + raw libproc FFI, Win32 APIs + UIA for Windows, /proc + AT-SPI2 + xdotool for Linux.
+40 phases across 10 milestones (v0.1.0 through v0.3.11), 77 plans executed over 25 days.
+All 132 requirements satisfied across milestones. ~185K LOC Rust + 5.6K LOC TypeScript.
 CI/CD pipeline produces signed macOS DMG, Windows installer, Linux AppImage (x86_64 + aarch64), and auto-update artifacts (latest.json + .sig files) on every v* tag push.
 Ed25519 update signing configured with GitHub secrets.
 
@@ -170,6 +167,12 @@ Ed25519 update signing configured with GitHub secrets.
 | zbus with default features for AT-SPI2 | zbus 5 requires async-io runtime even for blocking API | Good -- compiles correctly |
 | Native ARM runners for aarch64 AppImage | Cross-compilation too complex, native runners available | Good -- reliable builds |
 | AppImage write-permission guard | Tray warning when AppImage dir not writable, skip update | Good -- no error dialogs |
+| OpenAI-compat for local providers | Both Ollama and LM Studio support /v1/chat/completions, reuse existing adapter | Good -- zero new streaming code |
+| Keyless auth with health checks | Local providers skip keychain, validate via HTTP GET instead | Good -- clean separation |
+| Dynamic base URL from settings store | User-configurable URL instead of hardcoded localhost | Good -- supports remote servers |
+| Auto-tier by parameter size | Ollama models grouped by <7B/7-30B/>30B into Fast/Balanced/Most Capable | Good -- familiar UX |
+| Onboarding step-skip pattern | Same conditional skip as Windows/Accessibility, keep 5-step stepper | Good -- minimal code change |
+| "Free (local)" visible label | Replace $0.00 tooltip with visible text for local provider usage | Good -- clear cost signal |
 
 ---
-*Last updated: 2026-03-17 after v0.3.11 milestone start*
+*Last updated: 2026-03-18 after v0.3.11 milestone complete*

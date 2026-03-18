@@ -217,6 +217,41 @@
 
 ---
 
+## Milestone: v0.3.11 -- Local LLM Providers
+
+**Shipped:** 2026-03-18
+**Phases:** 4 | **Plans:** 5
+
+### What Was Built
+- Ollama and LM Studio added as local LLM providers with keyless auth and dynamic base URL configuration
+- Auto-discovered models from Ollama /api/tags and LM Studio /v1/models with parameter-size-based tier grouping
+- Local provider streaming via existing OpenAI-compat adapter with 120s cold-start timeout
+- Onboarding wizard auto-skips API key step for local providers
+- "Free (local)" usage label replaces "$0.00" for local provider queries
+- Connection health indicators and provider SVG icons
+
+### What Worked
+- Heavy reuse of existing infrastructure: OpenAI-compat adapter, provider enum pattern, PROVIDERS array, tier grouping
+- Phase 37 frontend plan (37-02) front-loaded most UI work, making Phase 40 very small (2 tasks + checkpoint)
+- Research correctly identified the StepModelSelect model-fetch gap before planning — prevented a runtime bug
+- Integration checker caught the URL-change model refresh edge case that manual testing would likely miss
+
+### What Was Inefficient
+- Phase 40 was scoped as a full frontend phase but 3/4 requirements were already done in Phase 37 — could have been a single task in Phase 37
+- LFUI-01/02/04 should have been in Phase 37's requirements from the start (they were implemented there)
+- Nyquist VALIDATION.md was never created for Phase 40 (research had no Validation Architecture section)
+
+### Patterns Established
+- Local providers pattern: `is_local()` check → skip keychain → dynamic URL from settings store → health check via validate_api_key
+- Step-skip pattern in onboarding: conditional `nextStep` increment (same as Windows/Accessibility)
+- "Already done" requirements: legitimate for verification phases to mark pre-done requirements
+
+### Key Lessons
+- When a backend phase includes "minimum frontend wiring," the scope often covers most of the frontend phase — plan accordingly
+- The OpenAI-compat API is a powerful unifier — both Ollama and LM Studio needed zero custom streaming code
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -231,6 +266,7 @@
 | v0.2.7 | 2 | 3 | Cost estimation, smallest milestone, fully cross-platform |
 | v0.2.8 | 3 | 6 | Terminal detection fix + icons, UAT-driven gap closure, TDD |
 | v0.3.9 | 7 | 10 | Full Linux support + smart context, largest since Windows port, 2 days |
+| v0.3.11 | 4 | 5 | Local LLM providers, heavy infra reuse, most UI pre-done in backend phase |
 
 ### Top Lessons (Verified Across Milestones)
 
