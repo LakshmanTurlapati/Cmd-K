@@ -114,7 +114,12 @@
 
 ### v0.3.13 Hotfix & Scrollbar Polish (Phase 41)
 
-- [ ] Phase 41: Version Bump & macOS Scrollbar Fix (0/1 plan)
+- [ ] Phase 41: Version Bump & macOS Scrollbar Fix (1 plan)
+
+**Plans:** 1 plan
+
+Plans:
+- [ ] 41-01-PLAN.md -- Confirm version 0.3.13 and fix macOS scrollbar styling
 
 **Goal:** Bump version to 0.3.13 across all config and showcase files, fix macOS scrollbar styling to use custom thin scrollbars instead of default system overlay scrollbars.
 
