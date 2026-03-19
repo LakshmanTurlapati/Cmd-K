@@ -76,6 +76,8 @@ The overlay must appear on top of the currently active application and feel inst
 - LMOD-01 through LMOD-03: Auto-discover models from Ollama /api/tags and LM Studio /v1/models with metadata display -- v0.3.11
 - LSTR-01 through LSTR-03: Local provider streaming via OpenAI-compat adapter, 120s timeout, token tracking -- v0.3.11
 - LFUI-01 through LFUI-04: Connection health indicator, base URL input, onboarding step-skip, provider icons -- v0.3.11
+- VER-01, VER-02: Version bump to 0.3.13 across config and showcase files -- v0.3.13
+- UIPOL-01: macOS scrollbar styling fix (scrollbar-width: thin in global CSS) -- v0.3.13
 
 ### Active
 
@@ -92,17 +94,17 @@ The overlay must appear on top of the currently active application and feel inst
 - Native Wayland overlay/hotkey -- protocol-level gap, XWayland is industry standard fallback
 - .deb/.rpm/Snap/Flatpak packaging -- AppImage covers all distros, sandboxing conflicts with /proc and xdotool
 
-## Current Milestone: v0.3.13 Hotfix & Scrollbar Polish
+## Current Milestone: v0.3.13 Hotfix & Scrollbar Polish (Complete)
 
 **Goal:** Version bump to 0.3.13 and fix macOS scrollbar styling to match Windows
 
-**Target features:**
+**Delivered:**
 - Version bump across all config and showcase files
-- macOS scrollbar styling fix (custom thin scrollbar not rendering, default system scrollbar showing)
+- macOS scrollbar styling fix via scrollbar-width: thin in global CSS
 
 ## Context
 
-Shipped v0.3.11 with local LLM provider support (Ollama + LM Studio) for fully offline AI command generation.
+Shipped v0.3.13 hotfix with macOS scrollbar polish and version bump. Previously shipped v0.3.11 with local LLM provider support (Ollama + LM Studio) for fully offline AI command generation.
 Tech stack: Tauri v2 (Rust + React + TypeScript), NSPanel for macOS overlay, Win32 for Windows overlay, X11/x11rb for Linux overlay, 7 AI providers (OpenAI/Anthropic/Gemini/xAI/OpenRouter + Ollama/LM Studio), macOS Accessibility API + raw libproc FFI, Win32 APIs + UIA for Windows, /proc + AT-SPI2 + xdotool for Linux.
 40 phases across 10 milestones (v0.1.0 through v0.3.11), 77 plans executed over 25 days.
 All 132 requirements satisfied across milestones. ~185K LOC Rust + 5.6K LOC TypeScript.
@@ -181,4 +183,4 @@ Ed25519 update signing configured with GitHub secrets.
 | "Free (local)" visible label | Replace $0.00 tooltip with visible text for local provider usage | Good -- clear cost signal |
 
 ---
-*Last updated: 2026-03-18 after v0.3.13 milestone started*
+*Last updated: 2026-03-19 after v0.3.13 milestone complete*
