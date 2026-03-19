@@ -114,7 +114,7 @@
 
 ### v0.3.13 Hotfix & Scrollbar Polish (Phase 41)
 
-- [ ] Phase 41: Version Bump & macOS Scrollbar Fix (1 plan)
+- [x] Phase 41: Version Bump & macOS Scrollbar Fix (1 plan) (completed 2026-03-19)
 
 **Plans:** 1 plan
 

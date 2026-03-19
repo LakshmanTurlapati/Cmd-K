@@ -9,12 +9,12 @@ Requirements for hotfix release. Single phase.
 
 ### Version
 
-- [ ] **VER-01**: All config files (package.json, tauri.conf.json, Cargo.toml) show version 0.3.13
-- [ ] **VER-02**: Showcase website (main.js, index.html, privacy.html) shows v0.3.13
+- [x] **VER-01**: All config files (package.json, tauri.conf.json, Cargo.toml) show version 0.3.13
+- [x] **VER-02**: Showcase website (main.js, index.html, privacy.html) shows v0.3.13
 
 ### UI Polish
 
-- [ ] **UIPOL-01**: macOS scrollbars use custom thin styling matching Windows (no default system scrollbar)
+- [x] **UIPOL-01**: macOS scrollbars use custom thin styling matching Windows (no default system scrollbar)
 
 ## Out of Scope
 
@@ -27,9 +27,9 @@ Requirements for hotfix release. Single phase.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| VER-01 | Phase 41 | Pending |
-| VER-02 | Phase 41 | Pending |
-| UIPOL-01 | Phase 41 | Pending |
+| VER-01 | Phase 41 | Complete |
+| VER-02 | Phase 41 | Complete |
+| UIPOL-01 | Phase 41 | Complete |
 
 **Coverage:**
 - v0.3.13 requirements: 3 total
