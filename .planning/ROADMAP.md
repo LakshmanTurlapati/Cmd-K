@@ -2,15 +2,16 @@
 
 ## Milestones
 
-- ✅ v0.1.0 MVP -- Phases 1-7.1 (shipped 2026-02-28) | [Archive](milestones/v1.0-ROADMAP.md)
-- ✅ v0.1.1 Command History & Follow-ups -- Phases 8-10 (shipped 2026-03-01) | [Archive](milestones/v0.1.1-ROADMAP.md)
-- ✅ v0.2.1 Windows Support -- Phases 11-16, 01-merge (shipped 2026-03-03) | [Archive](milestones/v0.2.1-ROADMAP.md)
-- ✅ v0.2.4 Overlay UX, Safety & CI/CD -- Phases 17-20 (shipped 2026-03-04) | [Archive](milestones/v0.2.4-ROADMAP.md)
-- ✅ v0.2.6 Multi-Provider, WSL & Auto-Update -- Phases 21-24 (shipped 2026-03-09) | [Archive](milestones/v0.2.6-ROADMAP.md)
-- ✅ v0.2.7 Cost Estimation -- Phases 25-26 (shipped 2026-03-10) | [Archive](milestones/v0.2.7-ROADMAP.md)
-- ✅ v0.2.8 Windows Terminal Detection Fix & Provider Icons -- Phases 27-29 (shipped 2026-03-14) | [Archive](milestones/v0.2.8-ROADMAP.md)
-- ✅ v0.3.9 Linux Support & Smart Terminal Context -- Phases 30-36 (shipped 2026-03-15) | [Archive](milestones/v0.3.9-ROADMAP.md)
-- ✅ v0.3.11 Local LLM Providers -- Phases 37-40 (shipped 2026-03-18) | [Archive](milestones/v0.3.11-ROADMAP.md)
+- v0.1.0 MVP -- Phases 1-7.1 (shipped 2026-02-28) | [Archive](milestones/v1.0-ROADMAP.md)
+- v0.1.1 Command History & Follow-ups -- Phases 8-10 (shipped 2026-03-01) | [Archive](milestones/v0.1.1-ROADMAP.md)
+- v0.2.1 Windows Support -- Phases 11-16, 01-merge (shipped 2026-03-03) | [Archive](milestones/v0.2.1-ROADMAP.md)
+- v0.2.4 Overlay UX, Safety & CI/CD -- Phases 17-20 (shipped 2026-03-04) | [Archive](milestones/v0.2.4-ROADMAP.md)
+- v0.2.6 Multi-Provider, WSL & Auto-Update -- Phases 21-24 (shipped 2026-03-09) | [Archive](milestones/v0.2.6-ROADMAP.md)
+- v0.2.7 Cost Estimation -- Phases 25-26 (shipped 2026-03-10) | [Archive](milestones/v0.2.7-ROADMAP.md)
+- v0.2.8 Windows Terminal Detection Fix & Provider Icons -- Phases 27-29 (shipped 2026-03-14) | [Archive](milestones/v0.2.8-ROADMAP.md)
+- v0.3.9 Linux Support & Smart Terminal Context -- Phases 30-36 (shipped 2026-03-15) | [Archive](milestones/v0.3.9-ROADMAP.md)
+- v0.3.11 Local LLM Providers -- Phases 37-40 (shipped 2026-03-18) | [Archive](milestones/v0.3.11-ROADMAP.md)
+- **v0.3.13 Hotfix & Scrollbar Polish -- Phase 41 (in progress)**
 
 ## Phases
 
@@ -110,3 +111,17 @@
 - [x] Phase 40: Local Provider Frontend (1/1 plan) -- completed 2026-03-18
 
 </details>
+
+### v0.3.13 Hotfix & Scrollbar Polish (Phase 41)
+
+- [ ] Phase 41: Version Bump & macOS Scrollbar Fix (0/1 plan)
+
+**Goal:** Bump version to 0.3.13 across all config and showcase files, fix macOS scrollbar styling to use custom thin scrollbars instead of default system overlay scrollbars.
+
+**Requirements:** VER-01, VER-02, UIPOL-01
+
+**Success criteria:**
+1. package.json, tauri.conf.json, Cargo.toml all show 0.3.13
+2. Showcase main.js VERSION constant, index.html, privacy.html all show v0.3.13
+3. macOS scrollable areas (model list, command input, settings) render thin custom scrollbars, not default macOS overlay scrollbars
+4. Windows and Linux scrollbar behavior unchanged
