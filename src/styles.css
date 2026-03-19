@@ -152,8 +152,9 @@ body,
   --sidebar-ring: oklch(0.556 0 0);
 }
 
-/* Scrollbar styling — transparent track, subtle thumb */
+/* Scrollbar styling — thin track, subtle thumb (cross-platform) */
 * {
+  scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
 
