@@ -92,7 +92,13 @@ The overlay must appear on top of the currently active application and feel inst
 - Native Wayland overlay/hotkey -- protocol-level gap, XWayland is industry standard fallback
 - .deb/.rpm/Snap/Flatpak packaging -- AppImage covers all distros, sandboxing conflicts with /proc and xdotool
 
-## Current Milestone: Planning next
+## Current Milestone: v0.3.13 Hotfix & Scrollbar Polish
+
+**Goal:** Version bump to 0.3.13 and fix macOS scrollbar styling to match Windows
+
+**Target features:**
+- Version bump across all config and showcase files
+- macOS scrollbar styling fix (custom thin scrollbar not rendering, default system scrollbar showing)
 
 ## Context
 
@@ -175,4 +181,4 @@ Ed25519 update signing configured with GitHub secrets.
 | "Free (local)" visible label | Replace $0.00 tooltip with visible text for local provider usage | Good -- clear cost signal |
 
 ---
-*Last updated: 2026-03-18 after v0.3.11 milestone complete*
+*Last updated: 2026-03-18 after v0.3.13 milestone started*
