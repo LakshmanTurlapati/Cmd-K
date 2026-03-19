@@ -525,7 +525,7 @@ dependencies = [
 
 [[package]]
 name = "cmd-k"
-version = "0.3.11"
+version = "0.3.13"
 dependencies = [
  "accessibility-sys",
  "arboard",

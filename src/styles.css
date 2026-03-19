@@ -152,27 +152,11 @@ body,
   --sidebar-ring: oklch(0.556 0 0);
 }
 
-/* Scrollbar styling — thin track, subtle thumb (cross-platform) */
-* {
+/* Scrollbar utility -- generates CSS for the scrollbar-thin class used in components.
+   Main scrollbar styling is in index.html to bypass Tailwind's @layer compilation. */
+@utility scrollbar-thin {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
-}
-
-*::-webkit-scrollbar {
-  width: 6px;
-}
-
-*::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-*::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 3px;
-}
-
-*::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
 }
 
 @layer base {

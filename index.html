@@ -5,6 +5,28 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tauri + React + Typescript</title>
+    <style>
+      /* Scrollbar styling -- outside Tailwind compilation to bypass @layer cascade.
+         Safari 18+ supports scrollbar-width/scrollbar-color.
+         Webkit-scrollbar pseudo-elements as fallback for older engines. */
+      * {
+        scrollbar-width: thin !important;
+        scrollbar-color: rgba(255, 255, 255, 0.15) transparent !important;
+      }
+      *::-webkit-scrollbar {
+        width: 6px !important;
+      }
+      *::-webkit-scrollbar-track {
+        background: transparent !important;
+      }
+      *::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.15) !important;
+        border-radius: 3px !important;
+      }
+      *::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.25) !important;
+      }
+    </style>
   </head>
 
   <body>
