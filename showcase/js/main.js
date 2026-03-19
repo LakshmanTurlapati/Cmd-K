@@ -8,14 +8,19 @@
   'use strict';
 
   // ---- Version & download URLs ----
-  var VERSION = '0.3.11';
+  var VERSION = '0.3.13'; // fallback if GitHub API unavailable
   var DOWNLOAD_BASE = 'https://github.com/LakshmanTurlapati/Cmd-K/releases/download';
-  var URLS = {
-    macos: DOWNLOAD_BASE + '/v' + VERSION + '/CMD+K-' + VERSION + '-universal.dmg',
-    windows: DOWNLOAD_BASE + '/v' + VERSION + '/CMD+K-' + VERSION + '-windows-x64.exe',
-    linux_x86: DOWNLOAD_BASE + '/v' + VERSION + '/CMD+K-' + VERSION + '-linux-x86_64.AppImage',
-    linux_arm: DOWNLOAD_BASE + '/v' + VERSION + '/CMD+K-' + VERSION + '-linux-aarch64.AppImage'
-  };
+
+  function buildURLs(v) {
+    return {
+      macos: DOWNLOAD_BASE + '/v' + v + '/CMD+K-' + v + '-universal.dmg',
+      windows: DOWNLOAD_BASE + '/v' + v + '/CMD+K-' + v + '-windows-x64.exe',
+      linux_x86: DOWNLOAD_BASE + '/v' + v + '/CMD+K-' + v + '-linux-x86_64.AppImage',
+      linux_arm: DOWNLOAD_BASE + '/v' + v + '/CMD+K-' + v + '-linux-aarch64.AppImage'
+    };
+  }
+
+  var URLS = buildURLs(VERSION);
 
   function detectOS() {
     var ua = navigator.userAgent;
@@ -188,13 +193,33 @@
     }
 
     // ---- Version & download URLs ----
-    document.querySelectorAll('[data-download]').forEach(function(el) {
-      var key = el.getAttribute('data-download');
-      if (URLS[key]) el.href = URLS[key];
-    });
-    document.querySelectorAll('[data-version]').forEach(function(el) {
-      el.textContent = 'v' + VERSION;
-    });
+    function applyDownloadURLs(urls, version) {
+      document.querySelectorAll('[data-download]').forEach(function(el) {
+        var key = el.getAttribute('data-download');
+        if (urls[key]) el.href = urls[key];
+      });
+      document.querySelectorAll('[data-version]').forEach(function(el) {
+        el.textContent = 'v' + version;
+      });
+    }
+
+    // Apply hardcoded fallback immediately
+    applyDownloadURLs(URLS, VERSION);
+
+    // Fetch latest release version from GitHub API and update
+    fetch('https://api.github.com/repos/LakshmanTurlapati/Cmd-K/releases/latest')
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data && data.tag_name) {
+          var latest = data.tag_name.replace(/^v/, '');
+          if (latest !== VERSION) {
+            URLS = buildURLs(latest);
+            VERSION = latest;
+            applyDownloadURLs(URLS, latest);
+          }
+        }
+      })
+      .catch(function() { /* fallback URLs already applied */ });
 
     // ---- OS auto-detect ----
     var detectedOS = detectOS();
